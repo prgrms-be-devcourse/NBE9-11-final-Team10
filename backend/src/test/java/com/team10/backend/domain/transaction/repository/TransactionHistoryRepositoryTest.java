@@ -119,6 +119,24 @@ class TransactionHistoryRepositoryTest {
     }
 
     @Test
+    @DisplayName("다건 조회 응답 필드를 정확히 매핑한다")
+    void searchMapsProjectionFields() {
+        Page<TransactionHistorySearchRes> result = transactionHistoryRepository.search(
+                ownerAccount.getId(),
+                emptyFilter(),
+                pageRequest(0, 20, Sort.Direction.ASC)
+        );
+
+        TransactionHistorySearchRes first = result.getContent().getFirst();
+        assertThat(first.transactionHistoryId()).isEqualTo(juneOneDepositId);
+        assertThat(first.counterpartyName()).isEqualTo("김입금");
+        assertThat(first.amount()).isEqualTo(1_000L);
+        assertThat(first.balanceAfter()).isEqualTo(101_000L);
+        assertThat(first.transactedAt()).isEqualTo(LocalDateTime.of(2026, 6, 1, 9, 0));
+        assertThat(first.direction()).isEqualTo(TransactionDirection.IN);
+    }
+
+    @Test
     @DisplayName("기간 범위를 날짜 기준으로 필터링한다")
     void searchFiltersByDateRangeInclusivelyByDate() {
         TransactionHistorySearchReq filter = new TransactionHistorySearchReq(
@@ -280,6 +298,15 @@ class TransactionHistoryRepositoryTest {
                 .containsExactly(juneFourPaymentOutId, juneThreeTransferInId, juneTwoTransferOutId, juneOneDepositId);
     }
 
+    @Test
+    @DisplayName("거래내역 ID와 계좌 ID가 모두 일치할 때 단건 조회한다")
+    void findByIdAndAccountIdReturnsOnlyMatchingAccountHistory() {
+        assertThat(transactionHistoryRepository.findByIdAndAccountId(juneOneDepositId, ownerAccount.getId()))
+                .isPresent();
+        assertThat(transactionHistoryRepository.findByIdAndAccountId(juneOneDepositId, otherAccount.getId()))
+                .isEmpty();
+    }
+
     private TransactionHistorySearchReq emptyFilter() {
         return new TransactionHistorySearchReq(null, null, null, null, null, null);
     }
@@ -320,6 +347,7 @@ class TransactionHistoryRepositoryTest {
         setField(history, "type", type);
         setField(history, "direction", direction);
         setField(history, "amount", amount);
+        setField(history, "balanceBefore", balanceAfter + amount);
         setField(history, "balanceAfter", balanceAfter);
         setField(history, "counterpartyAccountNumber", "999999999999");
         setField(history, "counterpartyName", counterpartyName);

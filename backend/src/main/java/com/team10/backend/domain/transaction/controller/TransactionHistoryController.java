@@ -10,7 +10,6 @@ import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +18,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/accounts/{accountId}/transactions")
@@ -45,13 +43,14 @@ public class TransactionHistoryController {
 
     // 거래 내역 단건 조회 [ 상세 정보 ]
     @GetMapping("/{transactionId}")
-    public TransactionHistoryDetailRes getTransactionHistoryDetail(
+    public ResponseEntity<TransactionHistoryDetailRes> getTransactionHistoryDetail(
             @PathVariable @Positive Long accountId,
             @PathVariable @Positive Long transactionId,
-            @Valid @ModelAttribute TransactionHistorySearchReq condition,
             @RequestParam @Positive Long userId // TODO : 추후 CustomUserDetails 로 변경
     ) {
-        throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "거래 내역 단건 조회는 아직 구현되지 않았습니다.");
+        return ResponseEntity.ok(
+                transactionHistoryService.getTransactionHistoryDetail(accountId, transactionId, userId)
+        );
     }
 
 }
