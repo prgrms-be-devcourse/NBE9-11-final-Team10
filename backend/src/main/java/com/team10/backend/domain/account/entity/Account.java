@@ -1,6 +1,7 @@
 package com.team10.backend.domain.account.entity;
 
 import com.team10.backend.domain.account.type.AccountStatus;
+import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.Column;
@@ -31,10 +32,30 @@ public class Account extends BaseEntity {
     @Column(length = 50)
     private String nickname;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private AccountType accountType;
+
     @Column(nullable = false)
     private Long balance;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private AccountStatus status;
+
+    public static Account create(
+            User user,
+            String accountNumber,
+            String nickname,
+            AccountType accountType
+    ) {
+        Account account = new Account();
+        account.user = user;
+        account.accountNumber = accountNumber;
+        account.nickname = nickname;
+        account.accountType = accountType;
+        account.balance = 0L;
+        account.status = AccountStatus.ACTIVE;
+        return account;
+    }
 }
