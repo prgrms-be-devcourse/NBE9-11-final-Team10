@@ -1,9 +1,5 @@
 package com.team10.backend.domain.transfer.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountType;
@@ -19,21 +15,31 @@ import com.team10.backend.domain.transfer.type.TransferStatus;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.exception.BusinessException;
 import jakarta.persistence.EntityManager;
-import java.lang.reflect.Constructor;
-import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.lang.reflect.Constructor;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@Transactional
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class TransferServiceIntegrationTest {
 
@@ -52,7 +58,11 @@ class TransferServiceIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
     @Test
+    @DisplayName("입금 성공 시 실제 DB에 잔액과 입금 거래내역이 저장된다")
     void deposit_success_persistsBalanceAndDepositHistory() {
         Account account = saveAccount(saveUser("sender@example.com", "홍길동"), "100200300001", 10_000L);
 
@@ -78,6 +88,7 @@ class TransferServiceIntegrationTest {
     }
 
     @Test
+    @DisplayName("송금 성공 시 실제 DB에 양쪽 잔액, 송금, 거래내역 두 건이 저장된다")
     void transfer_success_persistsBalancesTransferAndTwoHistories() {
         User sender = saveUser("sender@example.com", "송금자");
         User receiver = saveUser("receiver@example.com", "수취자");
@@ -132,6 +143,7 @@ class TransferServiceIntegrationTest {
     }
 
     @Test
+    @DisplayName("송금 금액이 유효하지 않으면 DB 변경 없이 INVALID_INPUT_VALUE 예외를 발생시킨다")
     void transfer_invalidAmount_doesNotPersistAnything() {
         Account account = saveAccount(saveUser("sender@example.com", "홍길동"), "100200300001", 10_000L);
 
@@ -149,6 +161,7 @@ class TransferServiceIntegrationTest {
     }
 
     @Test
+    @DisplayName("잔액 부족 송금은 잔액과 거래내역 변경 없이 INSUFFICIENT_BALANCE 예외를 발생시킨다")
     void transfer_insufficientBalance_rollsBackBalanceAndHistory() {
         User sender = saveUser("sender@example.com", "송금자");
         User receiver = saveUser("receiver@example.com", "수취자");
@@ -163,29 +176,120 @@ class TransferServiceIntegrationTest {
 
         Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
         Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
-        assertEquals(TransferErrorCode.TRANSFER_FAILED, exception.getErrorCode());
+        assertEquals(TransferErrorCode.INSUFFICIENT_BALANCE, exception.getErrorCode());
         assertEquals(10_000L, savedSenderAccount.getBalance());
         assertEquals(10_000L, savedReceiverAccount.getBalance());
         assertEquals(0, transferRepository.count());
         assertEquals(0, transactionHistoryRepository.count());
     }
 
+    @Test
+    @DisplayName("같은 계좌에 동시 입금이 발생해도 모든 입금 잔액과 거래내역이 반영된다")
+    void concurrentDeposits_sameAccount_persistsAllBalanceAndHistories() throws InterruptedException {
+        Account account = saveAccount(saveUser("sender@example.com", "홍길동"), "100200300001", 0L);
+        int threadCount = 20;
+        long amount = 1_000L;
+
+        List<Throwable> failures = runConcurrently(
+                threadCount,
+                () -> transferService.deposit(account.getId(), amount, "동시 입금")
+        );
+        entityManager.clear();
+
+        Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
+        List<TransactionHistory> histories = transactionHistoryRepository.findAll();
+
+        assertNoConcurrentFailures(failures);
+        assertEquals(threadCount * amount, savedAccount.getBalance());
+        assertEquals(threadCount, histories.size());
+        assertTrue(histories.stream().allMatch(history -> history.getType() == TransactionType.DEPOSIT));
+        assertTrue(histories.stream().allMatch(history -> history.getDirection() == TransactionDirection.IN));
+        assertTrue(histories.stream().allMatch(history -> history.getAmount().equals(amount)));
+    }
+
+    @Test
+    @DisplayName("같은 송금자 계좌에서 동시 송금이 발생해도 잔액과 거래내역이 일관되게 저장된다")
+    void concurrentTransfers_sameSender_persistsConsistentBalancesAndHistories() throws InterruptedException {
+        User sender = saveUser("sender@example.com", "송금자");
+        User receiver = saveUser("receiver@example.com", "수취자");
+        Account senderAccount = saveAccount(sender, "100200300001", 100_000L);
+        Account receiverAccount = saveAccount(receiver, "100200300002", 0L);
+        int threadCount = 20;
+        long amount = 1_000L;
+
+        List<Throwable> failures = runConcurrently(
+                threadCount,
+                () -> transferService.transfer(senderAccount.getId(), receiverAccount.getAccountNumber(), amount, "동시 송금")
+        );
+        entityManager.clear();
+
+        Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
+        Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
+        List<TransactionHistory> histories = transactionHistoryRepository.findAll();
+
+        assertNoConcurrentFailures(failures);
+        assertEquals(100_000L - threadCount * amount, savedSenderAccount.getBalance());
+        assertEquals(threadCount * amount, savedReceiverAccount.getBalance());
+        assertEquals(threadCount, transferRepository.count());
+        assertEquals(threadCount * 2, histories.size());
+        assertEquals(threadCount, histories.stream()
+                .filter(history -> history.getDirection() == TransactionDirection.OUT)
+                .count());
+        assertEquals(threadCount, histories.stream()
+                .filter(history -> history.getDirection() == TransactionDirection.IN)
+                .count());
+    }
+
+    @Test
+    @DisplayName("양방향 교차 송금이 동시에 발생해도 데드락 없이 모든 송금과 거래내역이 저장된다")
+    void concurrentTransfers_oppositeDirections_doesNotDeadlockAndPersistsAllHistories() throws InterruptedException {
+        User owner = saveUser("sender@example.com", "계좌주");
+        Account firstAccount = saveAccount(owner, "100200300001", 100_000L);
+        Account secondAccount = saveAccount(owner, "100200300002", 100_000L);
+        int threadCount = 20;
+        long amount = 1_000L;
+        AtomicInteger sequence = new AtomicInteger();
+
+        List<Throwable> failures = runConcurrently(
+                threadCount,
+                () -> {
+                    if (sequence.getAndIncrement() % 2 == 0) {
+                        transferService.transfer(firstAccount.getId(), secondAccount.getAccountNumber(), amount, "교차 송금");
+                    } else {
+                        transferService.transfer(secondAccount.getId(), firstAccount.getAccountNumber(), amount, "교차 송금");
+                    }
+                }
+        );
+        entityManager.clear();
+
+        Account savedFirstAccount = accountRepository.findById(firstAccount.getId()).orElseThrow();
+        Account savedSecondAccount = accountRepository.findById(secondAccount.getId()).orElseThrow();
+
+        assertNoConcurrentFailures(failures);
+        assertEquals(100_000L, savedFirstAccount.getBalance());
+        assertEquals(100_000L, savedSecondAccount.getBalance());
+        assertEquals(threadCount, transferRepository.count());
+        assertEquals(threadCount * 2, transactionHistoryRepository.count());
+    }
+
     private Account saveAccount(User user, String accountNumber, Long balance) {
         Account account = Account.create(user, accountNumber, "테스트 계좌", AccountType.DEPOSIT);
         account.deposit(balance);
-        return accountRepository.save(account);
+        return transactionTemplate.execute(status -> accountRepository.save(account));
     }
 
     private User saveUser(String email, String name) {
-        User user = newUser();
-        ReflectionTestUtils.setField(user, "email", email);
-        ReflectionTestUtils.setField(user, "password", "password");
-        ReflectionTestUtils.setField(user, "name", name);
-        ReflectionTestUtils.setField(user, "phoneNumber", "01012345678");
-        ReflectionTestUtils.setField(user, "birthDate", LocalDate.of(1990, 1, 1));
-        ReflectionTestUtils.setField(user, "identityVerified", true);
-        entityManager.persist(user);
-        return user;
+        return transactionTemplate.execute(status -> {
+            User user = newUser();
+            ReflectionTestUtils.setField(user, "email", email);
+            ReflectionTestUtils.setField(user, "password", "password");
+            ReflectionTestUtils.setField(user, "name", name);
+            ReflectionTestUtils.setField(user, "phoneNumber", "01012345678");
+            ReflectionTestUtils.setField(user, "birthDate", LocalDate.of(1990, 1, 1));
+            ReflectionTestUtils.setField(user, "identityVerified", true);
+            entityManager.persist(user);
+            return user;
+        });
     }
 
     private User newUser() {
@@ -199,7 +303,56 @@ class TransferServiceIntegrationTest {
     }
 
     private void flushAndClear() {
-        entityManager.flush();
         entityManager.clear();
+    }
+
+    private List<Throwable> runConcurrently(int threadCount, ThrowingRunnable task) throws InterruptedException {
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch ready = new CountDownLatch(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<Throwable>> futures = new ArrayList<>();
+
+        for (int i = 0; i < threadCount; i++) {
+            futures.add(executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                try {
+                    task.run();
+                    return null;
+                } catch (Throwable throwable) {
+                    return throwable;
+                }
+            }));
+        }
+
+        assertTrue(ready.await(5, TimeUnit.SECONDS));
+        start.countDown();
+        executor.shutdown();
+        assertTrue(executor.awaitTermination(30, TimeUnit.SECONDS));
+
+        List<Throwable> failures = new ArrayList<>();
+        for (Future<Throwable> future : futures) {
+            try {
+                Throwable failure = future.get();
+                if (failure != null) {
+                    failures.add(failure);
+                }
+            } catch (Exception e) {
+                failures.add(e);
+            }
+        }
+        return failures;
+    }
+
+    private void assertNoConcurrentFailures(List<Throwable> failures) {
+        assertTrue(failures.isEmpty(), () -> failures.stream()
+                .map(throwable -> throwable.getClass().getSimpleName() + ": " + throwable.getMessage())
+                .toList()
+                .toString());
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Exception;
     }
 }

@@ -26,13 +26,14 @@ public class TransferService {
 
     @Transactional
     public DepositRes deposit(Long accountId, Long amount, String memo) {
+        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
         Long loginUserId = 1L;
 
         // amount 1원 이상 확인
         if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
 
-        // accountId로 계좌 조회 & 로그인 사용자 소유 계좌인지 확인
-        Account account = accountRepository.findByIdAndUserId(accountId, loginUserId).orElseThrow(
+        // accountId로 계좌 조회 & 로그인 사용자 소유 계좌인지 확인 -> 비관적락
+        Account account = accountRepository.findByIdAndUserIdForUpdate(accountId, loginUserId).orElseThrow(
                 () -> new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND)
         );
 
@@ -75,30 +76,24 @@ public class TransferService {
 
     @Transactional
     public TransferRes transfer(Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
+        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
         Long loginUserId = 1L;
 
         // amount 1원 이상 확인
         if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
 
-        // senderAccountId로 출금 계좌 조회 & 출금 계좌가 로그인 사용자 소유인지 확인
-        Account senderAccount = accountRepository.findByIdAndUserId(senderAccountId, loginUserId).orElseThrow(
-                () -> new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND)
-        );
+        LockedTransferAccounts accounts =
+                lockTransferAccounts(senderAccountId, receiverAccountNumber);
 
-        // receiverAccountNumber로 수취 계좌 조회
-        Account receiverAccount = accountRepository.findByAccountNumber(receiverAccountNumber).orElseThrow(
-                () -> new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND)
-        );
+        Account senderAccount = accounts.sender();
+        Account receiverAccount = accounts.receiver();
 
-        // 예외 처리: 입출금 계좌 동일한 경우
-        if (senderAccount.getId().equals(receiverAccount.getId())) {
-            throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
-        }
-
+        // 출금 계좌가 로그인 유저의 소유인지 확인
+        validateSenderOwner(senderAccount, loginUserId);
+        // 서로 다른 계좌인지 확인
+        validateDifferentAccounts(senderAccount, receiverAccount);
         // 두 계좌 모두 ACTIVE인지 확인
-        if (!senderAccount.isActive() || !receiverAccount.isActive()) {
-            throw new BusinessException(TransferErrorCode.ACCOUNT_NOT_ACTIVE);
-        }
+        validateAccountsActive(senderAccount, receiverAccount);
 
         // 이전 잔액 캡쳐
         Long senderBalanceBefore = senderAccount.getBalance();
@@ -153,5 +148,60 @@ public class TransferService {
                 memo,
                 transferredAt
         );
+    }
+
+    private LockedTransferAccounts lockTransferAccounts(
+            Long senderAccountId,
+            String receiverAccountNumber
+    ){
+        // receiverAccountNumber로 수취 계좌 ID 조회
+        Long receiverAccountId = accountRepository.findIdByAccountNumber(receiverAccountNumber)
+                .orElseThrow(() -> new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND));
+
+        validateDifferentAccountIds(senderAccountId, receiverAccountId);
+
+        Long firstId = Math.min(senderAccountId, receiverAccountId);
+        Long secondId = Math.max(senderAccountId, receiverAccountId);
+
+        Account first = accountRepository.findByIdForUpdate(firstId)
+                .orElseThrow(() -> new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND));
+
+        Account second = accountRepository.findByIdForUpdate(secondId)
+                .orElseThrow(() -> new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND));
+
+        Account senderAccount = first.getId().equals(senderAccountId) ? first : second;
+        Account receiverAccount = first.getId().equals(receiverAccountId) ? first : second;
+
+        return new LockedTransferAccounts(senderAccount, receiverAccount);
+    }
+
+    private record LockedTransferAccounts(
+            Account sender,
+            Account receiver
+    ) {
+    }
+
+    private void validateDifferentAccounts(Account senderAccount, Account receiverAccount) {
+        if (senderAccount.getId().equals(receiverAccount.getId())) {
+            throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    private void validateDifferentAccountIds(Long senderAccountId, Long receiverAccountId) {
+        if (senderAccountId.equals(receiverAccountId)) {
+            throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    private void validateAccountsActive(Account senderAccount, Account receiverAccount) {
+        if (!senderAccount.isActive() || !receiverAccount.isActive()) {
+            throw new BusinessException(TransferErrorCode.ACCOUNT_NOT_ACTIVE);
+        }
+    }
+
+    private void validateSenderOwner(Account senderAccount, Long loginUserId) {
+        if (!senderAccount.getUser().getId().equals(loginUserId)) {
+            throw new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND);
+        }
     }
 }

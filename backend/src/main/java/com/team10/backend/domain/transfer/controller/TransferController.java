@@ -26,6 +26,7 @@ public class TransferController {
     @PostMapping("/deposit")
     @Operation(summary = "입금")
     public ResponseEntity<DepositRes> deposit(@Valid @RequestBody DepositReq request) {
+        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
         DepositRes response = transferService.deposit(request.accountId(), request.amount(), request.memo());
         return ResponseEntity.ok(response);
     }
@@ -33,6 +34,7 @@ public class TransferController {
     @PostMapping
     @Operation(summary = "계좌 간 송금")
     public ResponseEntity<TransferRes> transfer(@Valid @RequestBody TransferReq request) {
+        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
         TransferRes response = transferService.transfer(
                 request.senderAccountId(),
                 request.receiverAccountNumber(),

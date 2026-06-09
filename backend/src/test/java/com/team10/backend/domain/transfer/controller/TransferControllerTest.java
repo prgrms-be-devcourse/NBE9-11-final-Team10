@@ -7,6 +7,7 @@ import com.team10.backend.domain.transfer.dto.res.DepositRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.service.TransferService;
 import com.team10.backend.domain.transfer.type.TransferStatus;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -32,6 +33,7 @@ class TransferControllerTest {
     private TransferController transferController;
 
     @Test
+    @DisplayName("입금 요청을 서비스에 위임하고 200 OK 응답을 반환한다")
     void deposit_delegatesToServiceAndReturnsOk() {
         DepositReq request = new DepositReq(1L, 100_000L, "초기 입금");
         DepositRes response = new DepositRes(
@@ -54,6 +56,7 @@ class TransferControllerTest {
     }
 
     @Test
+    @DisplayName("송금 요청을 서비스에 위임하고 200 OK 응답을 반환한다")
     void transfer_delegatesToServiceAndReturnsOk() {
         TransferReq request = new TransferReq(1L, "100200300002", 50_000L, "점심값");
         TransferRes response = new TransferRes(
