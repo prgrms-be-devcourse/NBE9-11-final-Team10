@@ -19,11 +19,19 @@ repositories {
 }
 
 dependencies {
+    val querydslVersion = "7.1"
+
     // Spring Boot
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-h2console")
+
+    // QueryDSL
+    implementation("io.github.openfeign.querydsl:querydsl-jpa:$querydslVersion")
+    annotationProcessor("io.github.openfeign.querydsl:querydsl-apt:$querydslVersion:jpa")
+    annotationProcessor("jakarta.persistence:jakarta.persistence-api")
+    annotationProcessor("jakarta.annotation:jakarta.annotation-api")
 
     // Swagger(OpenAPI)
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
