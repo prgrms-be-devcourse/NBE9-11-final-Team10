@@ -1,4 +1,89 @@
 package com.team10.backend.domain.account.service;
 
+import com.team10.backend.domain.account.dto.req.AccountCreateReq;
+import com.team10.backend.domain.account.dto.res.AccountRes;
+import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
+import com.team10.backend.domain.account.entity.Account;
+import com.team10.backend.domain.account.repository.AccountRepository;
+import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.domain.account.util.AccountNumberGenerator;
+import jakarta.persistence.EntityManager;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class AccountService {
+
+    private final AccountRepository accountRepository;
+    private final EntityManager entityManager;
+
+    @Transactional
+    public AccountRes createAccount(Long userId, AccountCreateReq request) {
+        User user = entityManager.find(User.class, userId);
+
+        String accountNumber = generateUniqueAccountNumber();
+
+        Account account = Account.create(
+                user,
+                accountNumber,
+                request.getNickname(),
+                request.getAccountType()
+        );
+
+        Account savedAccount = accountRepository.save(account);
+
+        return toAccountRes(savedAccount);
+    }
+
+    public List<AccountSummaryRes> getAccounts(Long userId) {
+        return accountRepository.findAllByUserId(userId).stream()
+                .map(this::toAccountSummaryRes)
+                .toList();
+    }
+
+    public AccountRes getAccount(Long userId, Long accountId) {
+        Account account = accountRepository.findByIdAndUserId(accountId, userId)
+                .orElseThrow();
+
+        return toAccountRes(account);
+    }
+
+    private String generateUniqueAccountNumber() {
+        String accountNumber;
+
+        do {
+            accountNumber = AccountNumberGenerator.generate();
+        } while (accountRepository.existsByAccountNumber(accountNumber));
+
+        return accountNumber;
+    }
+
+    private AccountRes toAccountRes(Account account) {
+        return new AccountRes(
+                account.getId(),
+                account.getAccountNumber(),
+                account.getNickname(),
+                account.getAccountType(),
+                account.getBalance(),
+                account.getStatus(),
+                account.getCreatedAt(),
+                account.getUpdatedAt()
+        );
+    }
+
+    private AccountSummaryRes toAccountSummaryRes(Account account) {
+        return new AccountSummaryRes(
+                account.getId(),
+                account.getAccountNumber(),
+                account.getNickname(),
+                account.getBalance(),
+                account.getStatus(),
+                account.getCreatedAt()
+        );
+    }
 }
