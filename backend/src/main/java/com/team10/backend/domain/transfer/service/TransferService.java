@@ -109,7 +109,7 @@ public class TransferService {
         receiverAccount.deposit(amount); // 수취 계좌 balance 증가
 
         // Transfer(SUCCESS) 저장
-        Transfer transfer = Transfer.success(senderAccount, receiverAccount, amount, memo);
+        Transfer transfer = transferRepository.save(Transfer.success(senderAccount, receiverAccount, amount, memo));
 
         LocalDateTime transferredAt = LocalDateTime.now();
         // 출금 계좌 TransactionHistory(TRANSFER, OUT) 저장

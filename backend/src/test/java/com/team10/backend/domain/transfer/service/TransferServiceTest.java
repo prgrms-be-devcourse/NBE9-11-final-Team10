@@ -117,6 +117,8 @@ class TransferServiceTest {
         Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(senderAccount));
         when(accountRepository.findByAccountNumber("100200300002")).thenReturn(Optional.of(receiverAccount));
+        when(transferRepository.save(any(Transfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(transactionHistoryRepository.save(any(TransactionHistory.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -135,7 +137,7 @@ class TransferServiceTest {
 
         ArgumentCaptor<TransactionHistory> historyCaptor = ArgumentCaptor.forClass(TransactionHistory.class);
         verify(transactionHistoryRepository, times(2)).save(historyCaptor.capture());
-        verify(transferRepository, never()).save(any(Transfer.class));
+        verify(transferRepository).save(any(Transfer.class));
 
         List<TransactionHistory> histories = historyCaptor.getAllValues();
         TransactionHistory senderHistory = histories.get(0);
