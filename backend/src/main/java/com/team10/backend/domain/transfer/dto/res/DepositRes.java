@@ -8,6 +8,7 @@ public record DepositRes(
         Long accountId,
         TransactionType type,
         Long amount,
+        Long balanceBefore,
         Long balanceAfter,
         String memo,
         LocalDateTime transactedAt

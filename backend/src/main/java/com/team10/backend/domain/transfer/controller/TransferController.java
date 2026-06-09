@@ -26,12 +26,18 @@ public class TransferController {
     @PostMapping("/deposit")
     @Operation(summary = "입금")
     public ResponseEntity<DepositRes> deposit(@Valid @RequestBody DepositReq request) {
-        return ResponseEntity.ok(transferService.deposit(request));
+        DepositRes response = transferService.deposit(request.accountId(), request.amount(), request.memo());
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping
     @Operation(summary = "계좌 간 송금")
     public ResponseEntity<TransferRes> transfer(@Valid @RequestBody TransferReq request) {
-        return ResponseEntity.ok(transferService.transfer(request));
+        TransferRes response = transferService.transfer(
+                request.senderAccountId(),
+                request.receiverAccountNumber(),
+                request.amount(),
+                request.memo());
+        return ResponseEntity.ok(response);
     }
 }
