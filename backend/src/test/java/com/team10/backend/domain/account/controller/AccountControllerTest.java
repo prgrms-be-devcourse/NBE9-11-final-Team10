@@ -56,7 +56,7 @@ class AccountControllerTest {
 
         when(accountService.createAccount(eq(1L), any(AccountCreateReq.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/accounts")
+        mockMvc.perform(post("/api/v1/accounts")
                         .param("userId", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -76,7 +76,7 @@ class AccountControllerTest {
     void createAccountWithoutAccountType() throws Exception {
         AccountCreateReq request = createAccountCreateReq("생활비 계좌", null);
 
-        mockMvc.perform(post("/api/accounts")
+        mockMvc.perform(post("/api/v1/accounts")
                         .param("userId", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -97,7 +97,7 @@ class AccountControllerTest {
 
         when(accountService.getAccounts(1L)).thenReturn(List.of(response));
 
-        mockMvc.perform(get("/api/accounts")
+        mockMvc.perform(get("/api/v1/accounts")
                         .param("userId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1L))
@@ -125,7 +125,7 @@ class AccountControllerTest {
 
         when(accountService.getAccount(1L, 1L)).thenReturn(response);
 
-        mockMvc.perform(get("/api/accounts/{accountId}", 1L)
+        mockMvc.perform(get("/api/v1/accounts/{accountId}", 1L)
                         .param("userId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1L))
