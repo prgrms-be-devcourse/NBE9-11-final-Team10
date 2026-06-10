@@ -9,6 +9,7 @@ import com.team10.backend.domain.transaction.type.TransactionDirection;
 import com.team10.backend.domain.transaction.type.TransactionType;
 import com.team10.backend.domain.transfer.dto.res.DepositRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
+import com.team10.backend.domain.transfer.entity.Transfer;
 import com.team10.backend.domain.transfer.errorcode.TransferErrorCode;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
 import com.team10.backend.domain.transfer.type.TransferStatus;
@@ -161,7 +162,7 @@ class TransferServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("잔액 부족 송금은 잔액과 거래내역 변경 없이 INSUFFICIENT_BALANCE 예외를 발생시킨다")
+    @DisplayName("잔액 부족 송금은 잔액과 거래내역 변경 없이 실패 송금 기록을 저장한다")
     void transfer_insufficientBalance_rollsBackBalanceAndHistory() {
         User sender = saveUser("sender@example.com", "송금자");
         User receiver = saveUser("receiver@example.com", "수취자");
@@ -176,11 +177,20 @@ class TransferServiceIntegrationTest {
 
         Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
         Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
+        List<Transfer> transfers = transferRepository.findAll();
+
         assertEquals(TransferErrorCode.INSUFFICIENT_BALANCE, exception.getErrorCode());
         assertEquals(10_000L, savedSenderAccount.getBalance());
         assertEquals(10_000L, savedReceiverAccount.getBalance());
-        assertEquals(0, transferRepository.count());
+        assertEquals(1, transfers.size());
         assertEquals(0, transactionHistoryRepository.count());
+
+        Transfer failedTransfer = transfers.getFirst();
+        assertEquals(TransferStatus.FAILED, failedTransfer.getStatus());
+        assertEquals(senderAccount.getId(), failedTransfer.getSenderAccount().getId());
+        assertEquals(receiverAccount.getId(), failedTransfer.getReceiverAccount().getId());
+        assertEquals(50_000L, failedTransfer.getAmount());
+        assertEquals("잔액 부족", failedTransfer.getMemo());
     }
 
     @Test

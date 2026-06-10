@@ -8,9 +8,11 @@ import com.team10.backend.domain.transfer.dto.res.DepositRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.Transfer;
 import com.team10.backend.domain.transfer.errorcode.TransferErrorCode;
+import com.team10.backend.domain.transfer.event.TransferFailedEvent;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
 import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,7 @@ public class TransferService {
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final AccountRepository accountRepository;
     private final TransferRepository transferRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public DepositRes deposit(Long accountId, Long amount, String memo) {
@@ -100,7 +103,14 @@ public class TransferService {
         Long receiverBalanceBefore = receiverAccount.getBalance();
 
         // 출금 계좌 잔액 충분한지 확인 -> account.withdraw() 내부에 확인 로직 구현
-        senderAccount.withdraw(amount); // 출금 계좌 balance 감소
+        try {
+            senderAccount.withdraw(amount);
+        } catch (BusinessException e) {
+            if (e.getErrorCode() == TransferErrorCode.INSUFFICIENT_BALANCE) {
+                publishTransferFailedEvent(senderAccount.getId(), receiverAccount.getId(), amount, memo);
+            }
+            throw e;
+        }
         receiverAccount.deposit(amount); // 수취 계좌 balance 증가
 
         // Transfer(SUCCESS) 저장
@@ -203,5 +213,14 @@ public class TransferService {
         if (!senderAccount.getUser().getId().equals(loginUserId)) {
             throw new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND);
         }
+    }
+
+    private void publishTransferFailedEvent(
+            Long senderAccountId,
+            Long receiverAccountId,
+            Long amount,
+            String memo
+    ) {
+        eventPublisher.publishEvent(new TransferFailedEvent(senderAccountId, receiverAccountId, amount, memo));
     }
 }

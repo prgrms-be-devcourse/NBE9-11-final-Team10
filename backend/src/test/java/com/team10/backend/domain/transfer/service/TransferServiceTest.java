@@ -11,6 +11,7 @@ import com.team10.backend.domain.transfer.dto.res.DepositRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.Transfer;
 import com.team10.backend.domain.transfer.errorcode.TransferErrorCode;
+import com.team10.backend.domain.transfer.event.TransferFailedEvent;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
 import com.team10.backend.domain.transfer.type.TransferStatus;
 import com.team10.backend.domain.user.entity.User;
@@ -22,6 +23,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -42,6 +44,9 @@ class TransferServiceTest {
 
     @Mock
     private TransferRepository transferRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private TransferService transferService;
@@ -180,6 +185,37 @@ class TransferServiceTest {
 
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
         verify(transactionHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("잔액 부족 송금은 실패 송금 이벤트를 발행하고 INSUFFICIENT_BALANCE 예외를 발생시킨다")
+    void transfer_insufficientBalance_publishesFailedEvent() {
+        User sender = user();
+        User receiver = user();
+        when(sender.getId()).thenReturn(1L);
+
+        Account senderAccount = account(1L, sender, "100200300001", 10_000L);
+        Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
+        when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
+        when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
+        when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> transferService.transfer(1L, "100200300002", 50_000L, "잔액 부족")
+        );
+
+        ArgumentCaptor<TransferFailedEvent> eventCaptor = ArgumentCaptor.forClass(TransferFailedEvent.class);
+        assertEquals(TransferErrorCode.INSUFFICIENT_BALANCE, exception.getErrorCode());
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        verify(transferRepository, never()).save(any(Transfer.class));
+        verify(transactionHistoryRepository, never()).save(any());
+
+        TransferFailedEvent event = eventCaptor.getValue();
+        assertEquals(1L, event.senderAccountId());
+        assertEquals(2L, event.receiverAccountId());
+        assertEquals(50_000L, event.amount());
+        assertEquals("잔액 부족", event.memo());
     }
 
     private Account account(Long id, User user, String accountNumber, Long balance) {
