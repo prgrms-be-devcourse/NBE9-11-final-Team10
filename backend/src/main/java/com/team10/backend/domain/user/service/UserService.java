@@ -200,8 +200,12 @@ public class UserService {
      */
     @Transactional
     public OneWonStartRes startOneWonVerification(Long userId, OneWonStartReq request) {
+        // GOVERNMENT_VERIFIED: 최초 요청
+        // ONE_WON_PENDING: 코드를 못 받았거나 만료된 경우 재시도 허용
         IdentityVerification verification = identityVerificationRepository
-                .findTopByUserIdAndStatusOrderByCreatedAtDesc(userId, VerificationStatus.GOVERNMENT_VERIFIED)
+                .findTopByUserIdOrderByCreatedAtDesc(userId)
+                .filter(v -> v.getStatus() == VerificationStatus.GOVERNMENT_VERIFIED
+                        || v.getStatus() == VerificationStatus.ONE_WON_PENDING)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.VERIFICATION_NOT_READY_FOR_ONE_WON));
 
         // 코드 생성 + Redis 저장 (TTL 10분)

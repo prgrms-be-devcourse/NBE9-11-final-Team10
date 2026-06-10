@@ -51,16 +51,25 @@ public class AuthController {
     public ResponseEntity<Void> logout(
             @RequestHeader("Authorization") String authHeader
     ) {
-        Long userId = extractUserId(authHeader);
+        // 로그아웃은 만료된 토큰으로도 가능해야 하므로 parseUserIdIgnoreExpiry 사용
+        Long userId = extractUserIdIgnoreExpiry(authHeader);
         userService.logout(userId);
         return ResponseEntity.noContent().build();
     }
 
-    /** Authorization: Bearer {token} 에서 userId 추출 */
+    /** Authorization: Bearer {token} 에서 userId 추출 (만료 검증 포함) */
     private Long extractUserId(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             throw new IllegalArgumentException("Authorization 헤더가 없거나 형식이 올바르지 않습니다.");
         }
         return jwtProvider.parseUserId(authHeader.substring(7));
+    }
+
+    /** Authorization: Bearer {token} 에서 userId 추출 (만료 토큰도 허용 — logout 전용) */
+    private Long extractUserIdIgnoreExpiry(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new IllegalArgumentException("Authorization 헤더가 없거나 형식이 올바르지 않습니다.");
+        }
+        return jwtProvider.parseUserIdIgnoreExpiry(authHeader.substring(7));
     }
 }

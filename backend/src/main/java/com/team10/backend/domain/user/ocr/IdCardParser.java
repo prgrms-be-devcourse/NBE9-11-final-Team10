@@ -22,19 +22,20 @@ import java.util.regex.Pattern;
 public class IdCardParser {
 
     /**
-     * 주민등록번호: 6자리-7자리 (뒷자리 첫 숫자 1~4)
-     * 예: 901201-1234567
+     * 주민등록번호: 6자리-7자리 (뒷자리 첫 숫자 1~8, 외국인등록번호 포함)
+     * 예: 901201-1234567 (내국인), 901201-5xxxxxx (외국인)
      */
     private static final Pattern RESIDENT_NUMBER_PATTERN =
-            Pattern.compile("(\\d{6})[\\-–](([1-4])\\d{6})");
+            Pattern.compile("(\\d{6})[\\-–]([1-8]\\d{6})");
 
     /**
      * 발급일자: yyyy.MM.dd / yyyy-MM-dd / yyyy MM dd / yyyy. MM. dd. 형식
      * 구분자가 점+공백(". ") 두 글자인 경우도 처리
-     * 예: 2024. 11. 21. / 2023.01.15 / 2023-01-15
+     * 1900년대 발급 신분증도 지원 ((?:19|20)\d{2})
+     * 예: 2024. 11. 21. / 2023.01.15 / 1999-05-01
      */
     private static final Pattern ISSUE_DATE_PATTERN =
-            Pattern.compile("(20\\d{2})[.\\-\\s]{1,2}(\\d{1,2})[.\\-\\s]{1,2}(\\d{1,2})");
+            Pattern.compile("((?:19|20)\\d{2})[.\\-\\s]{1,2}(\\d{1,2})[.\\-\\s]{1,2}(\\d{1,2})");
 
     /**
      * 이름: '성명' 또는 '이름' 레이블 뒤의 한글 2~4자

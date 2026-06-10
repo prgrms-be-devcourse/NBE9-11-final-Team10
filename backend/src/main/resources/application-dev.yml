@@ -27,7 +27,7 @@ spring:
       port: 6379
 
 ocr:
-  google-vision-key-path: classpath:direct-branch-418305-8dac8c280b9d.json
+  google-vision-key-path: ${GCP_KEY_PATH:classpath:gcp-key.json}
 
 jwt:
   secret: "moneystory-dev-secret-key-must-be-at-least-32-characters-long!"
