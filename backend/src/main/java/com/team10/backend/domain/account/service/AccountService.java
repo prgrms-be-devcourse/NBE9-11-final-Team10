@@ -4,9 +4,11 @@ import com.team10.backend.domain.account.dto.req.AccountCreateReq;
 import com.team10.backend.domain.account.dto.res.AccountRes;
 import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
 import com.team10.backend.domain.account.entity.Account;
+import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.repository.AccountRepository;
-import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.account.util.AccountNumberGenerator;
+import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.global.exception.BusinessException;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,14 @@ public class AccountService {
     @Transactional
     public AccountRes createAccount(Long userId, AccountCreateReq request) {
         User user = entityManager.find(User.class, userId);
+
+        if (user == null) {
+            throw new BusinessException(AccountErrorCode.USER_NOT_FOUND);
+        }
+
+        if (!Boolean.TRUE.equals(user.getIdentityVerified())) {
+            throw new BusinessException(AccountErrorCode.IDENTITY_VERIFICATION_REQUIRED);
+        }
 
         String accountNumber = generateUniqueAccountNumber();
 
@@ -48,7 +58,7 @@ public class AccountService {
 
     public AccountRes getAccount(Long userId, Long accountId) {
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
-                .orElseThrow();
+                .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         return toAccountRes(account);
     }
