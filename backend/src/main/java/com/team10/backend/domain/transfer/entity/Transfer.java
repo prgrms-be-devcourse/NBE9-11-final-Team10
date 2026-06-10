@@ -36,7 +36,7 @@ public class Transfer extends BaseEntity {
     @Column(nullable = false, length = 20)
     private TransferStatus status;
 
-    @Column(length = 255)
+    @Column(length = 255, nullable = true)
     private String memo;
 
     public Transfer(Account senderAccount, Account receiverAccount, Long amount, TransferStatus status, String memo){
