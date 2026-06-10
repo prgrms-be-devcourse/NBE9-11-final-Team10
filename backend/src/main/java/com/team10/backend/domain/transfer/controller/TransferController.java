@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/transfers")
+@RequestMapping("/api/v1/transfers")
 @Tag(name = "TransferController", description = "입금/송금 API")
 @RequiredArgsConstructor
 public class TransferController {
