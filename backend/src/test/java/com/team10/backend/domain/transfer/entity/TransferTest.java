@@ -4,6 +4,7 @@ import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.transfer.type.TransferStatus;
 import com.team10.backend.domain.user.entity.User;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.mock;
 class TransferTest {
 
     @Test
+    @DisplayName("성공 송금 객체 생성 시 상태와 필드 값이 올바르게 설정된다")
     void success_createsSuccessTransfer() {
         Account senderAccount = account("100200300001");
         Account receiverAccount = account("100200300002");
@@ -28,6 +30,7 @@ class TransferTest {
     }
 
     @Test
+    @DisplayName("실패 송금 객체 생성 시 상태와 필드 값이 올바르게 설정된다")
     void failed_createsFailedTransfer() {
         Account senderAccount = account("100200300001");
         Account receiverAccount = account("100200300002");

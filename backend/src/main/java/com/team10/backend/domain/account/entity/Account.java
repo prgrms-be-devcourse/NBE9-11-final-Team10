@@ -60,7 +60,7 @@ public class Account extends BaseEntity {
 
     public void withdraw(Long amount){
         if (balance - amount < 0){
-            throw new BusinessException(TransferErrorCode.TRANSFER_FAILED);
+            throw new BusinessException(TransferErrorCode.INSUFFICIENT_BALANCE);
         } else {
             this.balance -= amount;
         }
