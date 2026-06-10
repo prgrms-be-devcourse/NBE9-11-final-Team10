@@ -49,7 +49,7 @@ public class TransactionHistory extends BaseEntity {
     @Column(length = 30)
     private String counterpartyName; // 이체 시점 상대에 대한 정보 - 기본적으로 상대방 User name 고려
 
-    @Column(length = 255)
+    @Column(length = 255, nullable = true)
     private String memo; // User가 작성하는 거래 메모
 
     @Column(nullable = false)
