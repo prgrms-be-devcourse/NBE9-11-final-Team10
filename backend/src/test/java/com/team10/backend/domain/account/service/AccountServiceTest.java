@@ -150,12 +150,29 @@ class AccountServiceTest {
                 .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
     }
 
+
+
+    @Test
+    @DisplayName("ACTIVE 상태가 아닌 계좌는 별칭을 수정할 수 없다")
+    void updateNicknameWithNotActiveStatus() {
+        Account account = createAccount(1L, verifiedUser, "100200300001", "생활비 계좌");
+        ReflectionTestUtils.setField(account, "status", AccountStatus.CLOSED);
+        AccountNicknameUpdateReq request = new AccountNicknameUpdateReq("급여 계좌");
+
+        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> accountService.updateNickname(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AccountErrorCode.ACCOUNT_NOT_ACTIVE);
+    }
+
     @Test
     @DisplayName("잔액이 0원인 ACTIVE 계좌를 해지한다")
     void closeAccount() {
         Account account = createAccount(1L, verifiedUser, "100200300001", "생활비 계좌");
 
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
 
         AccountRes response = accountService.closeAccount(1L, 1L);
 
@@ -169,7 +186,7 @@ class AccountServiceTest {
         Account account = createAccount(1L, verifiedUser, "100200300001", "생활비 계좌");
         ReflectionTestUtils.setField(account, "status", AccountStatus.CLOSED);
 
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
 
         assertThatThrownBy(() -> accountService.closeAccount(1L, 1L))
                 .isInstanceOf(BusinessException.class)
@@ -183,7 +200,7 @@ class AccountServiceTest {
         Account account = createAccount(1L, verifiedUser, "100200300001", "생활비 계좌");
         ReflectionTestUtils.setField(account, "balance", 1000L);
 
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
 
         assertThatThrownBy(() -> accountService.closeAccount(1L, 1L))
                 .isInstanceOf(BusinessException.class)

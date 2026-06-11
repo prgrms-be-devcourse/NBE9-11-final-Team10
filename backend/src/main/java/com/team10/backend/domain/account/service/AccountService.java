@@ -58,6 +58,10 @@ public class AccountService {
                 .orElseThrow(() -> new
                         BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
+        if (!account.isActive()) {
+            throw new BusinessException(AccountErrorCode.ACCOUNT_NOT_ACTIVE);
+        }
+
         account.updateNickname(request.nickname());
 
         return toAccountRes(account);
@@ -66,11 +70,11 @@ public class AccountService {
 
     @Transactional
     public AccountRes closeAccount(Long userId, Long accountId) {
-        Account account = accountRepository.findByIdAndUserId(accountId, userId)
+        Account account = accountRepository.findByIdAndUserIdForUpdate(accountId, userId)
                 .orElseThrow(() -> new
                         BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
-        if (account.getStatus() != AccountStatus.ACTIVE) {
+        if (!account.isActive()) {
             throw new BusinessException(AccountErrorCode.ACCOUNT_NOT_ACTIVE);
         }
 
