@@ -8,11 +8,12 @@ import com.team10.backend.domain.user.verification.MockGovernmentVerifyService;
 import com.team10.backend.domain.user.verification.VerificationSessionRecorder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
 import java.util.Optional;
 
 /**
@@ -44,6 +45,11 @@ public class OcrService {
     private final MockGovernmentVerifyService mockGovernmentVerifyService;
     private final VerificationSessionRecorder verificationSessionRecorder;
 
+    /** Self-injection: @Transactional 메서드를 같은 빈 내에서 호출할 때 프록시를 통하도록 한다. */
+    @Autowired
+    @Lazy
+    private OcrService self;
+
     /**
      * 비동기 OCR 처리 진입점.
      * Vision API 호출은 트랜잭션 밖에서 수행하고, DB 저장만 별도 트랜잭션으로 위임한다.
@@ -52,7 +58,7 @@ public class OcrService {
     public void processAsync(byte[] imageBytes, Long verificationId) {
         log.info("[OCR] 1단계 시작 — verificationId={}, thread={}", verificationId, Thread.currentThread().getName());
 
-        if (loadVerification(verificationId) == null) return;
+        if (self.loadVerification(verificationId) == null) return;
 
         try {
             // ── 1단계: Google Vision OCR (트랜잭션 밖) ──────────────────────
@@ -62,21 +68,21 @@ public class OcrService {
             Optional<IdCardOcrResult> parsed = idCardParser.parse(rawText);
 
             if (parsed.isEmpty()) {
-                saveFailure(verificationId, "OCR 파싱 실패: 필수 정보(이름·주민번호·발급일자)를 추출할 수 없습니다.");
+                self.saveFailure(verificationId, "OCR 파싱 실패: 필수 정보(이름·주민번호·발급일자)를 추출할 수 없습니다.");
                 log.warn("[OCR] 파싱 실패 — verificationId={}", verificationId);
                 return;
             }
 
             IdCardOcrResult result = parsed.get();
-            saveOcrSuccess(verificationId, result);
+            self.saveOcrSuccess(verificationId, result);
             log.info("[OCR] 1단계 완료 — verificationId={}, name={}", verificationId, result.name());
 
             // ── 2단계: 행안부 진위 확인 즉시 체이닝 ────────────────────────
             chainGovernmentVerification(verificationId, result);
 
-        } catch (IOException e) {
-            saveFailure(verificationId, "이미지 처리 오류: " + e.getMessage());
-            log.error("[OCR] 이미지 오류 — verificationId={}", verificationId, e);
+        } catch (Exception e) {
+            self.saveFailure(verificationId, "이미지 처리 중 오류가 발생했습니다: " + e.getMessage());
+            log.error("[OCR] 처리 오류 — verificationId={}", verificationId, e);
         }
     }
 
@@ -122,15 +128,15 @@ public class OcrService {
 
             switch (govResult) {
                 case VERIFIED -> {
-                    saveGovSuccess(verificationId);
+                    self.saveGovSuccess(verificationId);
                     log.info("[GOV] 2단계 완료 — verificationId={}, 다음 단계: 1원 송금 대기", verificationId);
                 }
                 case ISSUE_DATE_MISMATCH -> {
-                    saveFailure(verificationId, "분실·도난 신분증 의심: 발급일자가 정부 기록과 일치하지 않습니다.");
+                    self.saveFailure(verificationId, "분실·도난 신분증 의심: 발급일자가 정부 기록과 일치하지 않습니다.");
                     log.warn("[GOV] 발급일자 불일치 — verificationId={}", verificationId);
                 }
                 case IDENTITY_NOT_FOUND -> {
-                    saveFailure(verificationId, "존재하지 않는 명의: 위조 신분증이 의심됩니다.");
+                    self.saveFailure(verificationId, "존재하지 않는 명의: 위조 신분증이 의심됩니다.");
                     log.warn("[GOV] 존재하지 않는 명의 — verificationId={}", verificationId);
                 }
             }

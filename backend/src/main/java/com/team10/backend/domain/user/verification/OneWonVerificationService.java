@@ -25,10 +25,12 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class OneWonVerificationService {
 
-    public enum VerifyResult { MATCHED, MISMATCH, EXPIRED }
+    public enum VerifyResult { MATCHED, MISMATCH, EXPIRED, LOCKED }
 
     private static final String KEY_PREFIX = "identity:one-won:";
+    private static final String ATTEMPT_PREFIX = "identity:one-won:attempt:";
     private static final Duration TTL = Duration.ofMinutes(10);
+    private static final int MAX_ATTEMPTS = 5;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final StringRedisTemplate redisTemplate;
@@ -48,24 +50,37 @@ public class OneWonVerificationService {
      *
      * <ul>
      *   <li>키 없음 → {@link VerifyResult#EXPIRED}</li>
-     *   <li>코드 불일치 → {@link VerifyResult#MISMATCH}</li>
+     *   <li>시도 횟수 초과(5회) → 코드 삭제 후 {@link VerifyResult#LOCKED}</li>
+     *   <li>코드 불일치 → 시도 횟수 증가 후 {@link VerifyResult#MISMATCH}</li>
      *   <li>코드 일치 → Redis 키 삭제 후 {@link VerifyResult#MATCHED}</li>
      * </ul>
      */
     public VerifyResult verify(Long verificationId, String inputCode) {
         String key = KEY_PREFIX + verificationId;
+        String attemptKey = ATTEMPT_PREFIX + verificationId;
         String stored = redisTemplate.opsForValue().get(key);
 
         if (stored == null) {
             log.warn("[1원 인증] 코드 만료 또는 없음 — verificationId={}", verificationId);
             return VerifyResult.EXPIRED;
         }
+
         if (!stored.equals(inputCode)) {
-            log.warn("[1원 인증] 코드 불일치 — verificationId={}", verificationId);
+            Long attempts = redisTemplate.opsForValue().increment(attemptKey);
+            redisTemplate.expire(attemptKey, TTL);
+            log.warn("[1원 인증] 코드 불일치 — verificationId={}, attempts={}", verificationId, attempts);
+
+            if (attempts != null && attempts >= MAX_ATTEMPTS) {
+                redisTemplate.delete(key);
+                redisTemplate.delete(attemptKey);
+                log.warn("[1원 인증] 시도 횟수 초과 — verificationId={}, 코드 폐기", verificationId);
+                return VerifyResult.LOCKED;
+            }
             return VerifyResult.MISMATCH;
         }
 
         redisTemplate.delete(key);
+        redisTemplate.delete(attemptKey);
         log.info("[1원 인증] 코드 일치 — verificationId={}", verificationId);
         return VerifyResult.MATCHED;
     }

@@ -243,6 +243,9 @@ public class UserService {
         if (result == OneWonVerificationService.VerifyResult.EXPIRED) {
             throw new BusinessException(UserErrorCode.ONE_WON_CODE_EXPIRED);
         }
+        if (result == OneWonVerificationService.VerifyResult.LOCKED) {
+            throw new BusinessException(UserErrorCode.ONE_WON_ATTEMPT_EXCEEDED);
+        }
         if (result == OneWonVerificationService.VerifyResult.MISMATCH) {
             throw new BusinessException(UserErrorCode.ONE_WON_CODE_MISMATCH);
         }
@@ -266,6 +269,11 @@ public class UserService {
         }
         if (imageFile.getSize() > MAX_IMAGE_SIZE) {
             throw new BusinessException(UserErrorCode.OCR_IMAGE_TOO_LARGE);
+        }
+        String contentType = imageFile.getContentType();
+        if (contentType == null
+                || (!contentType.equals("image/jpeg") && !contentType.equals("image/png"))) {
+            throw new BusinessException(UserErrorCode.OCR_IMAGE_INVALID_TYPE);
         }
     }
 }
