@@ -92,7 +92,7 @@ public class TransactionHistory extends BaseEntity {
         TransactionHistory history = new TransactionHistory();
         history.account = account;
         history.transfer = transfer;
-        history.type = TransactionType.TRANSFER_OUT;
+        history.type = TransactionType.TRANSFER;
         history.direction = TransactionDirection.OUT;
         history.amount = amount;
         history.balanceBefore = balanceBefore;
@@ -118,7 +118,7 @@ public class TransactionHistory extends BaseEntity {
         TransactionHistory history = new TransactionHistory();
         history.account = account;
         history.transfer = transfer;
-        history.type = TransactionType.TRANSFER_IN;
+        history.type = TransactionType.TRANSFER;
         history.direction = TransactionDirection.IN;
         history.amount = amount;
         history.balanceBefore = balanceBefore;
