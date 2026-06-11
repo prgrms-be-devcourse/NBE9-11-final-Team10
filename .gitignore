@@ -92,6 +92,3 @@ backend/.gradle-home/
 **/secrets.tf
 
 node_modules/
-# Google Cloud service account key
-backend/src/main/resources/*.json
-
