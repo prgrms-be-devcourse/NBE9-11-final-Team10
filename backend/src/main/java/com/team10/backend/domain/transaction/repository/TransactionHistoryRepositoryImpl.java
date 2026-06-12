@@ -1,5 +1,6 @@
 package com.team10.backend.domain.transaction.repository;
 
+import static com.team10.backend.domain.transaction.entity.QTransactionHistory.transactionHistory;
 import static com.team10.backend.domain.transaction.service.TransactionHistoryService.SORT_PROPERTY_TRANSACTED_AT;
 
 import com.querydsl.core.BooleanBuilder;
@@ -9,7 +10,6 @@ import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.team10.backend.domain.transaction.dto.req.TransactionHistorySearchReq;
 import com.team10.backend.domain.transaction.dto.res.TransactionHistorySearchRes;
-import com.team10.backend.domain.transaction.entity.QTransactionHistory;
 import com.team10.backend.domain.transaction.type.TransactionDirection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -32,10 +32,8 @@ public class TransactionHistoryRepositoryImpl implements TransactionHistoryRepos
             TransactionHistorySearchReq filter,
             Pageable pageable
     ) {
-        QTransactionHistory transactionHistory = QTransactionHistory.transactionHistory;
-
         // where 절 생성 헬퍼 메서드
-        BooleanBuilder condition = buildSearchCondition(accountId, filter, transactionHistory);
+        BooleanBuilder condition = buildSearchCondition(accountId, filter);
 
         // controller 단의 요청파라미터 입력 시점에서 이미 default 값 지정되므로 non-null
         Sort.Direction direction = pageable.getSort()
@@ -74,65 +72,58 @@ public class TransactionHistoryRepositoryImpl implements TransactionHistoryRepos
 
     private BooleanBuilder buildSearchCondition(
             Long accountId,
-            TransactionHistorySearchReq filter,
-            QTransactionHistory transactionHistory
+            TransactionHistorySearchReq filter
     ) {
         return new BooleanBuilder()
-                .and(accountIdEq(accountId, transactionHistory))
-                .and(transactedAtGoe(filter.startDate(), transactionHistory))
-                .and(transactedAtLtEndDate(filter.endDate(), transactionHistory))
-                .and(directionEq(filter.direction(), transactionHistory))
-                .and(amountGoe(filter.minAmount(), transactionHistory))
-                .and(amountLoe(filter.maxAmount(), transactionHistory))
-                .and(counterpartyNameContains(filter.counterpartyName(), transactionHistory));
+                .and(accountIdEq(accountId))
+                .and(transactedAtGoe(filter.startDate()))
+                .and(transactedAtLtEndDate(filter.endDate()))
+                .and(directionEq(filter.direction()))
+                .and(amountGoe(filter.minAmount()))
+                .and(amountLoe(filter.maxAmount()))
+                .and(counterpartyNameContains(filter.counterpartyName()));
     }
 
-    private BooleanExpression accountIdEq(Long accountId, QTransactionHistory transactionHistory) {
+    private BooleanExpression accountIdEq(Long accountId) {
         return transactionHistory.account.id.eq(accountId);
     }
 
-    private BooleanExpression transactedAtGoe(LocalDate startDate, QTransactionHistory transactionHistory) {
+    private BooleanExpression transactedAtGoe(LocalDate startDate) {
         if (startDate == null) {
             return null;
         }
         return transactionHistory.transactedAt.goe(startDate.atStartOfDay());
     }
 
-    private BooleanExpression transactedAtLtEndDate(LocalDate endDate, QTransactionHistory transactionHistory) {
+    private BooleanExpression transactedAtLtEndDate(LocalDate endDate) {
         if (endDate == null) {
             return null;
         }
         return transactionHistory.transactedAt.lt(endDate.plusDays(1).atStartOfDay());
     }
 
-    private BooleanExpression directionEq(
-            TransactionDirection direction,
-            QTransactionHistory transactionHistory
-    ) {
+    private BooleanExpression directionEq(TransactionDirection direction) {
         if (direction == null) {
             return null;
         }
         return transactionHistory.direction.eq(direction);
     }
 
-    private BooleanExpression amountGoe(Long minAmount, QTransactionHistory transactionHistory) {
+    private BooleanExpression amountGoe(Long minAmount) {
         if (minAmount == null) {
             return null;
         }
         return transactionHistory.amount.goe(minAmount);
     }
 
-    private BooleanExpression amountLoe(Long maxAmount, QTransactionHistory transactionHistory) {
+    private BooleanExpression amountLoe(Long maxAmount) {
         if (maxAmount == null) {
             return null;
         }
         return transactionHistory.amount.loe(maxAmount);
     }
 
-    private BooleanExpression counterpartyNameContains(
-            String counterpartyName,
-            QTransactionHistory transactionHistory
-    ) {
+    private BooleanExpression counterpartyNameContains(String counterpartyName) {
         if (!StringUtils.hasText(counterpartyName)) {
             return null;
         }
