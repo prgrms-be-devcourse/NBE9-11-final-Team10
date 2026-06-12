@@ -46,8 +46,9 @@ dependencies {
     // Google Cloud Vision OCR
     implementation("com.google.cloud:google-cloud-vision:3.51.0")
 
-    // BCrypt 비밀번호 해싱 (Spring Security 없이 사용)
-    implementation("org.springframework.security:spring-security-crypto")
+    // Spring Security
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    testImplementation("org.springframework.security:spring-security-test")
 
     // Redis
     implementation("org.springframework.boot:spring-boot-starter-data-redis")

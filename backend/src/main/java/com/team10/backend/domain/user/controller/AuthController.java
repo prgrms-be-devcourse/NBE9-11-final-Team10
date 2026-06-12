@@ -7,13 +7,13 @@ import com.team10.backend.domain.user.dto.res.LoginRes;
 import com.team10.backend.domain.user.dto.res.TokenRefreshRes;
 import com.team10.backend.domain.user.dto.res.UserRes;
 import com.team10.backend.domain.user.service.UserService;
-import com.team10.backend.global.jwt.JwtProvider;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final UserService userService;
-    private final JwtProvider jwtProvider;
 
     @PostMapping("/signup")
     @Operation(summary = "회원가입")
@@ -47,29 +46,9 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    @Operation(summary = "로그아웃", description = "Redis의 Refresh Token을 삭제합니다.")
-    public ResponseEntity<Void> logout(
-            @RequestHeader("Authorization") String authHeader
-    ) {
-        // 로그아웃은 만료된 토큰으로도 가능해야 하므로 parseUserIdIgnoreExpiry 사용
-        Long userId = extractUserIdIgnoreExpiry(authHeader);
+    @Operation(summary = "로그아웃", description = "Redis의 Refresh Token을 삭제합니다. 만료된 토큰도 허용됩니다.")
+    public ResponseEntity<Void> logout(@AuthenticationPrincipal Long userId) {
         userService.logout(userId);
         return ResponseEntity.noContent().build();
-    }
-
-    /** Authorization: Bearer {token} 에서 userId 추출 (만료 검증 포함) */
-    private Long extractUserId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new IllegalArgumentException("Authorization 헤더가 없거나 형식이 올바르지 않습니다.");
-        }
-        return jwtProvider.parseUserId(authHeader.substring(7));
-    }
-
-    /** Authorization: Bearer {token} 에서 userId 추출 (만료 토큰도 허용 — logout 전용) */
-    private Long extractUserIdIgnoreExpiry(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new IllegalArgumentException("Authorization 헤더가 없거나 형식이 올바르지 않습니다.");
-        }
-        return jwtProvider.parseUserIdIgnoreExpiry(authHeader.substring(7));
     }
 }
