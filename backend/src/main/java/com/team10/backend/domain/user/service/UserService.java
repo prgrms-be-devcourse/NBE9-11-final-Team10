@@ -48,6 +48,7 @@ public class UserService {
     private final OneWonVerificationService oneWonVerificationService;
     private final JwtProvider jwtProvider;
     private final RefreshTokenService refreshTokenService;
+    private final UserConsentService userConsentService;
 
     @Transactional
     public UserRes signup(UserCreateReq request) {
@@ -64,6 +65,16 @@ public class UserService {
         );
 
         User saved = userRepository.save(user);
+
+        // 약관 동의 내역 저장
+        userConsentService.saveAll(
+                saved,
+                request.agreedServiceTerms(),
+                request.agreedPersonalInfo(),
+                request.agreedFinancialInfo(),
+                Boolean.TRUE.equals(request.agreedMarketing())
+        );
+
         return toUserRes(saved);
     }
 

@@ -22,6 +22,22 @@ public record UserCreateReq(
 
         @NotNull(message = "생년월일은 필수입니다.")
         @Past(message = "생년월일은 과거 날짜여야 합니다.")
-        LocalDate birthDate
+        LocalDate birthDate,
+
+        // 약관 동의 — 필수
+        @NotNull(message = "서비스 이용약관 동의는 필수입니다.")
+        @AssertTrue(message = "서비스 이용약관에 동의해야 합니다.")
+        Boolean agreedServiceTerms,
+
+        @NotNull(message = "개인정보 수집·이용 동의는 필수입니다.")
+        @AssertTrue(message = "개인정보 수집·이용에 동의해야 합니다.")
+        Boolean agreedPersonalInfo,
+
+        @NotNull(message = "금융정보 수집·이용 동의는 필수입니다.")
+        @AssertTrue(message = "금융정보 수집·이용에 동의해야 합니다.")
+        Boolean agreedFinancialInfo,
+
+        // 약관 동의 — 선택
+        Boolean agreedMarketing
 ) {
 }
