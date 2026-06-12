@@ -43,6 +43,13 @@ public class UserController {
         return ResponseEntity.ok(userService.getMe(userId));
     }
 
+    @DeleteMapping("/me")
+    @Operation(summary = "회원 탈퇴", description = "계정 상태를 WITHDRAWN으로 변경하고 Refresh Token을 삭제합니다.")
+    public ResponseEntity<Void> withdraw(@AuthenticationPrincipal Long userId) {
+        userService.withdraw(userId);
+        return ResponseEntity.noContent().build();
+    }
+
     // ── 약관 동의 ────────────────────────────────────────────────────────────
 
     @GetMapping("/me/consents")

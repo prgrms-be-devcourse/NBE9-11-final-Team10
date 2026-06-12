@@ -1,8 +1,11 @@
 package com.team10.backend.domain.user.entity;
 
+import com.team10.backend.domain.user.type.UserStatus;
 import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import lombok.AccessLevel;
@@ -34,6 +37,10 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private Boolean identityVerified;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserStatus status;
+
     @Builder
     private User(String email, String password, String name,
                  String phoneNumber, LocalDate birthDate) {
@@ -43,6 +50,7 @@ public class User extends BaseEntity {
         this.phoneNumber = phoneNumber;
         this.birthDate = birthDate;
         this.identityVerified = false;
+        this.status = UserStatus.ACTIVE;
     }
 
     public static User create(String email, String hashedPassword, String name,
@@ -59,5 +67,24 @@ public class User extends BaseEntity {
     /** 본인인증 최종 완료 처리 */
     public void completeIdentityVerification() {
         this.identityVerified = true;
+    }
+
+    /** 회원 탈퇴 처리 */
+    public void withdraw() {
+        this.status = UserStatus.WITHDRAWN;
+    }
+
+    /** 휴면 전환 */
+    public void setDormant() {
+        this.status = UserStatus.DORMANT;
+    }
+
+    /** 휴면 해제 (재활성화) */
+    public void reactivate() {
+        this.status = UserStatus.ACTIVE;
+    }
+
+    public boolean isActive() {
+        return this.status == UserStatus.ACTIVE;
     }
 }

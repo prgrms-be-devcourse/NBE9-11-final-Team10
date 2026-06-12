@@ -98,6 +98,7 @@ public class UserService {
 
     /**
      * 로그인: 이메일/비밀번호 검증 후 Access Token + Refresh Token을 발급한다.
+     * 휴면/탈퇴 계정은 로그인 불가.
      */
     public LoginRes login(LoginReq request) {
         User user = userRepository.findByEmail(request.email())
@@ -107,10 +108,28 @@ public class UserService {
             throw new BusinessException(UserErrorCode.INVALID_CREDENTIALS);
         }
 
+        // 계정 상태 검증
+        switch (user.getStatus()) {
+            case DORMANT   -> throw new BusinessException(UserErrorCode.DORMANT_ACCOUNT);
+            case WITHDRAWN -> throw new BusinessException(UserErrorCode.WITHDRAWN_ACCOUNT);
+            default        -> { /* ACTIVE — 정상 진행 */ }
+        }
+
         String accessToken  = jwtProvider.createAccessToken(user.getId(), user.getEmail());
         String refreshToken = refreshTokenService.issue(user.getId());
 
         return new LoginRes(accessToken, refreshToken, toUserRes(user));
+    }
+
+    /**
+     * 회원 탈퇴: 계정 상태를 WITHDRAWN으로 변경하고 Redis RT를 삭제한다.
+     */
+    @Transactional
+    public void withdraw(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        user.withdraw();
+        refreshTokenService.delete(userId);
     }
 
     /**
