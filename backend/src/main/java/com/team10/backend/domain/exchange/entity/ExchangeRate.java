@@ -19,31 +19,33 @@ public class ExchangeRate extends BaseEntity {
     @JoinColumn(name = "currency_code", referencedColumnName = "currency_code", nullable = false)
     private Currency currency;
 
-    @Column(name = "ttb", nullable = false, precision = 19, scale = 6)
-    private BigDecimal ttb; // 은행이 외화를 살 때 원화 환율
+    @Column(name = "base_price", nullable = false, precision = 19, scale = 6)
+    private BigDecimal basePrice; // 현재 기준 외화 환율
 
-    @Column(name = "tts", nullable = false, precision = 19, scale = 6)
-    private BigDecimal tts; // 은행이 외화를 팔 때 원화 환율
-
-    @Column(name = "deal_bas_r", nullable = false, precision = 19, scale = 6)
-    private BigDecimal dealBasR; // 외화 기준 매매기준율
+    @Column(name = "currency_unit", nullable = false)
+    private Integer currencyUnit; // 1원 기준 | 100원 기준
 
     @Column(name = "rate_at", nullable = false)
     private LocalDateTime rateAt;
 
+
     public static ExchangeRate create(
             Currency currency,
-            BigDecimal ttb,
-            BigDecimal tts,
-            BigDecimal dealBasR,
+            BigDecimal basePrice,
+            Integer currencyUnit,
             LocalDateTime rateAt
     ) {
         ExchangeRate exchangeRate = new ExchangeRate();
         exchangeRate.currency = currency;
-        exchangeRate.ttb = ttb;
-        exchangeRate.tts = tts;
-        exchangeRate.dealBasR = dealBasR;
+        exchangeRate.basePrice = basePrice;
+        exchangeRate.currencyUnit = currencyUnit;
         exchangeRate.rateAt = rateAt;
         return exchangeRate;
+    }
+
+    public void update(BigDecimal basePrice, Integer currencyUnit, LocalDateTime rateAt) {
+        this.basePrice = basePrice;
+        this.currencyUnit = currencyUnit;
+        this.rateAt = rateAt;
     }
 }

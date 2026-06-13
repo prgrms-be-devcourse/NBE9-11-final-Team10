@@ -11,32 +11,9 @@ import java.util.Optional;
 
 public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, Long> {
 
-    @Query("""
-        select er
-        from ExchangeRate er
-        where er.currency.currencyCode = :currencyCode
-          and er.rateAt = :rateAt
-        """)
-    Optional<ExchangeRate> findByCurrencyCodeAndRateAt(CurrencyCode currencyCode, LocalDateTime rateAt);
+    Optional<ExchangeRate> findByCurrencyCurrencyCode(CurrencyCode currencyCode);
 
-    @Query("""
-        select er
-        from ExchangeRate er
-        join fetch er.currency c
-        where c.currencyCode = :currencyCode
-        order by er.rateAt desc
-        limit 1
-        """)
-    Optional<ExchangeRate> findLatestByCurrencyCode(CurrencyCode currencyCode);
-
-    @Query("""
-        select er
-        from ExchangeRate er
-        join fetch er.currency c
-        where er.rateAt = :rateAt
-        order by c.currencyCode asc
-        """)
-    List<ExchangeRate> findAllByRateAtOrderByCurrencyCodeAsc(LocalDateTime rateAt);
+    List<ExchangeRate> findAllByOrderByCurrencyCurrencyCodeAsc();
 
     @Query("select max(er.rateAt) from ExchangeRate er")
     Optional<LocalDateTime> findLatestRateAt();

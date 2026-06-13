@@ -1,7 +1,7 @@
 package com.team10.backend.domain.exchange.service;
 
-import com.team10.backend.domain.exchange.client.KoreaEximExchangeRateClient;
-import com.team10.backend.domain.exchange.client.KoreaEximExchangeRateRes;
+import com.team10.backend.domain.exchange.client.UpbitExchangeRateClient;
+import com.team10.backend.domain.exchange.client.UpbitExchangeRateRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeRateRes;
 import com.team10.backend.domain.exchange.entity.Currency;
 import com.team10.backend.domain.exchange.entity.ExchangeRate;
@@ -14,58 +14,60 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- 오늘 날짜 API 호출
- -> 데이터 없으면 최대 7일 전까지 fallback
- -> result == 1인 응답만 사용
- -> JPY(100), IDR(100)은 코드에서 (100) 제거
- -> enum에 없는 통화는 저장하지 않고 스킵
- -> 같은 통화 + 같은 rateAt 날짜는 중복 저장하지 않음
- */
-
+ * 스케줄러로 30초마다 최신 환율만 유지
+ * 존재하면 업데이트, 없으면 새로 추가
+ *
+ *
+ * */
 @Service
 @RequiredArgsConstructor
 public class ExchangeRateService {
 
-    private static final int MAX_FALLBACK_DAYS = 7;
     private static final Set<CurrencyCode> SUPPORTED_CURRENCIES = Arrays.stream(CurrencyCode.values())
             .collect(Collectors.toUnmodifiableSet()); // 현재 서비스에서 제공하는 외화
 
-    private final KoreaEximExchangeRateClient koreaEximExchangeRateClient;
+    private final UpbitExchangeRateClient upbitExchangeRateClient;
     private final CurrencyRepository currencyRepository;
     private final ExchangeRateRepository exchangeRateRepository;
 
-    // 일일 1번 동기화
+    // 실시간 환율 동기화
     @Transactional
-    public List<ExchangeRateRes> syncTodayRates() {
-        ExchangeRateFetchResult fetchResult = fetchLatestAvailableRates(LocalDate.now());
-        LocalDateTime rateAt = fetchResult.rateDate().atStartOfDay();
+    public List<ExchangeRateRes> syncCurrentRates() {
+        List<CurrencyCode> targetCurrencies = getSupportedForeignCurrencies();
+        List<UpbitExchangeRateRes> responses = fetchRates(targetCurrencies);
 
-        fetchResult.rates().stream()
-                .filter(this::isSuccess)
-                .forEach(rate -> saveIfSupported(rate, rateAt));
+        if (responses.isEmpty()) {
+            throw new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_SYNC_FAILED);
+        }
 
-        return exchangeRateRepository.findAllByRateAtOrderByCurrencyCodeAsc(rateAt).stream()
-                .map(ExchangeRateRes::from)
-                .toList();
+        responses.forEach(this::saveIfSupported);
+        return getLatestRates();
+    }
+
+    private List<CurrencyCode> getSupportedForeignCurrencies() {
+        return new ArrayList<>(SUPPORTED_CURRENCIES);
+    }
+
+    private List<UpbitExchangeRateRes> fetchRates(List<CurrencyCode> currencyCodes) {
+        try {
+            List<UpbitExchangeRateRes> rates = upbitExchangeRateClient.fetch(currencyCodes);
+            return rates == null ? List.of() : rates;
+        } catch (RuntimeException exception) {
+            throw new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_SYNC_FAILED, exception);
+        }
     }
 
     // 최신 환율 리스트 조회
     @Transactional(readOnly = true)
     public List<ExchangeRateRes> getLatestRates() {
-        LocalDateTime latestRateAt = exchangeRateRepository.findLatestRateAt()
-                .orElseThrow(() -> new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_NOT_FOUND));
+        List<ExchangeRate> exchangeRates = exchangeRateRepository.findAllByOrderByCurrencyCurrencyCodeAsc();
 
-        return exchangeRateRepository.findAllByRateAtOrderByCurrencyCodeAsc(latestRateAt).stream()
+        return exchangeRates.stream()
                 .map(ExchangeRateRes::from)
                 .toList();
     }
@@ -73,104 +75,75 @@ public class ExchangeRateService {
     // 특정 통화의 최신 환율 조회
     @Transactional(readOnly = true)
     public ExchangeRateRes getLatestRate(CurrencyCode currencyCode) {
-        return exchangeRateRepository.findLatestByCurrencyCode(currencyCode)
+        return exchangeRateRepository.findByCurrencyCurrencyCode(currencyCode)
                 .map(ExchangeRateRes::from)
                 .orElseThrow(() -> new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_NOT_FOUND));
     }
 
-    private ExchangeRateFetchResult fetchLatestAvailableRates(LocalDate baseDate) {
-        // 당일부터 최대 7일전까지 확인
-        for (int daysAgo = 0; daysAgo <= MAX_FALLBACK_DAYS; daysAgo++) {
-            LocalDate searchDate = baseDate.minusDays(daysAgo); // 찾을 날짜
-            List<KoreaEximExchangeRateRes> rates = fetchRates(searchDate);
+/*
+    1. response.currencyCode()를 CurrencyCode enum으로 변환
+    2. enum에 없으면 스킵
+    3. Currency 조회, 없으면 생성
+    4. rateAt = LocalDateTime.of(response.date(), response.time())
+    5. currencyCode 기준 없으면 생성, 있으면 업데이트
+    6. ExchangeRate.create(currency, basePrice, currencyUnit, rateAt)
+    7. 저장
+ */
+    private void saveIfSupported(UpbitExchangeRateRes response) {
+        LocalDateTime rateAt = LocalDateTime.of(response.date(), response.time()); // 날짜 + 시간 => rateAt 생성
 
-            if (hasAvailableSupportedRate(rates)) {
-                return new ExchangeRateFetchResult(searchDate, rates);
-            }
-        }
-
-        throw new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_NOT_FOUND);
+        toCurrencyCode(response.currencyCode())
+                .filter(SUPPORTED_CURRENCIES::contains) // 현재 지원하는 통화만 필터링
+                .ifPresent(code -> upsertRate(code, response, rateAt));
     }
 
-    private List<KoreaEximExchangeRateRes> fetchRates(LocalDate date) {
-        try {
-            List<KoreaEximExchangeRateRes> rates = koreaEximExchangeRateClient.fetch(date);
-            return rates == null ? List.of() : rates;
-        } catch (RuntimeException exception) {
-            throw new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_SYNC_FAILED, exception);
-        }
-    }
-
-    private boolean hasAvailableSupportedRate(List<KoreaEximExchangeRateRes> rates) {
-        return rates.stream()
-                .filter(this::isSuccess)
-                .map(rate -> toCurrencyCode(rate.curUnit()))
-                .flatMap(Optional::stream)
-                .anyMatch(SUPPORTED_CURRENCIES::contains);
-    }
-
-    private void saveIfSupported(KoreaEximExchangeRateRes response, LocalDateTime rateAt) {
-        toCurrencyCode(response.curUnit())
-                .filter(SUPPORTED_CURRENCIES::contains)
-                .ifPresent(currencyCode -> saveIfAbsent(currencyCode, response, rateAt));
-    }
-
-    private void saveIfAbsent(CurrencyCode currencyCode, KoreaEximExchangeRateRes response, LocalDateTime rateAt) {
-        if (exchangeRateRepository.findByCurrencyCodeAndRateAt(currencyCode, rateAt).isPresent()) {
-            return;
-        }
+    private void upsertRate(CurrencyCode currencyCode, UpbitExchangeRateRes response, LocalDateTime rateAt) {
 
         Currency currency = currencyRepository.findByCurrencyCode(currencyCode)
                 .orElseGet(() -> currencyRepository.save(Currency.create(
                         currencyCode,
-                        response.curName(),
-                        response.curName(),
+                        response.currencyName(),
+                        response.country(),
                         decimalPlaces(currencyCode)
                 )));
 
-        ExchangeRate exchangeRate = ExchangeRate.create(
-                currency,
-                parseRate(response.ttb()),
-                parseRate(response.tts()),
-                parseRate(response.dealBasR()),
-                rateAt
-        );
-
-        exchangeRateRepository.save(exchangeRate);
+        exchangeRateRepository.findByCurrencyCurrencyCode(currencyCode)
+                .ifPresentOrElse(
+                        // 있으면 업데이트
+                        exchangeRate -> exchangeRate.update(
+                                response.basePrice(),
+                                response.currencyUnit(),
+                                rateAt
+                        ),
+                        // 없으면 새로 생성
+                        () -> exchangeRateRepository.save(
+                                ExchangeRate.create(
+                                        currency,
+                                        response.basePrice(),
+                                        response.currencyUnit(),
+                                        rateAt
+                                )
+                        )
+                );
     }
 
-    private boolean isSuccess(KoreaEximExchangeRateRes response) {
-        return response != null && Integer.valueOf(1).equals(response.result()); // 응답이 not null & "result": 1 인 경우
-    }
-
-    private Optional<CurrencyCode> toCurrencyCode(String curUnit) {
-        if (curUnit == null || curUnit.isBlank()) {
+    private Optional<CurrencyCode> toCurrencyCode(String currencyCode) {
+        if (currencyCode == null || currencyCode.isBlank()) {
             return Optional.empty(); // 외화 종류가 null or "" 인 경우
         }
 
-        String normalizedCode = curUnit.replace("(100)", ""); // "cur_unit": "JPY(100)"처럼 100원 단위인 경우
-
         try {
-            return Optional.of(CurrencyCode.valueOf(normalizedCode)); // Optional객체화 시켜서 반환
+            return Optional.of(CurrencyCode.valueOf(currencyCode)); // Optional객체화 시켜서 반환
         } catch (IllegalArgumentException exception) {
             return Optional.empty();
         }
     }
 
-    private BigDecimal parseRate(String value) {
-        return new BigDecimal(value.replace(",", ""));
-    }
-
     private Integer decimalPlaces(CurrencyCode currencyCode) {
         return switch (currencyCode) {
-            case KRW, JPY -> 0;
+            case JPY -> 0;
             default -> 2;
         };
     }
 
-    private record ExchangeRateFetchResult(
-            LocalDate rateDate,
-            List<KoreaEximExchangeRateRes> rates
-    ) {
-    }
 }
