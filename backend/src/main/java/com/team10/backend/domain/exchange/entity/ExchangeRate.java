@@ -30,4 +30,20 @@ public class ExchangeRate extends BaseEntity {
 
     @Column(name = "rate_at", nullable = false)
     private LocalDateTime rateAt;
+
+    public static ExchangeRate create(
+            Currency currency,
+            BigDecimal ttb,
+            BigDecimal tts,
+            BigDecimal dealBasR,
+            LocalDateTime rateAt
+    ) {
+        ExchangeRate exchangeRate = new ExchangeRate();
+        exchangeRate.currency = currency;
+        exchangeRate.ttb = ttb;
+        exchangeRate.tts = tts;
+        exchangeRate.dealBasR = dealBasR;
+        exchangeRate.rateAt = rateAt;
+        return exchangeRate;
+    }
 }

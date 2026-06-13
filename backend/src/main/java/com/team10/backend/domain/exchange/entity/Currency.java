@@ -30,4 +30,19 @@ public class Currency extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CurrencyStatus status;
+
+    public static Currency create(
+            CurrencyCode currencyCode,
+            String currencyName,
+            String countryName,
+            Integer decimalPlaces
+    ) {
+        Currency currency = new Currency();
+        currency.currencyCode = currencyCode;
+        currency.currencyName = currencyName;
+        currency.countryName = countryName;
+        currency.decimalPlaces = decimalPlaces;
+        currency.status = CurrencyStatus.ACTIVE;
+        return currency;
+    }
 }
