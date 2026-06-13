@@ -1,4 +1,7 @@
 package com.team10.backend.domain.youngPolicy.exception;
 
-public class YoungPolicyErrorCode {
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
+public enum YoungPolicyErrorCode {
 }
