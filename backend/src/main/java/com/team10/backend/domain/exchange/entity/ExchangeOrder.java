@@ -42,7 +42,7 @@ public class ExchangeOrder extends BaseEntity {
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "transaction_history_id")
-    private TransactionHistory transactionHistory;
+    private TransactionHistory transactionHistory; // 원화 계좌 기록만 연결
 
     @Column(name = "from_amount", nullable = false, precision = 19, scale = 4)
     private BigDecimal fromAmount;
