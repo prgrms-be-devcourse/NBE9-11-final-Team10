@@ -1,4 +1,4 @@
 package com.team10.backend.domain.youngPolicy.dto.res;
 
-public record youngPolicyRes() {
+public record YoungPolicyRes() {
 }

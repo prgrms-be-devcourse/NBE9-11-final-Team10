@@ -1,4 +1,4 @@
 package com.team10.backend.domain.youngPolicy.dto.req;
 
-public record youngPolicyReq() {
+public record YoungPolicyReq() {
 }
