@@ -8,9 +8,8 @@ import java.time.LocalDateTime;
 public record ExchangeRateRes(
         Long exchangeRateId,
         CurrencyCode currency,
-        BigDecimal ttb,
-        BigDecimal tts,
-        BigDecimal dealBasR,
+        BigDecimal basePrice,
+        Integer currencyUnit,
         LocalDateTime rateAt
 ) {
 
@@ -18,9 +17,8 @@ public record ExchangeRateRes(
         return new ExchangeRateRes(
                 exchangeRate.getId(),
                 exchangeRate.getCurrency().getCurrencyCode(),
-                exchangeRate.getTtb(),
-                exchangeRate.getTts(),
-                exchangeRate.getDealBasR(),
+                exchangeRate.getBasePrice(),
+                exchangeRate.getCurrencyUnit(),
                 exchangeRate.getRateAt()
         );
     }

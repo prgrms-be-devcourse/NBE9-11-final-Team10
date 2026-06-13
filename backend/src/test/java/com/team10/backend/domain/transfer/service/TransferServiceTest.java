@@ -63,7 +63,7 @@ class TransferServiceTest {
                     return history;
                 });
 
-        DepositRes response = transferService.deposit(1L, 5_000L, "입금 메모");
+        DepositRes response = transferService.topUp(1L, 5_000L, "입금 메모");
 
         assertEquals(15_000L, account.getBalance());
         assertEquals(100L, response.transactionId());
@@ -93,7 +93,7 @@ class TransferServiceTest {
     void deposit_invalidAmount_throwsInvalidInputValue() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.deposit(1L, 0L, "입금 메모")
+                () -> transferService.topUp(1L, 0L, "입금 메모")
         );
 
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
@@ -108,7 +108,7 @@ class TransferServiceTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.deposit(1L, 5_000L, "입금 메모")
+                () -> transferService.topUp(1L, 5_000L, "입금 메모")
         );
 
         assertEquals(TransferErrorCode.ACCOUNT_NOT_FOUND, exception.getErrorCode());

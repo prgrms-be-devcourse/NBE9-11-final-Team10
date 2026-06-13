@@ -67,7 +67,7 @@ class TransferServiceIntegrationTest {
     void deposit_success_persistsBalanceAndDepositHistory() {
         Account account = saveAccount(saveUser("sender@example.com", "홍길동"), "100200300001", 10_000L);
 
-        DepositRes response = transferService.deposit(account.getId(), 5_000L, "입금 메모");
+        DepositRes response = transferService.topUp(account.getId(), 5_000L, "입금 메모");
         flushAndClear();
 
         Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
@@ -202,7 +202,7 @@ class TransferServiceIntegrationTest {
 
         List<Throwable> failures = runConcurrently(
                 threadCount,
-                () -> transferService.deposit(account.getId(), amount, "동시 입금")
+                () -> transferService.topUp(account.getId(), amount, "동시 입금")
         );
         entityManager.clear();
 

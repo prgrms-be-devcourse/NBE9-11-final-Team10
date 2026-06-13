@@ -20,3 +20,14 @@ spring:
 # Swagger default MediaType 지정
 springdoc:
   default-produces-media-type: application/json;charset=UTF-8
+
+
+
+
+
+
+
+
+
+upbit:
+  base-url: https://crix-api-cdn.upbit.com
