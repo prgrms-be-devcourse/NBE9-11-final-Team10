@@ -1,9 +1,7 @@
 package com.team10.backend.domain.youngPolicy.entity;
 
+import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,9 +9,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class YoungPolicy {
+public class YoungPolicy extends BaseEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // 번호를 1부터 자동으로 1씩 증가시킵니다.
-    private Long id;
+
 }
