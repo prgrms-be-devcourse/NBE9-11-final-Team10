@@ -65,11 +65,28 @@ public class UserService {
         PortOneIdentityVerification verification =
                 portOneClient.getIdentityVerification(request.identityVerificationId());
 
-        if (!verification.isVerified()) {
+        if (!verification.isVerified() || verification.verifiedCustomer() == null) {
             throw new BusinessException(UserErrorCode.IDENTITY_VERIFICATION_FAILED);
         }
-        if (!request.name().equals(verification.verifiedCustomer().name())) {
+
+        PortOneIdentityVerification.VerifiedCustomer customer = verification.verifiedCustomer();
+
+        // 이름 일치 확인
+        if (!request.name().equals(customer.name())) {
             throw new BusinessException(UserErrorCode.IDENTITY_VERIFICATION_NAME_MISMATCH);
+        }
+
+        // 생년월일 일치 확인 (데이터 조작 방지)
+        String verifiedBirthDate = customer.birthDate();
+        if (verifiedBirthDate == null || !request.birthDate().toString().equals(verifiedBirthDate)) {
+            throw new BusinessException(UserErrorCode.IDENTITY_VERIFICATION_FAILED);
+        }
+
+        // 휴대폰 번호 일치 확인 (하이픈 제거 후 비교)
+        String verifiedPhone = customer.phoneNumber();
+        if (verifiedPhone == null ||
+                !request.phoneNumber().replaceAll("\\D", "").equals(verifiedPhone.replaceAll("\\D", ""))) {
+            throw new BusinessException(UserErrorCode.IDENTITY_VERIFICATION_FAILED);
         }
 
         if (userRepository.existsByEmail(request.email())) {

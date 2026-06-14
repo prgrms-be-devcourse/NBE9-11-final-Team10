@@ -85,6 +85,10 @@ public class OneWonVerificationService {
                 List.of(dailyKey),
                 String.valueOf(DAILY_TTL.toSeconds())
         );
+        if (daily == null) {
+            throw new com.team10.backend.global.exception.BusinessException(
+                    com.team10.backend.global.exception.GlobalErrorCode.INTERNAL_SERVER_ERROR);
+        }
         if (daily > MAX_DAILY) {
             redisTemplate.opsForValue().decrement(dailyKey); // 한도 초과분 되돌리기
             log.warn("[1원 인증] 하루 요청 한도 초과 — userId={}, daily={}", userId, daily);
