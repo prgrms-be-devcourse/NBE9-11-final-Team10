@@ -19,3 +19,7 @@ jwt:
 
 ocr:
   google-vision-key-path: classpath:dummy-key.json
+
+exchange-rate:
+  sync:
+    enabled: false
