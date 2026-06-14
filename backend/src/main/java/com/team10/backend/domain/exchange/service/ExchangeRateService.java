@@ -83,22 +83,35 @@ public class ExchangeRateService {
         }
     }
 
+    // 깨진/부분 캐시 문제 없는지 확인하는 메서드
+    private boolean isCompleteCache(List<ExchangeRateRes> cachedRates) {
+        Set<CurrencyCode> cachedCurrencyCodes = cachedRates.stream()
+                .map(ExchangeRateRes::currencyCode)
+                .collect(Collectors.toSet());
+
+        return cachedCurrencyCodes.containsAll(SUPPORTED_CURRENCIES);
+    }
+
     // 최신 환율 리스트 조회(Redis에서 우선 조회)
     @Transactional(readOnly = true)
     public List<ExchangeRateRes> getLatestRates() {
         try {
-            // Redis 서버가 아예 죽어있으면 예외터져서 DB fallback까지 못감
+            // Redis 서버가 아예 죽어있으면 예외터져서 DB fallback까지 못감 -> try-catch 필요
             List<ExchangeRateRes> cachedRates = exchangeRateCacheRepository.findAll();
 
-            if (!cachedRates.isEmpty()) {
+            if (isCompleteCache(cachedRates)) {
                 return cachedRates;
             }
+
+            log.warn("환율 Redis 캐시가 일부만 존재합니다. DB에서 조회합니다.");
+
         } catch (RuntimeException e) {
             log.warn("Redis 환율 캐시 조회 실패. DB에서 조회합니다.", e);
         }
 
-        // 캐시 조회 실패 (캐시된 값이 없는 경우, Redis 서버 다운)
+        // 캐시 조회 실패 (캐시된 값이 없는 경우, 부분 캐시, Redis 서버 다운)
         List<ExchangeRateRes> rates = getLatestRatesFromDb();
+
         try {
             exchangeRateCacheRepository.saveAll(rates);
         } catch (RuntimeException e) {

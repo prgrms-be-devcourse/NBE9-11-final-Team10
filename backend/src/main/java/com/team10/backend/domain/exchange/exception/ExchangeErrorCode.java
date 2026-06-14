@@ -14,6 +14,7 @@ public enum ExchangeErrorCode implements ErrorCode {
     CURRENCY_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "지원하지 않는 통화입니다."),
     EXCHANGE_RATE_NOT_FOUND(HttpStatus.NOT_FOUND, "환율 정보를 찾을 수 없습니다."),
     EXCHANGE_RATE_SYNC_FAILED(HttpStatus.BAD_GATEWAY, "환율 정보 동기화에 실패했습니다."),
+    PARTIAL_CACHE(HttpStatus.BAD_GATEWAY, "환율 캐시가 일부만 존재합니다."),
 
     FX_WALLET_NOT_FOUND(HttpStatus.NOT_FOUND, "외화 지갑을 찾을 수 없습니다."),
     FX_WALLET_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 생성된 외화 지갑입니다."),
