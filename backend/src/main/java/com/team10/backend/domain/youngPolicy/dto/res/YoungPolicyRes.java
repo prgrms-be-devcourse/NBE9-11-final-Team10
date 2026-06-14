@@ -5,7 +5,7 @@ import java.util.List;
 public record YoungPolicyRes(
         List<PolicyItem> youthPolicyList // 청년 정책 리스트
 ) {
-    // API에서 받아올 핵심 항목들만 선언합니다.
+    // 온통 청년 API에서 받아올 핵심 항목들만 선언
     public record PolicyItem(
             String plcyNo,         // 정책번호
             String plcyNm,         // 정책명
