@@ -26,12 +26,18 @@ public class ExchangeRateCacheRepository {
     public void saveAll(List<ExchangeRateRes> rates) {
         // Redis Hash에 저장
         rates.forEach(rate -> {
-            String hashKey = rate.currency().name();
+            String hashKey = rate.currencyCode().name();
             String value = serialize(rate);
 
             redisTemplate.opsForHash().put(KEY, hashKey, value);
         });
+    }
 
+    public void save(ExchangeRateRes rate) {
+        String hashKey = rate.currencyCode().name();
+        String value = serialize(rate);
+
+        redisTemplate.opsForHash().put(KEY, hashKey, value);
     }
 
     // 직렬화 메서드
@@ -39,7 +45,7 @@ public class ExchangeRateCacheRepository {
         try {
             return objectMapper.writeValueAsString(rate);
         } catch (JacksonException e) {
-            log.warn("환율 정보 JSON 직렬화 중 에러가 발생했습니다. currency={}", rate.currency(), e);
+            log.warn("환율 정보 JSON 직렬화 중 에러가 발생했습니다. currency={}", rate.currencyCode(), e);
             throw new IllegalStateException("환율 정보 직렬화에 실패했습니다.", e);
         }
     }

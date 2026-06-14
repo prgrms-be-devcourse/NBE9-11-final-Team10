@@ -12,6 +12,7 @@ import com.team10.backend.domain.exchange.repository.ExchangeRateRepository;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
 import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -24,7 +25,9 @@ import java.util.stream.Collectors;
 /**
  * 스케줄러로 30초마다 최신 환율만 유지
  * 존재하면 업데이트, 없으면 새로 추가
- * */
+ *
+ */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ExchangeRateService {
@@ -55,11 +58,16 @@ public class ExchangeRateService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                exchangeRateCacheRepository.saveAll(latestRates); // Redis에 저장
+                try {
+                    exchangeRateCacheRepository.saveAll(latestRates); // Redis에 저장
+                } catch (RuntimeException e) {
+                    log.warn("Redis 환율 캐시 저장 실패. DB 동기화는 완료되었습니다.", e);
+                }
+
             }
         });
 
-        return getLatestRates();
+        return latestRates; // DB에서 조회한 최신값 반환
     }
 
     private List<CurrencyCode> getSupportedForeignCurrencies() {
@@ -78,15 +86,25 @@ public class ExchangeRateService {
     // 최신 환율 리스트 조회(Redis에서 우선 조회)
     @Transactional(readOnly = true)
     public List<ExchangeRateRes> getLatestRates() {
-        List<ExchangeRateRes> cachedRates = exchangeRateCacheRepository.findAll();
+        try {
+            // Redis 서버가 아예 죽어있으면 예외터져서 DB fallback까지 못감
+            List<ExchangeRateRes> cachedRates = exchangeRateCacheRepository.findAll();
 
-        if (!cachedRates.isEmpty()) {
-            return cachedRates;
+            if (!cachedRates.isEmpty()) {
+                return cachedRates;
+            }
+        } catch (RuntimeException e) {
+            log.warn("Redis 환율 캐시 조회 실패. DB에서 조회합니다.", e);
         }
 
-        // 캐시된 값이 없는 경우
+        // 캐시 조회 실패 (캐시된 값이 없는 경우, Redis 서버 다운)
         List<ExchangeRateRes> rates = getLatestRatesFromDb();
-        exchangeRateCacheRepository.saveAll(rates);
+        try {
+            exchangeRateCacheRepository.saveAll(rates);
+        } catch (RuntimeException e) {
+            log.warn("Redis 환율 캐시 저장 실패. DB 조회 결과만 반환됩니다.", e);
+        }
+
         return rates;
     }
 
@@ -103,8 +121,27 @@ public class ExchangeRateService {
     // 특정 통화의 최신 환율 조회(Redis에서 우선 조회)
     @Transactional(readOnly = true)
     public ExchangeRateRes getLatestRate(CurrencyCode currencyCode) {
-        return exchangeRateCacheRepository.findByCurrency(currencyCode)
-                .orElseGet(() -> getLatestRateFromDb(currencyCode)); // 있으면 get, 없으면 DB에서 조회
+        
+        try {
+            Optional<ExchangeRateRes> cachedRate =
+                    exchangeRateCacheRepository.findByCurrency(currencyCode);
+
+            if (cachedRate.isPresent()) {
+                return cachedRate.get();
+            }
+        } catch (RuntimeException e) {
+            log.warn("Redis 환율 캐시 단건 조회 실패. DB에서 조회합니다.", e);
+        }
+
+        ExchangeRateRes rate = getLatestRateFromDb(currencyCode);
+
+        try {
+            exchangeRateCacheRepository.save(rate);
+        } catch (RuntimeException e) {
+            log.warn("Redis 환율 캐시 저장 실패. currency={}", currencyCode, e);
+        }
+
+        return rate;
     }
 
     // 특정 통화의 최신 환율 조회(DB에서 조회)
@@ -115,15 +152,15 @@ public class ExchangeRateService {
                 .orElseThrow(() -> new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_NOT_FOUND));
     }
 
-/*
-    1. response.currencyCode()를 CurrencyCode enum으로 변환
-    2. enum에 없으면 스킵
-    3. Currency 조회, 없으면 생성
-    4. rateAt = LocalDateTime.of(response.date(), response.time())
-    5. currencyCode 기준 없으면 생성, 있으면 업데이트
-    6. ExchangeRate.create(currency, basePrice, currencyUnit, rateAt) or .update(basePrice, currencyUnit, rateAt)
-    7. 저장
- */
+    /*
+        1. response.currencyCode()를 CurrencyCode enum으로 변환
+        2. enum에 없으면 스킵
+        3. Currency 조회, 없으면 생성
+        4. rateAt = LocalDateTime.of(response.date(), response.time())
+        5. currencyCode 기준 없으면 생성, 있으면 업데이트
+        6. ExchangeRate.create(currency, basePrice, currencyUnit, rateAt) or .update(basePrice, currencyUnit, rateAt)
+        7. 저장
+     */
     private void saveIfSupported(UpbitExchangeRateRes response) {
         LocalDateTime rateAt = LocalDateTime.of(response.date(), response.time()); // 날짜 + 시간 => rateAt 생성
 
