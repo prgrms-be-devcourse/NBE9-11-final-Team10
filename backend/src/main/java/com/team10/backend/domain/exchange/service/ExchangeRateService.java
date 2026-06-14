@@ -7,6 +7,7 @@ import com.team10.backend.domain.exchange.entity.Currency;
 import com.team10.backend.domain.exchange.entity.ExchangeRate;
 import com.team10.backend.domain.exchange.exception.ExchangeErrorCode;
 import com.team10.backend.domain.exchange.repository.CurrencyRepository;
+import com.team10.backend.domain.exchange.repository.ExchangeRateCacheRepository;
 import com.team10.backend.domain.exchange.repository.ExchangeRateRepository;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
 import com.team10.backend.global.exception.BusinessException;
@@ -21,8 +22,6 @@ import java.util.stream.Collectors;
 /**
  * 스케줄러로 30초마다 최신 환율만 유지
  * 존재하면 업데이트, 없으면 새로 추가
- *
- *
  * */
 @Service
 @RequiredArgsConstructor
@@ -34,6 +33,7 @@ public class ExchangeRateService {
     private final UpbitExchangeRateClient upbitExchangeRateClient;
     private final CurrencyRepository currencyRepository;
     private final ExchangeRateRepository exchangeRateRepository;
+    private final ExchangeRateCacheRepository exchangeRateCacheRepository;
 
     // 실시간 환율 동기화
     @Transactional
@@ -45,7 +45,10 @@ public class ExchangeRateService {
             throw new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_SYNC_FAILED);
         }
 
-        responses.forEach(this::saveIfSupported);
+        responses.forEach(this::saveIfSupported); // 지원하는 통화면 동기화
+        List<ExchangeRateRes> latestRates = getLatestRatesFromDb(); // DB에서 조회
+        exchangeRateCacheRepository.saveAll(latestRates); // Redis에 저장
+
         return getLatestRates();
     }
 
@@ -62,9 +65,24 @@ public class ExchangeRateService {
         }
     }
 
-    // 최신 환율 리스트 조회
+    // 최신 환율 리스트 조회(Redis에서 우선 조회)
     @Transactional(readOnly = true)
     public List<ExchangeRateRes> getLatestRates() {
+        List<ExchangeRateRes> cachedRates = exchangeRateCacheRepository.findAll();
+
+        if (!cachedRates.isEmpty()) {
+            return cachedRates;
+        }
+
+        // 캐시된 값이 없는 경우
+        List<ExchangeRateRes> rates = getLatestRatesFromDb();
+        exchangeRateCacheRepository.saveAll(rates);
+        return rates;
+    }
+
+    // 최신 환율 리스트 조회(DB에서 조회)
+    @Transactional(readOnly = true)
+    public List<ExchangeRateRes> getLatestRatesFromDb() {
         List<ExchangeRate> exchangeRates = exchangeRateRepository.findAllByOrderByCurrencyCurrencyCodeAsc();
 
         return exchangeRates.stream()
@@ -72,9 +90,16 @@ public class ExchangeRateService {
                 .toList();
     }
 
-    // 특정 통화의 최신 환율 조회
+    // 특정 통화의 최신 환율 조회(Redis에서 우선 조회)
     @Transactional(readOnly = true)
     public ExchangeRateRes getLatestRate(CurrencyCode currencyCode) {
+        return exchangeRateCacheRepository.findByCurrency(currencyCode)
+                .orElseGet(() -> getLatestRateFromDb(currencyCode)); // 있으면 get, 없으면 DB에서 조회
+    }
+
+    // 특정 통화의 최신 환율 조회(DB에서 조회)
+    @Transactional(readOnly = true)
+    public ExchangeRateRes getLatestRateFromDb(CurrencyCode currencyCode) {
         return exchangeRateRepository.findByCurrencyCurrencyCode(currencyCode)
                 .map(ExchangeRateRes::from)
                 .orElseThrow(() -> new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_NOT_FOUND));
@@ -86,7 +111,7 @@ public class ExchangeRateService {
     3. Currency 조회, 없으면 생성
     4. rateAt = LocalDateTime.of(response.date(), response.time())
     5. currencyCode 기준 없으면 생성, 있으면 업데이트
-    6. ExchangeRate.create(currency, basePrice, currencyUnit, rateAt)
+    6. ExchangeRate.create(currency, basePrice, currencyUnit, rateAt) or .update(basePrice, currencyUnit, rateAt)
     7. 저장
  */
     private void saveIfSupported(UpbitExchangeRateRes response) {
