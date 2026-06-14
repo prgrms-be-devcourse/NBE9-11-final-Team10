@@ -14,6 +14,8 @@ import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -46,8 +48,16 @@ public class ExchangeRateService {
         }
 
         responses.forEach(this::saveIfSupported); // 지원하는 통화면 동기화
+
         List<ExchangeRateRes> latestRates = getLatestRatesFromDb(); // DB에서 조회
-        exchangeRateCacheRepository.saveAll(latestRates); // Redis에 저장
+
+        // 익명클래스 & 콜백메서드 afterCommit에서 Redis 저장 실행 -> DB 커밋 성공시에만 Redis에도 저장됨
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                exchangeRateCacheRepository.saveAll(latestRates); // Redis에 저장
+            }
+        });
 
         return getLatestRates();
     }
