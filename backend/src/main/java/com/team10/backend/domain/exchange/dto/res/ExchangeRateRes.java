@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 
 public record ExchangeRateRes(
         Long exchangeRateId,
-        CurrencyCode currency,
+        CurrencyCode currencyCode,
         BigDecimal basePrice,
         Integer currencyUnit,
         LocalDateTime rateAt
