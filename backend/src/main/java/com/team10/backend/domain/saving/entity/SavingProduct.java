@@ -4,6 +4,8 @@ import com.team10.backend.domain.saving.type.SavingProductType;
 import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -11,6 +13,8 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "saving_product")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Builder
 public class SavingProduct extends BaseEntity {
 
     @Column(nullable = false, length = 100)
@@ -43,7 +47,7 @@ public class SavingProduct extends BaseEntity {
     private String terms;
 
     @Column(nullable = false)
-    private Boolean active;
+    private boolean active;
 
 
 }

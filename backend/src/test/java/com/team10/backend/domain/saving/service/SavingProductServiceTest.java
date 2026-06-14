@@ -111,29 +111,20 @@ class SavingProductServiceTest {
     }
 
     private SavingProduct createSavingProduct(Long id, SavingProductType type, String name) {
-        SavingProduct product = instantiateSavingProduct();
+        SavingProduct product = SavingProduct.builder()
+                .name(name)
+                .bankName("국민은행")
+                .bankCode("KB")
+                .type(type)
+                .interestRate(3.5)
+                .periodMonth(12)
+                .minAmount(100000L)
+                .maxAmount(10000000L)
+                .monthlyLimit(500000L)
+                .terms("가입 조건")
+                .active(true)
+                .build();
         ReflectionTestUtils.setField(product, "id", id);
-        ReflectionTestUtils.setField(product, "name", name);
-        ReflectionTestUtils.setField(product, "bankName", "국민은행");
-        ReflectionTestUtils.setField(product, "bankCode", "KB");
-        ReflectionTestUtils.setField(product, "type", type);
-        ReflectionTestUtils.setField(product, "interestRate", 3.5);
-        ReflectionTestUtils.setField(product, "periodMonth", 12);
-        ReflectionTestUtils.setField(product, "minAmount", 100000L);
-        ReflectionTestUtils.setField(product, "maxAmount", 10000000L);
-        ReflectionTestUtils.setField(product, "monthlyLimit", 500000L);
-        ReflectionTestUtils.setField(product, "terms", "가입 조건");
-        ReflectionTestUtils.setField(product, "active", true);
         return product;
-    }
-
-    private SavingProduct instantiateSavingProduct() {
-        try {
-            Constructor<SavingProduct> constructor = SavingProduct.class.getDeclaredConstructor();
-            constructor.setAccessible(true);
-            return constructor.newInstance();
-        } catch (Exception e) {
-            throw new IllegalStateException("SavingProduct 테스트 객체 생성에 실패했습니다.", e);
-        }
     }
 }
