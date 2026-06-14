@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.team10.backend.domain.account.dto.req.AccountCreateReq;
+import com.team10.backend.domain.account.dto.req.AccountNicknameUpdateReq;
 import com.team10.backend.domain.account.dto.res.AccountRes;
 import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
 import com.team10.backend.domain.account.entity.Account;
@@ -107,7 +108,7 @@ class AccountServiceTest {
     void getAccounts() {
         Account account = createAccount(1L, verifiedUser, "100200300001", "생활비 계좌");
 
-        when(accountRepository.findAllByUserId(1L)).thenReturn(List.of(account));
+        when(accountRepository.findAllByUserIdAndStatusNot(1L, AccountStatus.CLOSED)).thenReturn(List.of(account));
 
         List<AccountSummaryRes> responses = accountService.getAccounts(1L);
 
