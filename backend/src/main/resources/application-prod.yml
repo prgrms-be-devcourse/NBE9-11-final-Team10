@@ -14,6 +14,17 @@ spring:
         highlight_sql: false
         use_sql_comments: false
 
+# RT 쿠키 Secure 플래그 — 운영은 반드시 HTTPS이므로 true
+cookie:
+  secure: true
+
+# Swagger는 운영 환경에서 비활성화
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
+
 # 운영 환경에서는 로그 출력을 최소화
 logging:
   level:

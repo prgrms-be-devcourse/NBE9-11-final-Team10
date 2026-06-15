@@ -73,6 +73,15 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.from(errorCode, errors));
     }
 
+    // 예상치 못한 예외는 내부 정보를 노출하지 않고 500으로 처리
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
+        log.error("[UNEXPECTED] 처리되지 않은 예외 발생", e);
+        return ResponseEntity
+                .internalServerError()
+                .body(ErrorResponse.from(GlobalErrorCode.INTERNAL_SERVER_ERROR));
+    }
+
     // ConstraintViolationException에서 필드명만 추출하는 헬퍼 메서드
     private String extractField(Path path) {
         String field = null;
