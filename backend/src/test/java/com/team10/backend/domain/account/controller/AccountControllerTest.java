@@ -148,8 +148,7 @@ class AccountControllerTest {
                 "100200300001",
                 "생활비 계좌",
                 150000L,
-                AccountStatus.ACTIVE,
-                LocalDateTime.of(2026, 6, 8, 15, 45)
+                AccountStatus.ACTIVE
         );
 
         when(accountService.getAccounts(1L)).thenReturn(List.of(response));
@@ -174,8 +173,7 @@ class AccountControllerTest {
                 "100200300001",
                 "생활비 계좌",
                 0L,
-                AccountStatus.CLOSED,
-                LocalDateTime.of(2026, 6, 8, 15, 45)
+                AccountStatus.CLOSED
         );
 
         when(accountService.getClosedAccounts(1L)).thenReturn(List.of(response));
