@@ -18,13 +18,6 @@ spring:
 cookie:
   secure: true
 
-# Swagger는 운영 환경에서 비활성화
-springdoc:
-  swagger-ui:
-    enabled: false
-  api-docs:
-    enabled: false
-
 # 운영 환경에서는 로그 출력을 최소화
 logging:
   level:
