@@ -4,13 +4,15 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class AccountNumberGenerator {
 
-    private static final long MIN_ACCOUNT_NUMBER = 100_000_000_000L;
-    private static final long MAX_ACCOUNT_NUMBER = 999_999_999_999L;
+    private static final String ACCOUNT_NUMBER_PREFIX = "0314";
+    private static final int RANDOM_NUMBER_BOUND = 100_000_000;
 
+    // 앞 4자리는 0314로 고정하고, 뒤 8자리는 랜덤 숫자로 생성한다.
+    // 계좌번호는 계산 대상이 아니므로 String으로 반환한다.
     public static String generate() {
-        long number = ThreadLocalRandom.current()
-                .nextLong(MIN_ACCOUNT_NUMBER, MAX_ACCOUNT_NUMBER);
+        int randomNumber = ThreadLocalRandom.current()
+                .nextInt(RANDOM_NUMBER_BOUND);
 
-        return String.valueOf(number);
+        return ACCOUNT_NUMBER_PREFIX + String.format("%08d", randomNumber);
     }
 }
