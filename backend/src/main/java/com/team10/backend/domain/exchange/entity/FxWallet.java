@@ -57,6 +57,6 @@ public class FxWallet extends BaseEntity {
     }
 
     public boolean hasBalance() {
-        return this.balance.compareTo(BigDecimal.ZERO) > 0; // 0보다 크면 this.balance가 0보다 크다는 의미
+        return this.balance.compareTo(BigDecimal.ZERO) != 0;
     }
 }
