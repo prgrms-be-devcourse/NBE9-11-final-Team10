@@ -2,7 +2,8 @@ package com.team10.backend.domain.account.service;
 
 import com.team10.backend.domain.account.dto.req.AccountCreateReq;
 import com.team10.backend.domain.account.dto.req.AccountNicknameUpdateReq;
-import com.team10.backend.domain.account.dto.res.AccountRes;
+import com.team10.backend.domain.account.dto.res.AccountCreateRes;
+import com.team10.backend.domain.account.dto.res.AccountDetailRes;
 import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.exception.AccountErrorCode;
@@ -27,7 +28,7 @@ public class AccountService {
     private final EntityManager entityManager;
 
     @Transactional
-    public AccountRes createAccount(Long userId, AccountCreateReq request) {
+    public AccountCreateRes createAccount(Long userId, AccountCreateReq request) {
         User user = entityManager.find(User.class, userId);
 
         if (user == null) {
@@ -49,11 +50,11 @@ public class AccountService {
 
         Account savedAccount = accountRepository.save(account);
 
-        return toAccountRes(savedAccount);
+        return AccountCreateRes.from(savedAccount);
     }
 
     @Transactional
-    public AccountRes updateNickname(Long userId, Long accountId, AccountNicknameUpdateReq request) {
+    public AccountDetailRes updateNickname(Long userId, Long accountId, AccountNicknameUpdateReq request) {
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new
                         BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
@@ -64,12 +65,12 @@ public class AccountService {
 
         account.updateNickname(request.nickname());
 
-        return toAccountRes(account);
+        return AccountDetailRes.from(account);
     }
 
 
     @Transactional
-    public AccountRes closeAccount(Long userId, Long accountId) {
+    public AccountDetailRes closeAccount(Long userId, Long accountId) {
         Account account = accountRepository.findByIdAndUserIdForUpdate(accountId, userId)
                 .orElseThrow(() -> new
                         BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
@@ -84,27 +85,27 @@ public class AccountService {
 
         account.close();
 
-        return toAccountRes(account);
+        return AccountDetailRes.from(account);
     }
 
 
     public List<AccountSummaryRes> getAccounts(Long userId) {
         return accountRepository.findAllByUserIdAndStatusNot(userId, AccountStatus.CLOSED).stream()
-                .map(this::toAccountSummaryRes)
+                .map(AccountSummaryRes::from)
                 .toList();
     }
 
     public List<AccountSummaryRes> getClosedAccounts(Long userId) {
         return accountRepository.findAllByUserIdAndStatus(userId, AccountStatus.CLOSED).stream()
-                .map(this::toAccountSummaryRes)
+                .map(AccountSummaryRes::from)
                 .toList();
     }
 
-    public AccountRes getAccount(Long userId, Long accountId) {
+    public AccountDetailRes getAccount(Long userId, Long accountId) {
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
-        return toAccountRes(account);
+        return AccountDetailRes.from(account);
     }
 
     private String generateUniqueAccountNumber() {
@@ -115,29 +116,5 @@ public class AccountService {
         } while (accountRepository.existsByAccountNumber(accountNumber));
 
         return accountNumber;
-    }
-
-    private AccountRes toAccountRes(Account account) {
-        return new AccountRes(
-                account.getId(),
-                account.getAccountNumber(),
-                account.getNickname(),
-                account.getAccountType(),
-                account.getBalance(),
-                account.getStatus(),
-                account.getCreatedAt(),
-                account.getUpdatedAt()
-        );
-    }
-
-    private AccountSummaryRes toAccountSummaryRes(Account account) {
-        return new AccountSummaryRes(
-                account.getId(),
-                account.getAccountNumber(),
-                account.getNickname(),
-                account.getBalance(),
-                account.getStatus(),
-                account.getCreatedAt()
-        );
     }
 }

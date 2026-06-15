@@ -8,7 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.team10.backend.domain.account.dto.req.AccountCreateReq;
 import com.team10.backend.domain.account.dto.req.AccountNicknameUpdateReq;
-import com.team10.backend.domain.account.dto.res.AccountRes;
+import com.team10.backend.domain.account.dto.res.AccountCreateRes;
+import com.team10.backend.domain.account.dto.res.AccountDetailRes;
 import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.exception.AccountErrorCode;
@@ -65,7 +66,7 @@ class AccountServiceTest {
             return account;
         });
 
-        AccountRes response = accountService.createAccount(1L, request);
+        AccountCreateRes response = accountService.createAccount(1L, request);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.nickname()).isEqualTo("생활비 계좌");
@@ -147,7 +148,7 @@ class AccountServiceTest {
 
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
 
-        AccountRes response = accountService.updateNickname(1L, 1L, request);
+        AccountDetailRes response = accountService.updateNickname(1L, 1L, request);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.nickname()).isEqualTo("급여 계좌");
@@ -191,7 +192,7 @@ class AccountServiceTest {
 
         when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
 
-        AccountRes response = accountService.closeAccount(1L, 1L);
+        AccountDetailRes response = accountService.closeAccount(1L, 1L);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(AccountStatus.CLOSED);
@@ -232,7 +233,7 @@ class AccountServiceTest {
 
         when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(account));
 
-        AccountRes response = accountService.getAccount(1L, 1L);
+        AccountDetailRes response = accountService.getAccount(1L, 1L);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.accountNumber()).isEqualTo("100200300001");

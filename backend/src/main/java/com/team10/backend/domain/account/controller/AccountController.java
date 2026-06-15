@@ -2,7 +2,8 @@ package com.team10.backend.domain.account.controller;
 
 import com.team10.backend.domain.account.dto.req.AccountCreateReq;
 import com.team10.backend.domain.account.dto.req.AccountNicknameUpdateReq;
-import com.team10.backend.domain.account.dto.res.AccountRes;
+import com.team10.backend.domain.account.dto.res.AccountCreateRes;
+import com.team10.backend.domain.account.dto.res.AccountDetailRes;
 import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
 import com.team10.backend.domain.account.service.AccountService;
 import jakarta.validation.Valid;
@@ -21,33 +22,33 @@ public class AccountController {
     private final AccountService accountService;
 
     @PostMapping
-    public ResponseEntity<AccountRes> createAccount(
+    public ResponseEntity<AccountCreateRes> createAccount(
             // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
             @RequestParam Long userId,
             @Valid @RequestBody AccountCreateReq request
     ) {
-        AccountRes response = accountService.createAccount(userId, request);
+        AccountCreateRes response = accountService.createAccount(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PatchMapping("/{accountId}/nickname")
-    public ResponseEntity<AccountRes> updateNickname(
+    public ResponseEntity<AccountDetailRes> updateNickname(
             // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
             @RequestParam Long userId,
             @PathVariable Long accountId,
             @Valid @RequestBody AccountNicknameUpdateReq request
     ){
-        AccountRes response = accountService.updateNickname(userId, accountId, request);
+        AccountDetailRes response = accountService.updateNickname(userId, accountId, request);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{accountId}/close")
-    public ResponseEntity<AccountRes> closeAccount(
+    public ResponseEntity<AccountDetailRes> closeAccount(
             // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
             @RequestParam Long userId,
             @PathVariable Long accountId
     ){
-        AccountRes response = accountService.closeAccount(userId, accountId);
+        AccountDetailRes response = accountService.closeAccount(userId, accountId);
         return ResponseEntity.ok(response);
     }
 
@@ -68,7 +69,7 @@ public class AccountController {
     }
 
     @GetMapping("/{accountId}")
-    public ResponseEntity<AccountRes> getAccount(
+    public ResponseEntity<AccountDetailRes> getAccount(
             // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
             @RequestParam Long userId,
             @PathVariable Long accountId

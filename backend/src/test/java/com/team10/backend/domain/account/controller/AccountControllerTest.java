@@ -13,7 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.account.dto.req.AccountCreateReq;
 import com.team10.backend.domain.account.dto.req.AccountNicknameUpdateReq;
-import com.team10.backend.domain.account.dto.res.AccountRes;
+import com.team10.backend.domain.account.dto.res.AccountCreateRes;
+import com.team10.backend.domain.account.dto.res.AccountDetailRes;
 import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
 import com.team10.backend.domain.account.service.AccountService;
 import com.team10.backend.domain.account.type.AccountStatus;
@@ -44,14 +45,13 @@ class AccountControllerTest {
     @DisplayName("계좌 개설 API는 userId와 요청 본문을 받아 201을 반환한다")
     void createAccount() throws Exception {
         AccountCreateReq request = createAccountCreateReq("생활비 계좌", AccountType.DEPOSIT);
-        AccountRes response = new AccountRes(
+        AccountCreateRes response = new AccountCreateRes(
                 1L,
                 "100200300001",
                 "생활비 계좌",
                 AccountType.DEPOSIT,
                 0L,
                 AccountStatus.ACTIVE,
-                LocalDateTime.of(2026, 6, 8, 15, 45),
                 LocalDateTime.of(2026, 6, 8, 15, 45)
         );
 
@@ -90,7 +90,7 @@ class AccountControllerTest {
     @DisplayName("계좌 별칭 수정 API는 userId, accountId, 요청 본문을 받아 계좌 상세를 반환한다")
     void updateNickname() throws Exception {
         AccountNicknameUpdateReq request = new AccountNicknameUpdateReq("급여 계좌");
-        AccountRes response = new AccountRes(
+        AccountDetailRes response = new AccountDetailRes(
                 1L,
                 "100200300001",
                 "급여 계좌",
@@ -118,7 +118,7 @@ class AccountControllerTest {
     @Test
     @DisplayName("계좌 해지 API는 userId와 accountId를 받아 CLOSED 상태의 계좌 상세를 반환한다")
     void closeAccount() throws Exception {
-        AccountRes response = new AccountRes(
+        AccountDetailRes response = new AccountDetailRes(
                 1L,
                 "100200300001",
                 "생활비 계좌",
@@ -194,7 +194,7 @@ class AccountControllerTest {
     @Test
     @DisplayName("내 계좌 상세 조회 API는 userId와 accountId로 계좌 상세를 반환한다")
     void getAccount() throws Exception {
-        AccountRes response = new AccountRes(
+        AccountDetailRes response = new AccountDetailRes(
                 1L,
                 "100200300001",
                 "생활비 계좌",
