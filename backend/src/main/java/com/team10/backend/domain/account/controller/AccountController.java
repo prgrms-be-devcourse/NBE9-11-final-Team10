@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,8 +24,7 @@ public class AccountController {
 
     @PostMapping
     public ResponseEntity<AccountCreateRes> createAccount(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody AccountCreateReq request
     ) {
         AccountCreateRes response = accountService.createAccount(userId, request);
@@ -33,8 +33,7 @@ public class AccountController {
 
     @PatchMapping("/{accountId}/nickname")
     public ResponseEntity<AccountDetailRes> updateNickname(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId,
+            @AuthenticationPrincipal Long userId,
             @PathVariable Long accountId,
             @Valid @RequestBody AccountNicknameUpdateReq request
     ){
@@ -44,8 +43,7 @@ public class AccountController {
 
     @PostMapping("/{accountId}/close")
     public ResponseEntity<AccountDetailRes> closeAccount(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId,
+            @AuthenticationPrincipal Long userId,
             @PathVariable Long accountId
     ){
         AccountDetailRes response = accountService.closeAccount(userId, accountId);
@@ -54,24 +52,21 @@ public class AccountController {
 
     @GetMapping
     public ResponseEntity<List<AccountSummaryRes>> getAccounts(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ResponseEntity.ok(accountService.getAccounts(userId));
     }
 
     @GetMapping("/closed")
     public ResponseEntity<List<AccountSummaryRes>> getClosedAccounts(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ResponseEntity.ok(accountService.getClosedAccounts(userId));
     }
 
     @GetMapping("/{accountId}")
     public ResponseEntity<AccountDetailRes> getAccount(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId,
+            @AuthenticationPrincipal Long userId,
             @PathVariable Long accountId
     ) {
         return ResponseEntity.ok(accountService.getAccount(userId, accountId));
