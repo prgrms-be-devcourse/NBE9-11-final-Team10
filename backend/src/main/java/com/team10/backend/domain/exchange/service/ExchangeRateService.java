@@ -2,6 +2,7 @@ package com.team10.backend.domain.exchange.service;
 
 import com.team10.backend.domain.exchange.client.UpbitExchangeRateClient;
 import com.team10.backend.domain.exchange.client.UpbitExchangeRateRes;
+import com.team10.backend.domain.exchange.dto.res.CurrencyRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeRateRes;
 import com.team10.backend.domain.exchange.entity.Currency;
 import com.team10.backend.domain.exchange.entity.ExchangeRate;
@@ -39,6 +40,16 @@ public class ExchangeRateService {
     private final CurrencyRepository currencyRepository;
     private final ExchangeRateRepository exchangeRateRepository;
     private final ExchangeRateCacheRepository exchangeRateCacheRepository;
+
+    // 지원 통화 목록 조회
+    public List<CurrencyRes> getCurrencies() {
+        return SUPPORTED_CURRENCIES.stream()
+                .sorted(Comparator.comparing(Enum::name)) // 통화코드 알파벳순 정렬
+                .map(currencyRepository::findByCurrencyCode)
+                .flatMap(Optional::stream)
+                .map(CurrencyRes::from)
+                .toList();
+    }
 
     // 실시간 환율 동기화
     @Transactional
