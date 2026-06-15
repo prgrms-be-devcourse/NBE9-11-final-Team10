@@ -6,9 +6,19 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+/**
+ * 전역 예외 처리기.
+ *
+ * <p>Spring Security 필터 체인(AuthenticationException, AccessDeniedException)에서 발생하는
+ * 예외는 DispatcherServlet 이전에 처리되므로 여기서 잡히지 않는다.
+ * 해당 예외는 {@link com.team10.backend.global.security.JwtAuthenticationEntryPoint} 와
+ * {@link com.team10.backend.global.security.JwtAccessDeniedHandler} 에서 처리한다.
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -63,6 +73,29 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(ErrorResponse.from(errorCode, errors));
+    }
+
+    // 필수 @RequestParam 누락
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException e) {
+        log.warn("[MISSING_PARAM] {}", e.getMessage());
+        return ResponseEntity.badRequest().body(ErrorResponse.from(GlobalErrorCode.INVALID_INPUT_VALUE));
+    }
+
+    // @RequestParam 타입 변환 실패 (e.g. enum 값 불일치)
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        log.warn("[TYPE_MISMATCH] param='{}', value='{}' — {}", e.getName(), e.getValue(), e.getMessage());
+        return ResponseEntity.badRequest().body(ErrorResponse.from(GlobalErrorCode.INVALID_INPUT_VALUE));
+    }
+
+    // 예상치 못한 예외는 내부 정보를 노출하지 않고 500으로 처리
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
+        log.error("[UNEXPECTED] 처리되지 않은 예외 발생", e);
+        return ResponseEntity
+                .internalServerError()
+                .body(ErrorResponse.from(GlobalErrorCode.INTERNAL_SERVER_ERROR));
     }
 
     // ConstraintViolationException에서 필드명만 추출하는 헬퍼 메서드

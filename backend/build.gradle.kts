@@ -46,11 +46,15 @@ dependencies {
     // Google Cloud Vision OCR
     implementation("com.google.cloud:google-cloud-vision:3.51.0")
 
-    // BCrypt 비밀번호 해싱 (Spring Security 없이 사용)
-    implementation("org.springframework.security:spring-security-crypto")
+    // Spring Security
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    testImplementation("org.springframework.security:spring-security-test")
 
     // Redis
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+
+    // CODEF — 1원 계좌인증 (토큰 관리 자동)
+    implementation("io.codef.api:easycodef-java:1.0.6")
 
     // JWT
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")

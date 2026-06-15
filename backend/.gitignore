@@ -35,3 +35,5 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Secrets — 루트 .gitignore에서 통합 관리 ###

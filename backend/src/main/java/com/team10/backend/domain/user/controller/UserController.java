@@ -1,13 +1,20 @@
 package com.team10.backend.domain.user.controller;
 
+import com.team10.backend.domain.user.dto.req.ChangePasswordReq;
+import com.team10.backend.domain.user.dto.req.ConsentUpdateReq;
 import com.team10.backend.domain.user.dto.req.OneWonStartReq;
 import com.team10.backend.domain.user.dto.req.OneWonVerifyReq;
+import com.team10.backend.domain.user.dto.res.ConsentRes;
 import com.team10.backend.domain.user.dto.res.OcrAcceptedRes;
 import com.team10.backend.domain.user.dto.res.OneWonStartRes;
 import com.team10.backend.domain.user.dto.res.OneWonVerifyRes;
 import com.team10.backend.domain.user.dto.res.UserRes;
+import com.team10.backend.domain.user.service.IdentityVerificationService;
+import com.team10.backend.domain.user.service.UserConsentService;
+import com.team10.backend.domain.user.service.UserProfileService;
 import com.team10.backend.domain.user.service.UserService;
-import com.team10.backend.global.jwt.JwtProvider;
+import com.team10.backend.domain.user.dto.req.UserProfileReq;
+import com.team10.backend.domain.user.dto.res.UserProfileRes;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,8 +23,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -26,23 +36,82 @@ import org.springframework.web.multipart.MultipartFile;
 public class UserController {
 
     private final UserService userService;
-    private final JwtProvider jwtProvider;
+    private final IdentityVerificationService identityVerificationService;
+    private final UserConsentService userConsentService;
+    private final UserProfileService userProfileService;
 
     @GetMapping("/me")
     @Operation(summary = "내 정보 조회")
-    public ResponseEntity<UserRes> getMe(
-            @RequestHeader("Authorization") String authHeader
-    ) {
-        Long userId = extractUserId(authHeader);
+    public ResponseEntity<UserRes> getMe(@AuthenticationPrincipal Long userId) {
         return ResponseEntity.ok(userService.getMe(userId));
     }
 
-    /**
-     * 본인인증 1단계: 신분증 OCR 업로드.
-     *
-     * <p>이미지를 접수한 뒤 즉시 202 Accepted 를 반환한다.
-     * 실제 OCR 처리는 {@code ocrExecutor} 스레드 풀에서 비동기로 수행된다.
-     */
+    @PatchMapping("/me/password")
+    @Operation(
+            summary = "비밀번호 변경",
+            description = "현재 비밀번호 검증 후 변경합니다. 변경 즉시 기존 Refresh Token이 무효화되어 재로그인이 필요합니다."
+    )
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody ChangePasswordReq request
+    ) {
+        userService.changePassword(userId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/me")
+    @Operation(summary = "회원 탈퇴", description = "계정 상태를 WITHDRAWN으로 변경하고 Refresh Token을 삭제합니다.")
+    public ResponseEntity<Void> withdraw(@AuthenticationPrincipal Long userId) {
+        userService.withdraw(userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── 약관 동의 ────────────────────────────────────────────────────────────
+
+    @GetMapping("/me/consents")
+    @Operation(summary = "약관 동의 내역 조회")
+    public ResponseEntity<List<ConsentRes>> getConsents(@AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(userConsentService.getConsents(userId));
+    }
+
+    @PatchMapping("/me/consents")
+    @Operation(summary = "마케팅 수신 동의 변경", description = "선택 항목(마케팅)만 변경 가능합니다.")
+    public ResponseEntity<ConsentRes> updateConsent(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody ConsentUpdateReq request
+    ) {
+        return ResponseEntity.ok(userConsentService.updateMarketing(userId, request));
+    }
+
+    // ── 사용자 프로필 ─────────────────────────────────────────────────────────
+
+    @PostMapping("/me/profile")
+    @Operation(summary = "프로필 등록", description = "나이·지역·직업·관심 금융 분야를 등록합니다.")
+    public ResponseEntity<UserProfileRes> createProfile(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody UserProfileReq request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(userProfileService.create(userId, request));
+    }
+
+    @GetMapping("/me/profile")
+    @Operation(summary = "프로필 조회")
+    public ResponseEntity<UserProfileRes> getProfile(@AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(userProfileService.get(userId));
+    }
+
+    @PatchMapping("/me/profile")
+    @Operation(summary = "프로필 수정")
+    public ResponseEntity<UserProfileRes> updateProfile(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody UserProfileReq request
+    ) {
+        return ResponseEntity.ok(userProfileService.update(userId, request));
+    }
+
+    // ── 본인인증 ──────────────────────────────────────────────────────────────
+
     @PostMapping(value = "/me/identity-verification/ocr",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
@@ -51,13 +120,11 @@ public class UserController {
                     "요청 즉시 202 Accepted 를 반환하며, OCR은 백그라운드에서 처리됩니다."
     )
     public ResponseEntity<OcrAcceptedRes> uploadIdCardOcr(
-            @RequestHeader("Authorization") String authHeader,
-
+            @AuthenticationPrincipal Long userId,
             @Parameter(description = "신분증 이미지 (jpg/png, 최대 10MB)")
             @RequestPart("idCardImage") MultipartFile idCardImage
     ) {
-        Long userId = extractUserId(authHeader);
-        OcrAcceptedRes response = userService.submitIdCardOcr(userId, idCardImage);
+        OcrAcceptedRes response = identityVerificationService.submitIdCardOcr(userId, idCardImage);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
@@ -67,12 +134,11 @@ public class UserController {
             description = "지정 계좌로 1원을 송금합니다. 입금 메모의 4자리 코드로 /verify를 호출하세요."
     )
     public ResponseEntity<OneWonStartRes> startOneWonVerification(
-            @RequestHeader("Authorization") String authHeader,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody OneWonStartReq request
     ) {
-        Long userId = extractUserId(authHeader);
         return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(userService.startOneWonVerification(userId, request));
+                .body(identityVerificationService.startOneWonVerification(userId, request));
     }
 
     @PostMapping("/me/identity-verification/one-won/verify")
@@ -81,18 +147,9 @@ public class UserController {
             description = "입금 메모에서 확인한 4자리 코드를 제출하여 본인인증을 완료합니다."
     )
     public ResponseEntity<OneWonVerifyRes> verifyOneWonCode(
-            @RequestHeader("Authorization") String authHeader,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody OneWonVerifyReq request
     ) {
-        Long userId = extractUserId(authHeader);
-        return ResponseEntity.ok(userService.verifyOneWonCode(userId, request));
-    }
-
-    /** Authorization: Bearer {token} 에서 userId 추출 */
-    private Long extractUserId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new IllegalArgumentException("Authorization 헤더가 없거나 형식이 올바르지 않습니다.");
-        }
-        return jwtProvider.parseUserId(authHeader.substring(7));
+        return ResponseEntity.ok(identityVerificationService.verifyOneWonCode(userId, request));
     }
 }
