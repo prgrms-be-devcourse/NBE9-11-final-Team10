@@ -24,9 +24,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 스케줄러로 30초마다 최신 환율만 유지
+ * 스케줄러로 1분마다 동기화
+ * 최신 환율만 유지
  * 존재하면 업데이트, 없으면 새로 추가
- *
  */
 @Slf4j
 @Service

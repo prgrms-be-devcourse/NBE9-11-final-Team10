@@ -31,3 +31,8 @@ springdoc:
 
 upbit:
   base-url: https://crix-api-cdn.upbit.com
+exchange-rate:
+  sync:
+    enabled: true
+    fixed-delay-ms: 60000 # 동기화 시간 1분
+
