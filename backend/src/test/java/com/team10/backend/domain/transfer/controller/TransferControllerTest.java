@@ -14,7 +14,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 
@@ -46,13 +45,13 @@ class TransferControllerTest {
                 "초기 입금",
                 LocalDateTime.of(2026, 6, 9, 10, 0)
         );
-        when(transferService.deposit(1L, 100_000L, "초기 입금")).thenReturn(response);
+        when(transferService.topUp(1L, 100_000L, "초기 입금")).thenReturn(response);
 
         ResponseEntity<DepositRes> result = transferController.deposit(request);
 
         assertEquals(200, result.getStatusCode().value());
         assertSame(response, result.getBody());
-        verify(transferService).deposit(1L, 100_000L, "초기 입금");
+        verify(transferService).topUp(1L, 100_000L, "초기 입금");
     }
 
     @Test
