@@ -5,11 +5,11 @@ import java.util.List;
 
 // 필요없는 데이터 무시하는 설정 추가하여 시스템 안정성 향상
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record YoungPolicyRes(
+public record YoungPolicyExternalRes(
         List<PolicyItem> youthPolicyList // 청년 정책 리스트
 ) {
     // null 값이 들어올 경우 빈 리스트로 초기화하여 시스템 에러 방지
-    public YoungPolicyRes {
+    public YoungPolicyExternalRes {
         if (youthPolicyList == null) {
             youthPolicyList = List.of();
         }

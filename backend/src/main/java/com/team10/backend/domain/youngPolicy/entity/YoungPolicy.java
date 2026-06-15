@@ -62,4 +62,31 @@ public class YoungPolicy extends BaseEntity {
         this.applyUrl = applyUrl;
         this.applyMethod = applyMethod;
     }
+
+    //update 메서드: 12개 항목을 모두 받는 형태로 업데이트
+    public void updateFrom(
+            String title,
+            String description,
+            String category,
+            String subCategory,
+            Integer minAge,
+            Integer maxAge,
+            String regionCode,
+            String jobCode,
+            String applyPeriod,
+            String applyUrl,
+            String applyMethod
+    ) {
+        this.title = title;
+        this.description = description;
+        this.category = category;
+        this.subCategory = subCategory;
+        this.minAge = minAge;
+        this.maxAge = maxAge;
+        this.regionCode = regionCode;
+        this.jobCode = jobCode;
+        this.applyPeriod = applyPeriod;
+        this.applyUrl = applyUrl;
+        this.applyMethod = applyMethod;
+    }
 }
