@@ -52,11 +52,15 @@ public class FxWallet extends BaseEntity {
         this.status = FxWalletStatus.CLOSED;
     }
 
+    public void activate() {
+        this.status = FxWalletStatus.ACTIVE;
+    }
+
     public boolean isActive() {
         return this.status == FxWalletStatus.ACTIVE;
     }
 
     public boolean hasBalance() {
-        return this.balance.compareTo(BigDecimal.ZERO) != 0;
+        return this.balance.compareTo(BigDecimal.ZERO) != 0; // 0보다 크거나 잔액이 음수인 예외도 방지
     }
 }

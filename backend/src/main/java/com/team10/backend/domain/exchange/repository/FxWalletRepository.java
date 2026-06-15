@@ -9,7 +9,7 @@ import java.util.Optional;
 
 public interface FxWalletRepository extends JpaRepository<FxWallet, Long> {
 
-    boolean existsByUserIdAndCurrencyCurrencyCode(Long userId, CurrencyCode currencyCode);
+    Optional<FxWallet> findByUserIdAndCurrencyCurrencyCode(Long userId, CurrencyCode currencyCode);
 
     List<FxWallet> findAllByUserIdOrderByCreatedAtDesc(Long userId);
 

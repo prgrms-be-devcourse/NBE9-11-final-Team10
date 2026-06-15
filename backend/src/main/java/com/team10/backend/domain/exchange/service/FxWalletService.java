@@ -28,8 +28,8 @@ public class FxWalletService {
     // 외화 지갑 생성
     @Transactional
     public FxWalletRes createFxWallet(CurrencyCode currencyCode, Long userId) {
-        // user 조회
-        User user = validateUser(userId);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ExchangeErrorCode.USER_NOT_FOUND));
         // currency 조회
         Currency currency = currencyRepository.findByCurrencyCode(currencyCode)
                 .orElseThrow(() -> new BusinessException(ExchangeErrorCode.CURRENCY_NOT_FOUND));
@@ -38,9 +38,17 @@ public class FxWalletService {
             throw new BusinessException(ExchangeErrorCode.CURRENCY_NOT_SUPPORTED);
         }
 
-        // [동일 사용자 + 동일 통화] 지갑 존재 확인
-        if (fxWalletRepository.existsByUserIdAndCurrencyCurrencyCode(userId, currencyCode)) {
-            throw new BusinessException(ExchangeErrorCode.FX_WALLET_ALREADY_EXISTS);
+        // [동일 사용자 + 동일 통화] 지갑이 이미 있으면 상태에 따라 처리
+        FxWallet existingWallet = fxWalletRepository.findByUserIdAndCurrencyCurrencyCode(userId, currencyCode)
+                .orElse(null);
+        if (existingWallet != null) {
+            // 이미 활성상태인 지갑 존재하는 경우
+            if (existingWallet.isActive()) {
+                throw new BusinessException(ExchangeErrorCode.FX_WALLET_ALREADY_EXISTS);
+            }
+            // 존재하지만 활성상태가 아닌 경우 -> 활성상태로 변경
+            existingWallet.activate();
+            return FxWalletRes.from(existingWallet);
         }
 
         // FxWallet 생성 후 저장
@@ -51,8 +59,6 @@ public class FxWalletService {
     // 내 외화 지갑 목록 조회
     @Transactional(readOnly = true)
     public List<FxWalletRes> getFxWallets(Long userId) {
-        // user 검증
-        validateUser(userId);
         // 생성일 최신순
         List<FxWallet> fxWallets = fxWalletRepository.findAllByUserIdOrderByCreatedAtDesc(userId);
 
@@ -64,9 +70,6 @@ public class FxWalletService {
     // 외화 지갑 상세 조회
     @Transactional(readOnly = true)
     public FxWalletRes getFxWallet(Long fxWalletId, Long userId) {
-        // user 검증
-        validateUser(userId);
-
         FxWallet fxWallet = fxWalletRepository.findByIdAndUserId(fxWalletId, userId)
                 .orElseThrow(() -> new BusinessException(ExchangeErrorCode.FX_WALLET_NOT_FOUND));
         return FxWalletRes.from(fxWallet);
@@ -75,9 +78,6 @@ public class FxWalletService {
     // 외화 지갑 해지/비활성화
     @Transactional
     public FxWalletRes closeFxWallet(Long fxWalletId, Long userId) {
-        // user 검증
-        validateUser(userId);
-
         FxWallet fxWallet = fxWalletRepository.findByIdAndUserId(fxWalletId, userId)
                 .orElseThrow(() -> new BusinessException(ExchangeErrorCode.FX_WALLET_NOT_FOUND));
 
@@ -93,11 +93,6 @@ public class FxWalletService {
 
         fxWallet.close();
         return FxWalletRes.from(fxWallet);
-    }
-
-    private User validateUser(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ExchangeErrorCode.USER_NOT_FOUND));
     }
 
 }

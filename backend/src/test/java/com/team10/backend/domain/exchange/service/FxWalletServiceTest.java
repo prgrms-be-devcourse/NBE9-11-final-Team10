@@ -61,7 +61,8 @@ class FxWalletServiceTest {
     void createFxWallet() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(currencyRepository.findByCurrencyCode(CurrencyCode.USD)).thenReturn(Optional.of(usd));
-        when(fxWalletRepository.existsByUserIdAndCurrencyCurrencyCode(1L, CurrencyCode.USD)).thenReturn(false);
+        when(fxWalletRepository.findByUserIdAndCurrencyCurrencyCode(1L, CurrencyCode.USD))
+                .thenReturn(Optional.empty());
         when(fxWalletRepository.save(any(FxWallet.class))).thenAnswer(invocation -> {
             FxWallet fxWallet = invocation.getArgument(0);
             ReflectionTestUtils.setField(fxWallet, "id", 10L);
@@ -124,9 +125,11 @@ class FxWalletServiceTest {
     @Test
     @DisplayName("같은 사용자와 같은 통화의 외화 지갑은 중복 생성할 수 없다")
     void createFxWalletWithDuplicateWallet() {
+        FxWallet wallet = createWallet(10L, user, usd);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(currencyRepository.findByCurrencyCode(CurrencyCode.USD)).thenReturn(Optional.of(usd));
-        when(fxWalletRepository.existsByUserIdAndCurrencyCurrencyCode(1L, CurrencyCode.USD)).thenReturn(true);
+        when(fxWalletRepository.findByUserIdAndCurrencyCurrencyCode(1L, CurrencyCode.USD))
+                .thenReturn(Optional.of(wallet));
 
         assertThatThrownBy(() -> fxWalletService.createFxWallet(CurrencyCode.USD, 1L))
                 .isInstanceOf(BusinessException.class)
@@ -137,10 +140,28 @@ class FxWalletServiceTest {
     }
 
     @Test
+    @DisplayName("해지된 외화 지갑은 재개설하면 ACTIVE 상태로 변경된다")
+    void createFxWalletWithClosedWallet() {
+        FxWallet wallet = createWallet(10L, user, usd);
+        wallet.close();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(currencyRepository.findByCurrencyCode(CurrencyCode.USD)).thenReturn(Optional.of(usd));
+        when(fxWalletRepository.findByUserIdAndCurrencyCurrencyCode(1L, CurrencyCode.USD))
+                .thenReturn(Optional.of(wallet));
+
+        FxWalletRes response = fxWalletService.createFxWallet(CurrencyCode.USD, 1L);
+
+        assertThat(response.walletId()).isEqualTo(10L);
+        assertThat(response.status()).isEqualTo(FxWalletStatus.ACTIVE);
+        assertThat(wallet.getStatus()).isEqualTo(FxWalletStatus.ACTIVE);
+
+        verify(fxWalletRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("내 외화 지갑 목록을 조회한다")
     void getFxWallets() {
         FxWallet wallet = createWallet(10L, user, usd);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(fxWalletRepository.findAllByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(wallet));
 
         List<FxWalletRes> responses = fxWalletService.getFxWallets(1L);
@@ -154,7 +175,6 @@ class FxWalletServiceTest {
     @DisplayName("외화 지갑 상세를 조회한다")
     void getFxWallet() {
         FxWallet wallet = createWallet(10L, user, usd);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(fxWalletRepository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(wallet));
 
         FxWalletRes response = fxWalletService.getFxWallet(10L, 1L);
@@ -167,7 +187,6 @@ class FxWalletServiceTest {
     @Test
     @DisplayName("내 지갑이 아니거나 존재하지 않는 외화 지갑은 상세 조회에 실패한다")
     void getFxWalletWithNotFoundWallet() {
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(fxWalletRepository.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> fxWalletService.getFxWallet(999L, 1L))
@@ -180,7 +199,6 @@ class FxWalletServiceTest {
     @DisplayName("잔액이 없는 ACTIVE 외화 지갑을 해지한다")
     void closeFxWallet() {
         FxWallet wallet = createWallet(10L, user, usd);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(fxWalletRepository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(wallet));
 
         FxWalletRes response = fxWalletService.closeFxWallet(10L, 1L);
@@ -195,7 +213,6 @@ class FxWalletServiceTest {
     void closeFxWalletWithNotActiveStatus() {
         FxWallet wallet = createWallet(10L, user, usd);
         wallet.close();
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(fxWalletRepository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(wallet));
 
         assertThatThrownBy(() -> fxWalletService.closeFxWallet(10L, 1L))
@@ -209,7 +226,6 @@ class FxWalletServiceTest {
     void closeFxWalletWithRemainingBalance() {
         FxWallet wallet = createWallet(10L, user, usd);
         ReflectionTestUtils.setField(wallet, "balance", BigDecimal.ONE);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(fxWalletRepository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(wallet));
 
         assertThatThrownBy(() -> fxWalletService.closeFxWallet(10L, 1L))
