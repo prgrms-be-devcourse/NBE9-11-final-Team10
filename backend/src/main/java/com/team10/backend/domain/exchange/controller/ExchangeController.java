@@ -1,14 +1,15 @@
 package com.team10.backend.domain.exchange.controller;
 
+import com.team10.backend.domain.exchange.dto.res.CurrencyRes;
+import com.team10.backend.domain.exchange.dto.res.ExchangeRateRes;
 import com.team10.backend.domain.exchange.entity.Currency;
+import com.team10.backend.domain.exchange.service.ExchangeRateService;
+import com.team10.backend.domain.exchange.type.CurrencyCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -18,22 +19,27 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ExchangeController {
 
+    private final ExchangeRateService exchangeRateService;
+
     @GetMapping("/currencies")
     @Operation(description = "지원 통화 목록 조회")
-    public ResponseEntity<List<Currency>> getCurrencies() {
-        throw new UnsupportedOperationException("구현 예정 기능");
+    public ResponseEntity<List<CurrencyRes>> getCurrencies() {
+        List<CurrencyRes> response = exchangeRateService.getCurrencies();
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/rates")
     @Operation(description = "현재 환율 목록 조회")
-    public ResponseEntity<List<Currency>> getExchangeRates() {
-        throw new UnsupportedOperationException("구현 예정 기능");
+    public ResponseEntity<List<ExchangeRateRes>> getExchangeRates() {
+        return ResponseEntity.ok(exchangeRateService.getLatestRates());
     }
 
     @GetMapping("/currencies/{currencyCode}")
     @Operation(description = "특정 통화 환율 조회")
-    public ResponseEntity<List<Currency>> getExchangeRate() {
-        throw new UnsupportedOperationException("구현 예정 기능");
+    public ResponseEntity<ExchangeRateRes> getExchangeRate(
+            @PathVariable CurrencyCode currencyCode
+            ) {
+        return ResponseEntity.ok(exchangeRateService.getLatestRate(currencyCode));
     }
 
     @PostMapping("/currencies/quotes")
