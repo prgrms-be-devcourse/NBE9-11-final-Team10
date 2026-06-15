@@ -21,7 +21,10 @@ public class ExchangeRateSyncScheduler {
     private final ExchangeRateService exchangeRateService;
 
     // 한 번 작업이 끝나고 1분 뒤에 ExchangeRateService.syncCurrentRates() 호출
-    @Scheduled(fixedDelay = 60000)
+    @Scheduled(
+            fixedDelayString = "${exchange-rate.sync.fixed-delay-ms}",
+            initialDelayString = "${exchange-rate.sync.fixed-delay-ms}" // 1분 뒤 부터 반복 시작
+    )
     public void syncCurrentRates() {
         try {
             exchangeRateService.syncCurrentRates();
