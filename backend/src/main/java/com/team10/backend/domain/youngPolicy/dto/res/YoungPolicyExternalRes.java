@@ -1,6 +1,9 @@
 package com.team10.backend.domain.youngPolicy.dto.res;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.team10.backend.domain.youngPolicy.entity.YoungPolicy;
+import org.springframework.util.StringUtils;
+
 import java.util.List;
 
 // 필요없는 데이터 무시하는 설정 추가하여 시스템 안정성 향상
@@ -30,5 +33,53 @@ public record YoungPolicyExternalRes(
             String aplyUrlAddr,    // 신청URL 주소
             String plcyAplyMthdCn  // 정책신청 방법 설명
     ) {
+        public boolean hasPolicyId() {
+            return StringUtils.hasText(plcyNo);
+        }
+
+        public YoungPolicy toEntity() {
+            return new YoungPolicy(
+                    plcyNo,
+                    plcyNm,
+                    plcyExplnCn,
+                    lclsfNm,
+                    mclsfNm,
+                    parseAge(sprtTrgtMinAge),
+                    parseAge(sprtTrgtMaxAge),
+                    zipCd,
+                    jobCd,
+                    aplyYmd,
+                    aplyUrlAddr,
+                    plcyAplyMthdCn
+            );
+        }
+
+        public void update(YoungPolicy policy) {
+            policy.updateFrom(
+                    plcyNm,
+                    plcyExplnCn,
+                    lclsfNm,
+                    mclsfNm,
+                    parseAge(sprtTrgtMinAge),
+                    parseAge(sprtTrgtMaxAge),
+                    zipCd,
+                    jobCd,
+                    aplyYmd,
+                    aplyUrlAddr,
+                    plcyAplyMthdCn
+            );
+        }
+
+        private Integer parseAge(String value) {
+            if (!StringUtils.hasText(value)) {
+                return null;
+            }
+
+            try {
+                return Integer.valueOf(value);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
     }
 }
