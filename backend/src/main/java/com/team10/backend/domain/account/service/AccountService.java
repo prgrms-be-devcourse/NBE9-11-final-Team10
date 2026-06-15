@@ -11,8 +11,8 @@ import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.util.AccountNumberGenerator;
 import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
-import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,17 +24,15 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class AccountService {
 
+    private static final int MAX_ACCOUNT_NUMBER_GENERATION_RETRY = 10;
     private final AccountRepository accountRepository;
-    private final EntityManager entityManager;
+    private final UserRepository userRepository;
 
     // 계좌 개설
     @Transactional
     public AccountCreateRes createAccount(Long userId, AccountCreateReq request) {
-        User user = entityManager.find(User.class, userId);
-
-        if (user == null) {
-            throw new BusinessException(AccountErrorCode.USER_NOT_FOUND);
-        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(AccountErrorCode.USER_NOT_FOUND));
 
         if (!Boolean.TRUE.equals(user.getIdentityVerified())) {
             throw new BusinessException(AccountErrorCode.IDENTITY_VERIFICATION_REQUIRED);
@@ -114,12 +112,14 @@ public class AccountService {
 
     // 중복되지 않는 계좌번호 생성
     private String generateUniqueAccountNumber() {
-        String accountNumber;
+        for (int i = 0; i < MAX_ACCOUNT_NUMBER_GENERATION_RETRY; i++) {
+            String accountNumber = AccountNumberGenerator.generate();
 
-        do {
-            accountNumber = AccountNumberGenerator.generate();
-        } while (accountRepository.existsByAccountNumber(accountNumber));
+            if (!accountRepository.existsByAccountNumber(accountNumber)) {
+                return accountNumber;
+            }
+        }
 
-        return accountNumber;
+        throw new BusinessException(AccountErrorCode.ACCOUNT_NUMBER_GENERATION_FAILED);
     }
 }

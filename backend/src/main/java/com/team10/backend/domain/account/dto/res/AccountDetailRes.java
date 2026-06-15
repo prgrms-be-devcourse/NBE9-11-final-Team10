@@ -5,6 +5,7 @@ import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 public record AccountDetailRes(
         Long id,
@@ -18,6 +19,8 @@ public record AccountDetailRes(
 ) {
 
     public static AccountDetailRes from(Account account) {
+        Objects.requireNonNull(account, "account는 null일 수 없습니다.");
+
         return new AccountDetailRes(
                 account.getId(),
                 account.getAccountNumber(),

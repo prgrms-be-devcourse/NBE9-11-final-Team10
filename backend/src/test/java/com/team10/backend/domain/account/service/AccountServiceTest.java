@@ -17,8 +17,8 @@ import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
-import jakarta.persistence.EntityManager;
 import java.lang.reflect.Constructor;
 import java.time.LocalDate;
 import java.util.List;
@@ -39,7 +39,7 @@ class AccountServiceTest {
     private AccountRepository accountRepository;
 
     @Mock
-    private EntityManager entityManager;
+    private UserRepository userRepository;
 
     @InjectMocks
     private AccountService accountService;
@@ -58,7 +58,7 @@ class AccountServiceTest {
     void createAccount() {
         AccountCreateReq request = createAccountCreateReq("생활비 계좌", AccountType.DEPOSIT);
 
-        when(entityManager.find(User.class, 1L)).thenReturn(verifiedUser);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(verifiedUser));
         when(accountRepository.existsByAccountNumber(any(String.class))).thenReturn(false);
         when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
             Account account = invocation.getArgument(0);
@@ -83,7 +83,7 @@ class AccountServiceTest {
     void createAccountWithNotFoundUser() {
         AccountCreateReq request = createAccountCreateReq("생활비 계좌", AccountType.DEPOSIT);
 
-        when(entityManager.find(User.class, 999L)).thenReturn(null);
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> accountService.createAccount(999L, request))
                 .isInstanceOf(BusinessException.class)
@@ -96,12 +96,26 @@ class AccountServiceTest {
     void createAccountWithoutIdentityVerification() {
         AccountCreateReq request = createAccountCreateReq("생활비 계좌", AccountType.DEPOSIT);
 
-        when(entityManager.find(User.class, 2L)).thenReturn(unverifiedUser);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(unverifiedUser));
 
         assertThatThrownBy(() -> accountService.createAccount(2L, request))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(AccountErrorCode.IDENTITY_VERIFICATION_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("계좌번호 생성 최대 시도 횟수를 초과하면 계좌 개설에 실패한다")
+    void createAccountWithAccountNumberGenerationFailed() {
+        AccountCreateReq request = createAccountCreateReq("생활비 계좌", AccountType.DEPOSIT);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(verifiedUser));
+        when(accountRepository.existsByAccountNumber(any(String.class))).thenReturn(true);
+
+        assertThatThrownBy(() -> accountService.createAccount(1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AccountErrorCode.ACCOUNT_NUMBER_GENERATION_FAILED);
     }
 
     @Test
