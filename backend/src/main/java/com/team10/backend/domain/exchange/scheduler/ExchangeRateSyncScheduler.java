@@ -20,8 +20,8 @@ public class ExchangeRateSyncScheduler {
 
     private final ExchangeRateService exchangeRateService;
 
-    // 한 번 작업이 끝나고 30초 뒤에 ExchangeRateService.syncCurrentRates() 호출
-    @Scheduled(fixedDelay = 30000)
+    // 한 번 작업이 끝나고 1분 뒤에 ExchangeRateService.syncCurrentRates() 호출
+    @Scheduled(fixedDelay = 60000)
     public void syncCurrentRates() {
         try {
             exchangeRateService.syncCurrentRates();
