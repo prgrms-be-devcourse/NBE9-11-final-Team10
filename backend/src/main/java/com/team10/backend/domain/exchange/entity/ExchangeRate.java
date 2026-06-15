@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 public class ExchangeRate extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "currency_code", referencedColumnName = "currency_code", nullable = false)
+    @JoinColumn(name = "currency_code", referencedColumnName = "currency_code", nullable = false, unique = true)
     private Currency currency;
 
     @Column(name = "base_price", nullable = false, precision = 19, scale = 6)
