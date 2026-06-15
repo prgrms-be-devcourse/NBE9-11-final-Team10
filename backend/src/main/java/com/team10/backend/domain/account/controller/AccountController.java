@@ -59,6 +59,14 @@ public class AccountController {
         return ResponseEntity.ok(accountService.getAccounts(userId));
     }
 
+    @GetMapping("/closed")
+    public ResponseEntity<List<AccountSummaryRes>> getClosedAccounts(
+            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
+            @RequestParam Long userId
+    ) {
+        return ResponseEntity.ok(accountService.getClosedAccounts(userId));
+    }
+
     @GetMapping("/{accountId}")
     public ResponseEntity<AccountRes> getAccount(
             // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체

@@ -94,6 +94,12 @@ public class AccountService {
                 .toList();
     }
 
+    public List<AccountSummaryRes> getClosedAccounts(Long userId) {
+        return accountRepository.findAllByUserIdAndStatus(userId, AccountStatus.CLOSED).stream()
+                .map(this::toAccountSummaryRes)
+                .toList();
+    }
+
     public AccountRes getAccount(Long userId, Long accountId) {
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));

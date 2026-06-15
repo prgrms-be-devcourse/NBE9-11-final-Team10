@@ -123,6 +123,23 @@ class AccountServiceTest {
 
 
     @Test
+    @DisplayName("사용자 ID로 해지 계좌 목록을 조회한다")
+    void getClosedAccounts() {
+        Account account = createAccount(1L, verifiedUser, "100200300001", "생활비 계좌");
+        ReflectionTestUtils.setField(account, "status", AccountStatus.CLOSED);
+
+        when(accountRepository.findAllByUserIdAndStatus(1L, AccountStatus.CLOSED)).thenReturn(List.of(account));
+
+        List<AccountSummaryRes> responses = accountService.getClosedAccounts(1L);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).id()).isEqualTo(1L);
+        assertThat(responses.get(0).accountNumber()).isEqualTo("100200300001");
+        assertThat(responses.get(0).nickname()).isEqualTo("생활비 계좌");
+        assertThat(responses.get(0).status()).isEqualTo(AccountStatus.CLOSED);
+    }
+
+    @Test
     @DisplayName("사용자 ID와 계좌 ID로 내 계좌 별칭을 수정한다")
     void updateNickname() {
         Account account = createAccount(1L, verifiedUser, "100200300001", "생활비 계좌");

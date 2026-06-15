@@ -167,6 +167,31 @@ class AccountControllerTest {
     }
 
     @Test
+    @DisplayName("해지 계좌 목록 조회 API는 userId로 CLOSED 계좌 목록을 반환한다")
+    void getClosedAccounts() throws Exception {
+        AccountSummaryRes response = new AccountSummaryRes(
+                1L,
+                "100200300001",
+                "생활비 계좌",
+                0L,
+                AccountStatus.CLOSED,
+                LocalDateTime.of(2026, 6, 8, 15, 45)
+        );
+
+        when(accountService.getClosedAccounts(1L)).thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/v1/accounts/closed")
+                        .param("userId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1L))
+                .andExpect(jsonPath("$[0].accountNumber").value("100200300001"))
+                .andExpect(jsonPath("$[0].nickname").value("생활비 계좌"))
+                .andExpect(jsonPath("$[0].status").value("CLOSED"));
+
+        verify(accountService).getClosedAccounts(1L);
+    }
+
+    @Test
     @DisplayName("내 계좌 상세 조회 API는 userId와 accountId로 계좌 상세를 반환한다")
     void getAccount() throws Exception {
         AccountRes response = new AccountRes(
