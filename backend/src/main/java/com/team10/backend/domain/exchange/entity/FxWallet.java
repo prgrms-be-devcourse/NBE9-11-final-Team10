@@ -39,7 +39,24 @@ public class FxWallet extends BaseEntity {
     @Column(nullable = false, length = 20)
     private FxWalletStatus status;
 
-    @Version
-    @Column(name = "lock_version", nullable = false)
-    private Long lockVersion;
+    public static FxWallet create(User user, Currency currency) {
+        FxWallet fxWallet = new FxWallet();
+        fxWallet.user = user;
+        fxWallet.currency = currency;
+        fxWallet.balance = BigDecimal.ZERO;
+        fxWallet.status = FxWalletStatus.ACTIVE;
+        return fxWallet;
+    }
+
+    public void close() {
+        this.status = FxWalletStatus.CLOSED;
+    }
+
+    public boolean isActive() {
+        return this.status == FxWalletStatus.ACTIVE;
+    }
+
+    public boolean hasBalance() {
+        return this.balance.compareTo(BigDecimal.ZERO) > 0; // 0보다 크면 this.balance가 0보다 크다는 의미
+    }
 }

@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 
 public record FxWalletRes(
         Long walletId,
-        CurrencyCode currency,
+        CurrencyCode currencyCode,
         BigDecimal balance,
         FxWalletStatus status,
         LocalDateTime createdAt,

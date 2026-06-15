@@ -7,8 +7,8 @@ import java.time.LocalDateTime;
 
 public record ExchangeQuoteRes(
         Long exchangeQuoteId,
-        CurrencyCode fromCurrency,
-        CurrencyCode toCurrency,
+        CurrencyCode fromCurrencyCode,
+        CurrencyCode toCurrencyCode,
         BigDecimal fromAmount,
         BigDecimal rate,
         BigDecimal feeRate,
