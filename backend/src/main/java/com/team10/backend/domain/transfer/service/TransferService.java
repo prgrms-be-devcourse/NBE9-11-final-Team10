@@ -28,7 +28,7 @@ public class TransferService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public DepositRes deposit(Long accountId, Long amount, String memo) {
+    public DepositRes topUp(Long accountId, Long amount, String memo) {
         // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
         Long loginUserId = 1L;
 
