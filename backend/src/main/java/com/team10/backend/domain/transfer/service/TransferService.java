@@ -28,7 +28,9 @@ public class TransferService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public DepositRes deposit(Long loginUserId, Long accountId, Long amount, String memo) {
+    public DepositRes topUp(Long accountId, Long amount, String memo) {
+        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
+        Long loginUserId = 1L;
 
         // amount 1원 이상 확인
         if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
@@ -66,7 +68,9 @@ public class TransferService {
     }
 
     @Transactional
-    public TransferRes transfer(Long loginUserId, Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
+    public TransferRes transfer(Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
+        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
+        Long loginUserId = 1L;
 
         // amount 1원 이상 확인
         if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);

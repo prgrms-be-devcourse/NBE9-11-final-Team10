@@ -46,6 +46,12 @@ dependencies {
     // Spring Security
     implementation("org.springframework.boot:spring-boot-starter-security")
     testImplementation("org.springframework.security:spring-security-test")
+    // Google Cloud Vision OCR
+    implementation("com.google.cloud:google-cloud-vision:3.51.0")
+
+    // Spring Security
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    testImplementation("org.springframework.security:spring-security-test")
 
     // Redis
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
@@ -69,6 +75,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
     testImplementation("org.springframework.boot:spring-boot-starter-validation-test")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.3")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

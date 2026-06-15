@@ -1,7 +1,7 @@
 package com.team10.backend.domain.youngPolicy.client;
 
 import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicyReq;
-import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyExternalRes;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -18,7 +18,7 @@ public class YoungPolicyClientImpl implements YoungPolicyClient {
     private static final String BASE_URL = "https://www.youthcenter.go.kr/opi/empList.do";
 
     @Override
-    public YoungPolicyRes fetchPolicies(YoungPolicyReq request) {
+    public YoungPolicyExternalRes fetchPolicies(YoungPolicyReq request) {
         java.util.Objects.requireNonNull(request, "request must not be null");
 
         URI uri = UriComponentsBuilder.fromUriString(BASE_URL)
@@ -32,6 +32,6 @@ public class YoungPolicyClientImpl implements YoungPolicyClient {
         return restClient.get()
                 .uri(uri)
                 .retrieve()
-                .body(YoungPolicyRes.class);
+                .body(YoungPolicyExternalRes.class);
     }
 }
