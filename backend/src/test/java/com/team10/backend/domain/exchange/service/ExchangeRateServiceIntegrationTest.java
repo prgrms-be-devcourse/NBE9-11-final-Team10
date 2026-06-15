@@ -6,15 +6,24 @@ import com.team10.backend.domain.exchange.dto.res.ExchangeRateRes;
 import com.team10.backend.domain.exchange.entity.Currency;
 import com.team10.backend.domain.exchange.entity.ExchangeRate;
 import com.team10.backend.domain.exchange.repository.CurrencyRepository;
+import com.team10.backend.domain.exchange.repository.ExchangeRateCacheRepository;
 import com.team10.backend.domain.exchange.repository.ExchangeRateRepository;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -28,8 +37,21 @@ import static org.mockito.BDDMockito.given;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@Testcontainers(disabledWithoutDocker = true)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class ExchangeRateServiceIntegrationTest {
+
+    private static final String CACHE_KEY = "exchange-rate:latest";
+
+    @Container
+    static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+            .withExposedPorts(6379);
+
+    @DynamicPropertySource
+    static void redisProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+    }
 
     @Autowired
     private ExchangeRateService exchangeRateService;
@@ -40,8 +62,19 @@ class ExchangeRateServiceIntegrationTest {
     @Autowired
     private ExchangeRateRepository exchangeRateRepository;
 
+    @Autowired
+    private ExchangeRateCacheRepository exchangeRateCacheRepository;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
     @MockitoBean
     private UpbitExchangeRateClient upbitExchangeRateClient;
+
+    @BeforeEach
+    void setUp() {
+        redisTemplate.delete(CACHE_KEY);
+    }
 
     @Test
     @DisplayName("Upbit 환율 응답을 Currency와 ExchangeRate로 적재한다")
@@ -101,6 +134,25 @@ class ExchangeRateServiceIntegrationTest {
         assertThat(usdRate.getBasePrice()).isEqualByComparingTo("1520.25");
         assertThat(usdRate.getCurrencyUnit()).isEqualTo(1);
         assertThat(usdRate.getRateAt()).isEqualTo(LocalDateTime.of(2026, 6, 13, 12, 14, 42));
+    }
+
+    @Test
+    @DisplayName("환율 동기화 성공 후 DB 최신 환율을 Redis에 저장한다")
+    void syncCurrentRatesStoresLatestRatesInRedisAfterCommit() {
+        given(upbitExchangeRateClient.fetch(anyList()))
+                .willReturn(List.of(
+                        rate("USD", "달러", "미국", "1519.50", 1, LocalTime.of(12, 14, 12)),
+                        rate("JPY", "엔", "일본", "948.35", 100, LocalTime.of(12, 14, 12))
+                ));
+
+        List<ExchangeRateRes> syncedRates = exchangeRateService.syncCurrentRates();
+
+        List<ExchangeRateRes> cachedRates = exchangeRateCacheRepository.findAll();
+
+        // cachedRates와 syncedRates의 각 ExchangeRateRes 객체 값이 필드별로 같은지 비교
+        assertThat(cachedRates)
+                .usingRecursiveFieldByFieldElementComparator()
+                .containsExactlyInAnyOrderElementsOf(syncedRates);
     }
 
     private UpbitExchangeRateRes rate(
