@@ -1,16 +1,29 @@
 package com.team10.backend.domain.youngPolicy.repository;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyDetailRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySummaryRes;
 import com.team10.backend.domain.youngPolicy.entity.YoungPolicy;
-import java.util.List;
+import com.team10.backend.global.config.QuerydslConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@DataJpaTest
+@ActiveProfiles("test")
+@Import(QuerydslConfig.class)
 public class YoungPolicyRepositoryTest {
+
+    @Autowired
+    private YoungPolicyRepository youngPolicyRepository;
 
     public static final Long POLICY_ID = 1L;
     public static final String EXTERNAL_POLICY_ID = "YP-001";
@@ -25,6 +38,39 @@ public class YoungPolicyRepositoryTest {
     public static final String POLICY_APPLY_PERIOD = "20260601~20260630";
     public static final String POLICY_APPLY_URL = "https://example.com/policies/YP-001";
     public static final String POLICY_APPLY_METHOD = "온라인 신청";
+
+    @Test
+    @DisplayName("정책번호로 청년 정책을 조회한다")
+    void findByPolicyId_returnsPolicy() {
+        YoungPolicy savedPolicy = youngPolicyRepository.save(createPolicyWithoutId());
+
+        Optional<YoungPolicy> result = youngPolicyRepository.findByPolicyId(EXTERNAL_POLICY_ID);
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getId()).isEqualTo(savedPolicy.getId());
+        assertThat(result.get().getPolicyId()).isEqualTo(EXTERNAL_POLICY_ID);
+        assertThat(result.get().getTitle()).isEqualTo(POLICY_TITLE);
+        assertThat(result.get().getDescription()).isEqualTo(POLICY_DESCRIPTION);
+        assertThat(result.get().getCategory()).isEqualTo(POLICY_CATEGORY);
+        assertThat(result.get().getSubCategory()).isEqualTo(POLICY_SUB_CATEGORY);
+        assertThat(result.get().getMinAge()).isEqualTo(POLICY_MIN_AGE);
+        assertThat(result.get().getMaxAge()).isEqualTo(POLICY_MAX_AGE);
+        assertThat(result.get().getRegionCode()).isEqualTo(POLICY_REGION_CODE);
+        assertThat(result.get().getJobCode()).isEqualTo(POLICY_JOB_CODE);
+        assertThat(result.get().getApplyPeriod()).isEqualTo(POLICY_APPLY_PERIOD);
+        assertThat(result.get().getApplyUrl()).isEqualTo(POLICY_APPLY_URL);
+        assertThat(result.get().getApplyMethod()).isEqualTo(POLICY_APPLY_METHOD);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 정책번호는 빈 Optional을 반환한다")
+    void findByPolicyId_unknownPolicyId_returnsEmpty() {
+        youngPolicyRepository.save(createPolicyWithoutId());
+
+        Optional<YoungPolicy> result = youngPolicyRepository.findByPolicyId("UNKNOWN");
+
+        assertThat(result).isEmpty();
+    }
 
     @Test
     @DisplayName("service와 controller 테스트에서 사용할 mock 청년 정책 엔티티를 생성한다")
@@ -80,7 +126,13 @@ public class YoungPolicyRepositoryTest {
     }
 
     public static YoungPolicy createPolicy() {
-        YoungPolicy policy = new YoungPolicy(
+        YoungPolicy policy = createPolicyWithoutId();
+        ReflectionTestUtils.setField(policy, "id", POLICY_ID);
+        return policy;
+    }
+
+    private static YoungPolicy createPolicyWithoutId() {
+        return new YoungPolicy(
                 EXTERNAL_POLICY_ID,
                 POLICY_TITLE,
                 POLICY_DESCRIPTION,
@@ -94,8 +146,6 @@ public class YoungPolicyRepositoryTest {
                 POLICY_APPLY_URL,
                 POLICY_APPLY_METHOD
         );
-        ReflectionTestUtils.setField(policy, "id", POLICY_ID);
-        return policy;
     }
 
     public static YoungPolicySummaryRes createSummaryResponse() {
