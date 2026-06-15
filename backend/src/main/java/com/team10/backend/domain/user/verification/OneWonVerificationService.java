@@ -115,11 +115,20 @@ public class OneWonVerificationService {
      */
     /**
      * 송금 실패 시 호출 — Redis에 저장된 인증 코드를 삭제한다.
-     * daily 카운터는 유지되므로 다음 재시도 시 카운터가 추가 소모된다.
      */
     public void deleteCode(Long verificationId) {
         redisTemplate.delete(KEY_PREFIX + verificationId);
         log.warn("[1원 인증] 송금 실패로 코드 삭제 — verificationId={}", verificationId);
+    }
+
+    /**
+     * 송금 실패 시 호출 — 소모된 일일 요청 횟수를 감소시킨다.
+     * generateAndStore에서 카운터를 먼저 증가시키므로 실제 송금 실패 시 보상 DECR이 필요하다.
+     */
+    public void decrementDailyCount(Long userId) {
+        String dailyKey = DAILY_PREFIX + userId;
+        redisTemplate.opsForValue().decrement(dailyKey);
+        log.warn("[1원 인증] 송금 실패로 일일 카운터 감소 — userId={}", userId);
     }
 
     public VerifyResult verify(Long verificationId, String inputCode) {

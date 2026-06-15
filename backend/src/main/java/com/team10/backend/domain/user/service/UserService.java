@@ -21,7 +21,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Slf4j
 @Service
@@ -37,61 +40,64 @@ public class UserService {
     private final LoginAttemptService loginAttemptService;
     private final TokenBlocklistService tokenBlocklistService;
     private final PortOneClient portOneClient;
+    private final PlatformTransactionManager txManager;
 
-    @Transactional
+    /**
+     * 회원가입: PortOne 본인인증 검증 후 유저와 약관 동의를 저장한다.
+     *
+     * <p>외부 API(PortOne) 호출은 DB 커넥션 점유를 방지하기 위해 트랜잭션 외부에서 수행한다.
+     * DB 저장 로직만 TransactionTemplate으로 별도 쓰기 트랜잭션을 시작한다.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public UserRes signup(UserCreateReq request) {
-        // 포트원 본인인증 검증 — 가입 전 신원 확인
+        // Step 1: PortOne 본인인증 검증 — 외부 API, 트랜잭션 없음
         PortOneIdentityVerification verification =
                 portOneClient.getIdentityVerification(request.identityVerificationId());
+        validateIdentityVerification(verification, request);
 
+        // Step 2: 유저 + 약관 동의 저장 — 쓰기 트랜잭션
+        return new TransactionTemplate(txManager).execute(status -> {
+            if (userRepository.existsByEmail(request.email())) {
+                throw new BusinessException(UserErrorCode.DUPLICATE_EMAIL);
+            }
+            User user = User.create(
+                    request.email(),
+                    passwordEncoder.encode(request.password()),
+                    request.name(),
+                    request.phoneNumber(),
+                    request.birthDate()
+            );
+            User saved = userRepository.save(user);
+            userConsentService.saveAll(
+                    saved,
+                    request.agreedServiceTerms(),
+                    request.agreedPersonalInfo(),
+                    request.agreedFinancialInfo(),
+                    Boolean.TRUE.equals(request.agreedMarketing())
+            );
+            return toUserRes(saved);
+        });
+    }
+
+    private void validateIdentityVerification(PortOneIdentityVerification verification,
+                                               UserCreateReq request) {
         if (!verification.isVerified() || verification.verifiedCustomer() == null) {
             throw new BusinessException(UserErrorCode.IDENTITY_VERIFICATION_FAILED);
         }
-
         PortOneIdentityVerification.VerifiedCustomer customer = verification.verifiedCustomer();
 
-        // 이름 일치 확인
         if (!request.name().equals(customer.name())) {
             throw new BusinessException(UserErrorCode.IDENTITY_VERIFICATION_NAME_MISMATCH);
         }
-
-        // 생년월일 일치 확인 (데이터 조작 방지)
         String verifiedBirthDate = customer.birthDate();
         if (verifiedBirthDate == null || !request.birthDate().toString().equals(verifiedBirthDate)) {
             throw new BusinessException(UserErrorCode.IDENTITY_VERIFICATION_FAILED);
         }
-
-        // 휴대폰 번호 일치 확인 (하이픈 제거 후 비교)
         String verifiedPhone = customer.phoneNumber();
         if (verifiedPhone == null ||
                 !request.phoneNumber().replaceAll("\\D", "").equals(verifiedPhone.replaceAll("\\D", ""))) {
             throw new BusinessException(UserErrorCode.IDENTITY_VERIFICATION_FAILED);
         }
-
-        if (userRepository.existsByEmail(request.email())) {
-            throw new BusinessException(UserErrorCode.DUPLICATE_EMAIL);
-        }
-
-        User user = User.create(
-                request.email(),
-                passwordEncoder.encode(request.password()),
-                request.name(),
-                request.phoneNumber(),
-                request.birthDate()
-        );
-
-        User saved = userRepository.save(user);
-
-        // 약관 동의 내역 저장
-        userConsentService.saveAll(
-                saved,
-                request.agreedServiceTerms(),
-                request.agreedPersonalInfo(),
-                request.agreedFinancialInfo(),
-                Boolean.TRUE.equals(request.agreedMarketing())
-        );
-
-        return toUserRes(saved);
     }
 
     public UserRes getMe(Long userId) {

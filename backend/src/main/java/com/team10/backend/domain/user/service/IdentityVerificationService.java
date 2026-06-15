@@ -18,9 +18,12 @@ import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -48,6 +51,7 @@ public class IdentityVerificationService {
     private final OcrService ocrService;
     private final BankTransferService bankTransferService;
     private final OneWonVerificationService oneWonVerificationService;
+    private final PlatformTransactionManager txManager;
 
     /**
      * 본인인증 1단계: 신분증 이미지를 접수하고 즉시 202를 반환한다.
@@ -94,9 +98,13 @@ public class IdentityVerificationService {
 
     /**
      * 본인인증 3단계: 인증코드를 생성하고 사용자 계좌로 1원을 송금한다.
+     *
+     * <p>외부 API(bankTransferService.sendOneWon) 호출이 포함되므로 트랜잭션 외부에서 수행한다.
+     * DB 조회 → Redis/외부 API → DB 쓰기 순으로 트랜잭션을 분리하여 커넥션 풀 고갈을 방지한다.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OneWonStartRes startOneWonVerification(Long userId, OneWonStartReq request) {
+        // Step 1: DB 조회 — Spring Data 자체 읽기 트랜잭션 사용
         IdentityVerification verification = identityVerificationRepository
                 .findTopByUserIdOrderByCreatedAtDesc(userId)
                 .filter(v -> v.getStatus() == VerificationStatus.GOVERNMENT_VERIFIED
@@ -104,23 +112,30 @@ public class IdentityVerificationService {
                 .orElseThrow(() -> new BusinessException(UserErrorCode.VERIFICATION_NOT_READY_FOR_ONE_WON));
 
         Long verificationId = verification.getId();
-        String code = oneWonVerificationService.generateAndStore(verificationId, userId);
 
-        // 송금 실패 시 Redis 코드 정리 — 재시도 시 daily 카운터가 이중 소모되지 않도록
+        // Step 2: Redis 코드 생성 + 외부 송금 API — 트랜잭션 없음
+        String code = oneWonVerificationService.generateAndStore(verificationId, userId);
         try {
             bankTransferService.sendOneWon(request.organization(), request.accountNumber(), code);
         } catch (Exception e) {
+            // 송금 실패 시 Redis 코드 + daily 카운터 모두 롤백
             oneWonVerificationService.deleteCode(verificationId);
+            oneWonVerificationService.decrementDailyCount(userId);
             throw e;
         }
 
-        verification.startOneWon();
-
-        return new OneWonStartRes(
-                verification.getId(),
-                verification.getStatus(),
-                "1원이 송금되었습니다. 입금 메모의 4자리 코드를 입력해주세요. (유효시간 10분)"
-        );
+        // Step 3: DB 상태 업데이트 — 별도 쓰기 트랜잭션
+        return new TransactionTemplate(txManager).execute(status -> {
+            IdentityVerification managed = identityVerificationRepository
+                    .findById(verificationId)
+                    .orElseThrow(() -> new BusinessException(UserErrorCode.VERIFICATION_SESSION_NOT_FOUND));
+            managed.startOneWon();
+            return new OneWonStartRes(
+                    managed.getId(),
+                    managed.getStatus(),
+                    "1원이 송금되었습니다. 입금 메모의 4자리 코드를 입력해주세요. (유효시간 10분)"
+            );
+        });
     }
 
     /**
