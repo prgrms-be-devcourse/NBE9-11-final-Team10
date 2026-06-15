@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,17 +26,20 @@ public class TransferController {
 
     @PostMapping("/deposit")
     @Operation(summary = "입금")
-    public ResponseEntity<DepositRes> deposit(@Valid @RequestBody DepositReq request) {
-        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
-        DepositRes response = transferService.deposit(request.accountId(), request.amount(), request.memo());
+    public ResponseEntity<DepositRes> deposit(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody DepositReq request) {
+        DepositRes response = transferService.deposit(userId, request.accountId(), request.amount(), request.memo());
         return ResponseEntity.ok(response);
     }
 
     @PostMapping
     @Operation(summary = "계좌 간 송금")
-    public ResponseEntity<TransferRes> transfer(@Valid @RequestBody TransferReq request) {
-        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
+    public ResponseEntity<TransferRes> transfer(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody TransferReq request) {
         TransferRes response = transferService.transfer(
+                userId,
                 request.senderAccountId(),
                 request.receiverAccountNumber(),
                 request.amount(),

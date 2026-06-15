@@ -98,8 +98,8 @@ public class OneWonVerificationService {
 
         String code = String.format("%04d", RANDOM.nextInt(10000));
         redisTemplate.opsForValue().set(KEY_PREFIX + verificationId, code, TTL);
-        log.info("[1원 인증] 코드 생성 및 저장 — verificationId={}, userId={}, daily={}/{}, TTL=10분",
-                verificationId, userId, daily, MAX_DAILY);
+        log.info("[1원 인증] 코드 생성 및 저장 — verificationId={}, userId={}, code={}, daily={}/{}, TTL=10분",
+                verificationId, userId, code, daily, MAX_DAILY);
         return code;
     }
 
