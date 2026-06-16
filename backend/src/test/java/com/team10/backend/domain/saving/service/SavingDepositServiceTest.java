@@ -20,6 +20,7 @@ import com.team10.backend.domain.saving.repository.DepositRepository;
 import com.team10.backend.domain.saving.repository.SavingProductRepository;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.SavingProductType;
+import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
@@ -85,6 +86,7 @@ class SavingDepositServiceTest {
         assertThat(response.principal()).isEqualTo(1000000L);
         assertThat(response.maturityDate()).isEqualTo(LocalDate.now().plusMonths(12));
         assertThat(response.expectedInterest()).isEqualTo(35000L);
+        assertThat(activeAccount.getBalance()).isEqualTo(1000000L);
         verify(depositRepository).save(any(Deposit.class));
     }
 
@@ -181,6 +183,23 @@ class SavingDepositServiceTest {
                 .isEqualTo(SavingErrorCode.INVALID_DEPOSIT_AMOUNT);
     }
 
+    @Test
+    @DisplayName("출금 계좌 잔액이 부족하면 예금 가입에 실패한다")
+    void createDepositWithInsufficientBalance() {
+        DepositCreateReq request = new DepositCreateReq(1L, 1L, 1000000L);
+        Account insufficientAccount = createAccount(1L, user, AccountStatus.ACTIVE, 500000L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
+                .thenReturn(Optional.of(depositProduct));
+        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(insufficientAccount));
+
+        assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(TransferErrorCode.INSUFFICIENT_BALANCE);
+    }
+
     private User createUser(Long id) {
         User user = User.create(
                 "user" + id + "@test.com",
@@ -195,9 +214,14 @@ class SavingDepositServiceTest {
     }
 
     private Account createAccount(Long id, User user, AccountStatus status) {
+        return createAccount(id, user, status, 2000000L);
+    }
+
+    private Account createAccount(Long id, User user, AccountStatus status, Long balance) {
         Account account = Account.create(user, "031412345678", "생활비 계좌", AccountType.DEPOSIT);
         ReflectionTestUtils.setField(account, "id", id);
         ReflectionTestUtils.setField(account, "status", status);
+        ReflectionTestUtils.setField(account, "balance", balance);
         return account;
     }
 

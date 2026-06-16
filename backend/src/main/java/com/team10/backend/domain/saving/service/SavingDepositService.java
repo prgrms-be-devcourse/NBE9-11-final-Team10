@@ -62,6 +62,8 @@ public class SavingDepositService {
         LocalDate maturityDate = LocalDate.now()
                 .plusMonths(savingProduct.getPeriodMonth());
 
+        withdrawAccount.withdraw(request.amount());
+
         // 원금 × 연이율 × 가입개월수 ÷ 1년 개월수 ÷ 퍼센트 변환값
         Long expectedInterest = (long) (
                 request.amount()
