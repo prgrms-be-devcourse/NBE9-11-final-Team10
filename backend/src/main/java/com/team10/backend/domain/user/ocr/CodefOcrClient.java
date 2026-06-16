@@ -1,21 +1,20 @@
 package com.team10.backend.domain.user.ocr;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team10.backend.domain.user.client.CodefAuthClient;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.global.exception.BusinessException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 // CODEF EasyCodef SDK는 URL 인코딩 + Content-Type 누락으로 CF-00003 오류 발생
 // → Spring RestClient로 application/json 방식 직접 호출
@@ -23,36 +22,21 @@ import java.util.concurrent.atomic.AtomicReference;
 /** CODEF 신분증 OCR 클라이언트 (POST /v1/kr/etc/a/ocr/registration-card) */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class CodefOcrClient {
 
-    private static final String OAUTH_URL = "https://oauth.codef.io/oauth/token";
     private static final String OCR_URL = "https://development.codef.io/v1/kr/etc/a/ocr/registration-card";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private final String clientId;
-    private final String clientSecret;
+    private final CodefAuthClient codefAuthClient;
     private final RestClient restClient;
-
-    // AT 캐시 — 만료 5분 전 갱신, token+만료시간 원자적 관리
-    private record TokenCache(String token, long expiryEpoch) {}
-    private final AtomicReference<TokenCache> tokenCache = new AtomicReference<>();
-
-    public CodefOcrClient(
-            @Value("${codef.client-id}") String clientId,
-            @Value("${codef.client-secret}") String clientSecret,
-            RestClient restClient
-    ) {
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
-        this.restClient = restClient;
-    }
 
     /**
      * 신분증 이미지 바이트를 CODEF OCR API로 전송하고 구조화된 정보를 반환한다.
      */
     public IdCardOcrResult extractIdCard(byte[] imageBytes) {
         try {
-            String token = getAccessToken();
+            String token = codefAuthClient.getAccessToken();
             String base64Image = Base64.getEncoder().encodeToString(imageBytes);
 
             Map<String, String> body = new HashMap<>();
@@ -114,35 +98,6 @@ public class CodefOcrClient {
             throw e;
         } catch (Exception e) {
             log.error("[CODEF OCR] 처리 오류", e);
-            throw new BusinessException(UserErrorCode.OCR_FAILED);
-        }
-    }
-
-    private String getAccessToken() {
-        TokenCache cache = tokenCache.get();
-        if (cache != null && Instant.now().getEpochSecond() < cache.expiryEpoch() - 300) {
-            return cache.token();
-        }
-
-        String credentials = Base64.getEncoder().encodeToString(
-                (clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
-        String response = restClient.post()
-                .uri(OAUTH_URL)
-                .header("Authorization", "Basic " + credentials)
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body("grant_type=client_credentials&scope=read")
-                .retrieve()
-                .body(String.class);
-
-        try {
-            Map<?, ?> tokenMap = OBJECT_MAPPER.readValue(response, Map.class);
-            String accessToken = (String) tokenMap.get("access_token");
-            Number expiresIn = (Number) tokenMap.get("expires_in");
-            long expiryEpoch = Instant.now().getEpochSecond() + expiresIn.longValue();
-            tokenCache.set(new TokenCache(accessToken, expiryEpoch));
-            log.info("[CODEF OCR] 토큰 발급 완료");
-            return accessToken;
-        } catch (Exception e) {
             throw new BusinessException(UserErrorCode.OCR_FAILED);
         }
     }
