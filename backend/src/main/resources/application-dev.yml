@@ -32,21 +32,6 @@ cors:
 ocr:
   google-vision-key-path: ${GCP_KEY_PATH:classpath:gcp-key.json}
 
-jwt:
-  secret: ${JWT_SECRET:moneystory-dev-secret-key-must-be-at-least-32-characters-long!}
-  access-token-expiration-seconds: 3600      # 1시간
-  refresh-token-expiration-seconds: 604800   # 7일
-
-codef:
-  client-id: ${CODEF_CLIENT_ID}
-  client-secret: ${CODEF_CLIENT_SECRET}
-  public-key: ${CODEF_PUBLIC_KEY}
-
-portone:
-  api-secret: ${PORTONE_API_SECRET}
-  store-id: ${PORTONE_STORE_ID}
-  channel-key: ${PORTONE_CHANNEL_KEY}
-
 logging:
   level:
     org.hibernate.orm.jdbc.bind: TRACE
