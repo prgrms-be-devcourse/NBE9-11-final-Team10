@@ -2,13 +2,15 @@ package com.team10.backend.domain.account.controller;
 
 import com.team10.backend.domain.account.dto.req.AccountCreateReq;
 import com.team10.backend.domain.account.dto.req.AccountNicknameUpdateReq;
-import com.team10.backend.domain.account.dto.res.AccountRes;
+import com.team10.backend.domain.account.dto.res.AccountCreateRes;
+import com.team10.backend.domain.account.dto.res.AccountDetailRes;
 import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
 import com.team10.backend.domain.account.service.AccountService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,48 +23,50 @@ public class AccountController {
     private final AccountService accountService;
 
     @PostMapping
-    public ResponseEntity<AccountRes> createAccount(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId,
+    public ResponseEntity<AccountCreateRes> createAccount(
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody AccountCreateReq request
     ) {
-        AccountRes response = accountService.createAccount(userId, request);
+        AccountCreateRes response = accountService.createAccount(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PatchMapping("/{accountId}/nickname")
-    public ResponseEntity<AccountRes> updateNickname(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId,
+    public ResponseEntity<AccountDetailRes> updateNickname(
+            @AuthenticationPrincipal Long userId,
             @PathVariable Long accountId,
             @Valid @RequestBody AccountNicknameUpdateReq request
     ){
-        AccountRes response = accountService.updateNickname(userId, accountId, request);
+        AccountDetailRes response = accountService.updateNickname(userId, accountId, request);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{accountId}/close")
-    public ResponseEntity<AccountRes> closeAccount(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId,
+    public ResponseEntity<AccountDetailRes> closeAccount(
+            @AuthenticationPrincipal Long userId,
             @PathVariable Long accountId
     ){
-        AccountRes response = accountService.closeAccount(userId, accountId);
+        AccountDetailRes response = accountService.closeAccount(userId, accountId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping
     public ResponseEntity<List<AccountSummaryRes>> getAccounts(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId
+            @AuthenticationPrincipal Long userId
     ) {
         return ResponseEntity.ok(accountService.getAccounts(userId));
     }
 
+    @GetMapping("/closed")
+    public ResponseEntity<List<AccountSummaryRes>> getClosedAccounts(
+            @AuthenticationPrincipal Long userId
+    ) {
+        return ResponseEntity.ok(accountService.getClosedAccounts(userId));
+    }
+
     @GetMapping("/{accountId}")
-    public ResponseEntity<AccountRes> getAccount(
-            // TODO: 인증 도메인 연동 후 @RequestParam userId를 @AuthenticationPrincipal 기반으로 교체
-            @RequestParam Long userId,
+    public ResponseEntity<AccountDetailRes> getAccount(
+            @AuthenticationPrincipal Long userId,
             @PathVariable Long accountId
     ) {
         return ResponseEntity.ok(accountService.getAccount(userId, accountId));
