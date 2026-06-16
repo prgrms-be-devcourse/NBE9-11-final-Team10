@@ -45,6 +45,10 @@ public class TransferIdempotency extends BaseEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Lob
+    @Column(name = "response_body", columnDefinition = "TEXT")
+    private String responseBody;
+
     private TransferIdempotency(User user, String idempotencyKey, String requestHash) {
         this.user = user;
         this.idempotencyKey = idempotencyKey;
@@ -56,8 +60,9 @@ public class TransferIdempotency extends BaseEntity {
         return new TransferIdempotency(user, idempotencyKey, requestHash);
     }
 
-    public void complete(Transfer transfer) {
+    public void complete(Transfer transfer, String responseBody) {
         this.transfer = transfer;
+        this.responseBody = responseBody;
         this.status = IdempotencyStatus.SUCCESS;
         this.completedAt = LocalDateTime.now();
     }

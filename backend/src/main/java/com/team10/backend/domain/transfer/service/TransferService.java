@@ -1,5 +1,7 @@
 package com.team10.backend.domain.transfer.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.transaction.entity.TransactionHistory;
@@ -38,6 +40,7 @@ public class TransferService {
     private final ApplicationEventPublisher eventPublisher;
     private final TransferIdempotencyRepository transferIdempotencyRepository;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public DepositRes topUp(Long userId, Long accountId, Long amount, String memo) {
@@ -102,9 +105,9 @@ public class TransferService {
                 throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_PROCESSING);
             }
 
+            // 같은 key 재요청 -> idempotency에 저장된 responseBody 읽어서 TransferRes변환 후 return
             if (idempotency.getStatus() == IdempotencyStatus.SUCCESS) {
-                Transfer transfer = idempotency.getTransfer();
-                return TransferRes.from(transfer, idempotency.getCompletedAt());
+                return deserializeTransferResponse(idempotency.getResponseBody());
             }
 
         }
@@ -149,11 +152,7 @@ public class TransferService {
 
         // Transfer(SUCCESS) 저장
         Transfer transfer = transferRepository.save(Transfer.success(senderAccount, receiverAccount, amount, memo));
-        // Transfer 저장 직후 complete 호출
-        idempotency.complete(transfer);
-
-        // 멱등성 키 객체의 완료시간 가져오기
-        LocalDateTime transferredAt = idempotency.getCompletedAt();
+        LocalDateTime transferredAt = LocalDateTime.now();
         // 출금 계좌 TransactionHistory(TRANSFER, OUT) 저장
         TransactionHistory senderHistory = TransactionHistory.createTransferOut(
                 senderAccount,
@@ -183,7 +182,10 @@ public class TransferService {
         transactionHistoryRepository.save(senderHistory);
         transactionHistoryRepository.save(receiverHistory);
 
-        return TransferRes.from(transfer, transferredAt);
+        TransferRes response = TransferRes.from(transfer, transferredAt);
+        idempotency.complete(transfer, serializeTransferResponse(response)); // 응답 JSON 형태로 저장
+
+        return response;
     }
 
     private void validateIdempotencyKey(String idempotencyKey) {
@@ -285,5 +287,23 @@ public class TransferService {
             throw new IllegalStateException("SHA-256 algorithm is not available", e);
         }
 
+    }
+
+    // 직렬화 (자바객체 -> JSON)
+    private String serializeTransferResponse(TransferRes response) {
+        try {
+            return objectMapper.writeValueAsString(response);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialize transfer response", e);
+        }
+    }
+
+    // 역직렬화 (JSON -> 자바객체)
+    private TransferRes deserializeTransferResponse(String responseBody) {
+        try {
+            return objectMapper.readValue(responseBody, TransferRes.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to deserialize transfer response", e);
+        }
     }
 }
