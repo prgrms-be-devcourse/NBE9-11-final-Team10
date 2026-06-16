@@ -1,6 +1,5 @@
 package com.team10.backend.domain.exchange.entity;
 
-import com.team10.backend.domain.exchange.type.ExchangeQuoteStatus;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.*;
@@ -47,10 +46,6 @@ public class ExchangeQuote extends BaseEntity {
     @Column(name = "expired_at", nullable = false)
     private LocalDateTime expiredAt;    // 견적 만료 시각
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private ExchangeQuoteStatus status;
-
     public static ExchangeQuote create(
             User user,
             Currency fromCurrency,
@@ -72,7 +67,6 @@ public class ExchangeQuote extends BaseEntity {
         quote.fee = fee;
         quote.expectedToAmount = expectedToAmount;
         quote.expiredAt = expiredAt;
-        quote.status = ExchangeQuoteStatus.ACTIVE;
         return quote;
     }
 

@@ -2,7 +2,6 @@ package com.team10.backend.domain.exchange.dto.res;
 
 import com.team10.backend.domain.exchange.entity.ExchangeQuote;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
-import com.team10.backend.domain.exchange.type.ExchangeQuoteStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -16,7 +15,6 @@ public record ExchangeQuoteRes(
         BigDecimal feeRate,
         BigDecimal fee,
         BigDecimal expectedToAmount,
-        ExchangeQuoteStatus status,
         LocalDateTime expiredAt,
         LocalDateTime createdAt
 ) {
@@ -31,7 +29,6 @@ public record ExchangeQuoteRes(
                 exchangeQuote.getFeeRate(),
                 exchangeQuote.getFee(),
                 exchangeQuote.getExpectedToAmount(),
-                exchangeQuote.getStatus(),
                 exchangeQuote.getExpiredAt(),
                 exchangeQuote.getCreatedAt()
         );
