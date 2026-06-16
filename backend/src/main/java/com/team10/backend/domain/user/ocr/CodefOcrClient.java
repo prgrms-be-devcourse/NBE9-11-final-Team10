@@ -55,9 +55,9 @@ public class CodefOcrClient {
     private final String clientSecret;
     private final RestClient restClient;
 
-    // 토큰 캐시 (만료 전까지 재사용)
-    private final AtomicReference<String> cachedToken = new AtomicReference<>();
-    private volatile long tokenExpiryEpoch = 0;
+    // 토큰 캐시 (만료 전까지 재사용) — token과 만료시간을 원자적으로 관리
+    private record TokenCache(String token, long expiryEpoch) {}
+    private final AtomicReference<TokenCache> tokenCache = new AtomicReference<>();
 
     public CodefOcrClient(
             @Value("${codef.client-id}") String clientId,
@@ -96,15 +96,25 @@ public class CodefOcrClient {
             log.debug("[CODEF OCR] 응답 — {}", decoded.substring(0, Math.min(200, decoded.length())));
 
             Map<?, ?> responseMap = OBJECT_MAPPER.readValue(decoded, Map.class);
-            Map<?, ?> result = (Map<?, ?>) responseMap.get("result");
-            String code = (String) result.get("code");
+            if (responseMap == null) {
+                throw new BusinessException(UserErrorCode.OCR_FAILED);
+            }
 
+            Map<?, ?> result = (Map<?, ?>) responseMap.get("result");
+            if (result == null) {
+                throw new BusinessException(UserErrorCode.OCR_FAILED);
+            }
+
+            String code = (String) result.get("code");
             if (!"CF-00000".equals(code)) {
                 log.error("[CODEF OCR] 실패 — code={}, message={}", code, result.get("message"));
                 throw new BusinessException(UserErrorCode.OCR_FAILED);
             }
 
             Map<?, ?> data = (Map<?, ?>) responseMap.get("data");
+            if (data == null) {
+                throw new BusinessException(UserErrorCode.OCR_FAILED);
+            }
 
             String name        = (String) data.get("resUserName");
             String rawIdentity = (String) data.get("resUserIdentity");
@@ -130,12 +140,13 @@ public class CodefOcrClient {
     }
 
     private String getAccessToken() {
-        String token = cachedToken.get();
-        if (token != null && Instant.now().getEpochSecond() < tokenExpiryEpoch - 300) {
-            return token;
+        TokenCache cache = tokenCache.get();
+        if (cache != null && Instant.now().getEpochSecond() < cache.expiryEpoch() - 300) {
+            return cache.token();
         }
 
-        String credentials = Base64.getEncoder().encodeToString((clientId + ":" + clientSecret).getBytes());
+        String credentials = Base64.getEncoder().encodeToString(
+                (clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
         String response = restClient.post()
                 .uri(OAUTH_URL)
                 .header("Authorization", "Basic " + credentials)
@@ -148,8 +159,8 @@ public class CodefOcrClient {
             Map<?, ?> tokenMap = OBJECT_MAPPER.readValue(response, Map.class);
             String accessToken = (String) tokenMap.get("access_token");
             Number expiresIn = (Number) tokenMap.get("expires_in");
-            tokenExpiryEpoch = Instant.now().getEpochSecond() + expiresIn.longValue();
-            cachedToken.set(accessToken);
+            long expiryEpoch = Instant.now().getEpochSecond() + expiresIn.longValue();
+            tokenCache.set(new TokenCache(accessToken, expiryEpoch));
             log.info("[CODEF OCR] 토큰 발급 완료");
             return accessToken;
         } catch (Exception e) {

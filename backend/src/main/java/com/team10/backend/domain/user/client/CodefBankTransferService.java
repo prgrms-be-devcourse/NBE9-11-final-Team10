@@ -87,7 +87,7 @@ public class CodefBankTransferService implements BankTransferService {
                     params
             );
 
-            String decoded = URLDecoder.decode(response, StandardCharsets.UTF_8);
+            String decoded = URLDecoder.decode(response != null ? response : "", StandardCharsets.UTF_8);
             log.debug("[CODEF] 1원 이체 응답 — {}", decoded);
 
             Map<?, ?> responseMap = OBJECT_MAPPER.readValue(decoded, Map.class);

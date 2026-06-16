@@ -12,6 +12,7 @@ import com.team10.backend.domain.user.ocr.OcrService;
 import com.team10.backend.domain.user.repository.IdentityVerificationRepository;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.domain.user.type.VerificationStatus;
+import com.team10.backend.domain.user.verification.BankCode;
 import com.team10.backend.domain.user.verification.BankTransferService;
 import com.team10.backend.domain.user.verification.OneWonVerificationService;
 import com.team10.backend.global.exception.BusinessException;
@@ -31,6 +32,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 
 /**
@@ -131,7 +134,10 @@ public class IdentityVerificationService {
 
         Long verificationId = verification.getId();
 
-        // Step 2: Redis 코드 생성 + 외부 송금 API — 트랜잭션 없음
+        // Step 2: 은행 점검 시간 검증
+        validateBankAvailability(request.organization());
+
+        // Step 3: Redis 코드 생성 + 외부 송금 API — 트랜잭션 없음
         String code = oneWonVerificationService.generateAndStore(verificationId, userId);
         try {
             bankTransferService.sendOneWon(request.organization(), request.accountNumber(), code);
@@ -142,7 +148,7 @@ public class IdentityVerificationService {
             throw e;
         }
 
-        // Step 3: DB 상태 업데이트 — 별도 쓰기 트랜잭션
+        // Step 4: DB 상태 업데이트 — 별도 쓰기 트랜잭션
         return new TransactionTemplate(txManager).execute(status -> {
             IdentityVerification managed = identityVerificationRepository
                     .findById(verificationId)
@@ -188,6 +194,17 @@ public class IdentityVerificationService {
                 verification.getStatus(),
                 "본인인증이 완료되었습니다."
         );
+    }
+
+    private void validateBankAvailability(String organizationCode) {
+        BankCode bank = BankCode.fromCode(organizationCode)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.UNSUPPORTED_BANK));
+
+        LocalTime now = LocalTime.now(ZoneId.of("Asia/Seoul"));
+        if (bank.isMaintenance(now)) {
+            log.warn("[1원 인증] 은행 점검 시간 — bank={}, code={}, time={}", bank.getDisplayName(), organizationCode, now);
+            throw new BusinessException(UserErrorCode.BANK_MAINTENANCE);
+        }
     }
 
     private void checkOcrDailyLimit(Long userId) {
