@@ -13,22 +13,28 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.account.dto.req.AccountCreateReq;
 import com.team10.backend.domain.account.dto.req.AccountNicknameUpdateReq;
-import com.team10.backend.domain.account.dto.res.AccountRes;
+import com.team10.backend.domain.account.dto.res.AccountCreateRes;
+import com.team10.backend.domain.account.dto.res.AccountDetailRes;
 import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
 import com.team10.backend.domain.account.service.AccountService;
 import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
+import com.team10.backend.support.security.AuthenticationPrincipalTestConfig;
+import com.team10.backend.support.security.WithMockLongUser;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AccountController.class)
+@Import(AuthenticationPrincipalTestConfig.class)
+@WithMockLongUser
 class AccountControllerTest {
 
     @Autowired
@@ -41,24 +47,22 @@ class AccountControllerTest {
     private AccountService accountService;
 
     @Test
-    @DisplayName("계좌 개설 API는 userId와 요청 본문을 받아 201을 반환한다")
+    @DisplayName("계좌 개설 API는 인증 사용자와 요청 본문을 받아 201을 반환한다")
     void createAccount() throws Exception {
         AccountCreateReq request = createAccountCreateReq("생활비 계좌", AccountType.DEPOSIT);
-        AccountRes response = new AccountRes(
+        AccountCreateRes response = new AccountCreateRes(
                 1L,
                 "100200300001",
                 "생활비 계좌",
                 AccountType.DEPOSIT,
                 0L,
                 AccountStatus.ACTIVE,
-                LocalDateTime.of(2026, 6, 8, 15, 45),
                 LocalDateTime.of(2026, 6, 8, 15, 45)
         );
 
         when(accountService.createAccount(eq(1L), any(AccountCreateReq.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/accounts")
-                        .param("userId", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -78,7 +82,6 @@ class AccountControllerTest {
         AccountCreateReq request = createAccountCreateReq("생활비 계좌", null);
 
         mockMvc.perform(post("/api/v1/accounts")
-                        .param("userId", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
@@ -87,10 +90,10 @@ class AccountControllerTest {
 
 
     @Test
-    @DisplayName("계좌 별칭 수정 API는 userId, accountId, 요청 본문을 받아 계좌 상세를 반환한다")
+    @DisplayName("계좌 별칭 수정 API는 인증 사용자, accountId, 요청 본문을 받아 계좌 상세를 반환한다")
     void updateNickname() throws Exception {
         AccountNicknameUpdateReq request = new AccountNicknameUpdateReq("급여 계좌");
-        AccountRes response = new AccountRes(
+        AccountDetailRes response = new AccountDetailRes(
                 1L,
                 "100200300001",
                 "급여 계좌",
@@ -104,7 +107,6 @@ class AccountControllerTest {
         when(accountService.updateNickname(eq(1L), eq(1L), any(AccountNicknameUpdateReq.class))).thenReturn(response);
 
         mockMvc.perform(patch("/api/v1/accounts/{accountId}/nickname", 1L)
-                        .param("userId", "1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -116,9 +118,9 @@ class AccountControllerTest {
     }
 
     @Test
-    @DisplayName("계좌 해지 API는 userId와 accountId를 받아 CLOSED 상태의 계좌 상세를 반환한다")
+    @DisplayName("계좌 해지 API는 인증 사용자와 accountId를 받아 CLOSED 상태의 계좌 상세를 반환한다")
     void closeAccount() throws Exception {
-        AccountRes response = new AccountRes(
+        AccountDetailRes response = new AccountDetailRes(
                 1L,
                 "100200300001",
                 "생활비 계좌",
@@ -131,8 +133,7 @@ class AccountControllerTest {
 
         when(accountService.closeAccount(1L, 1L)).thenReturn(response);
 
-        mockMvc.perform(post("/api/v1/accounts/{accountId}/close", 1L)
-                        .param("userId", "1"))
+        mockMvc.perform(post("/api/v1/accounts/{accountId}/close", 1L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.status").value("CLOSED"));
@@ -141,21 +142,19 @@ class AccountControllerTest {
     }
 
     @Test
-    @DisplayName("내 계좌 목록 조회 API는 userId로 계좌 목록을 반환한다")
+    @DisplayName("내 계좌 목록 조회 API는 인증 사용자의 계좌 목록을 반환한다")
     void getAccounts() throws Exception {
         AccountSummaryRes response = new AccountSummaryRes(
                 1L,
                 "100200300001",
                 "생활비 계좌",
                 150000L,
-                AccountStatus.ACTIVE,
-                LocalDateTime.of(2026, 6, 8, 15, 45)
+                AccountStatus.ACTIVE
         );
 
         when(accountService.getAccounts(1L)).thenReturn(List.of(response));
 
-        mockMvc.perform(get("/api/v1/accounts")
-                        .param("userId", "1"))
+        mockMvc.perform(get("/api/v1/accounts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1L))
                 .andExpect(jsonPath("$[0].accountNumber").value("100200300001"))
@@ -167,9 +166,32 @@ class AccountControllerTest {
     }
 
     @Test
-    @DisplayName("내 계좌 상세 조회 API는 userId와 accountId로 계좌 상세를 반환한다")
+    @DisplayName("해지 계좌 목록 조회 API는 인증 사용자의 CLOSED 계좌 목록을 반환한다")
+    void getClosedAccounts() throws Exception {
+        AccountSummaryRes response = new AccountSummaryRes(
+                1L,
+                "100200300001",
+                "생활비 계좌",
+                0L,
+                AccountStatus.CLOSED
+        );
+
+        when(accountService.getClosedAccounts(1L)).thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/v1/accounts/closed"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1L))
+                .andExpect(jsonPath("$[0].accountNumber").value("100200300001"))
+                .andExpect(jsonPath("$[0].nickname").value("생활비 계좌"))
+                .andExpect(jsonPath("$[0].status").value("CLOSED"));
+
+        verify(accountService).getClosedAccounts(1L);
+    }
+
+    @Test
+    @DisplayName("내 계좌 상세 조회 API는 인증 사용자와 accountId로 계좌 상세를 반환한다")
     void getAccount() throws Exception {
-        AccountRes response = new AccountRes(
+        AccountDetailRes response = new AccountDetailRes(
                 1L,
                 "100200300001",
                 "생활비 계좌",
@@ -182,8 +204,7 @@ class AccountControllerTest {
 
         when(accountService.getAccount(1L, 1L)).thenReturn(response);
 
-        mockMvc.perform(get("/api/v1/accounts/{accountId}", 1L)
-                        .param("userId", "1"))
+        mockMvc.perform(get("/api/v1/accounts/{accountId}", 1L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.accountNumber").value("100200300001"))
