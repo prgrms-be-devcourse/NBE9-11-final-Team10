@@ -136,8 +136,8 @@ public class UserService {
         refreshTokenService.delete(userId);
 
         // AT 블랙리스트 등록 — 탈퇴 즉시 기존 토큰 무효화
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String accessToken = authHeader.substring(7);
+        String accessToken = JwtProvider.resolveBearerToken(authHeader);
+        if (accessToken != null) {
             try {
                 String jti = jwtProvider.extractJti(accessToken);
                 long remainingSeconds = jwtProvider.getRemainingExpirySeconds(accessToken);
