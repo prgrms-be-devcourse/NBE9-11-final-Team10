@@ -9,7 +9,8 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum SavingErrorCode implements ErrorCode {
 
-    SAVING_PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "저축 상품을 찾을 수 없습니다.");
+    SAVING_PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "저축 상품을 찾을 수 없습니다."),
+    INVALID_DEPOSIT_AMOUNT(HttpStatus.BAD_REQUEST, "예금 가입 금액이 올바르지 않습니다.");
 
     private final HttpStatus status;
     private final String message;

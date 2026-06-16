@@ -1,0 +1,221 @@
+package com.team10.backend.domain.saving.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.team10.backend.domain.account.entity.Account;
+import com.team10.backend.domain.account.exception.AccountErrorCode;
+import com.team10.backend.domain.account.repository.AccountRepository;
+import com.team10.backend.domain.account.type.AccountStatus;
+import com.team10.backend.domain.account.type.AccountType;
+import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
+import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
+import com.team10.backend.domain.saving.entity.Deposit;
+import com.team10.backend.domain.saving.entity.SavingProduct;
+import com.team10.backend.domain.saving.exception.SavingErrorCode;
+import com.team10.backend.domain.saving.repository.DepositRepository;
+import com.team10.backend.domain.saving.repository.SavingProductRepository;
+import com.team10.backend.domain.saving.type.DepositStatus;
+import com.team10.backend.domain.saving.type.SavingProductType;
+import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.domain.user.repository.UserRepository;
+import com.team10.backend.global.exception.BusinessException;
+import java.time.LocalDate;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+@ExtendWith(MockitoExtension.class)
+class SavingDepositServiceTest {
+
+    @Mock
+    private DepositRepository depositRepository;
+
+    @Mock
+    private SavingProductRepository savingProductRepository;
+
+    @Mock
+    private AccountRepository accountRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @InjectMocks
+    private SavingDepositService savingDepositService;
+
+    private User user;
+    private Account activeAccount;
+    private SavingProduct depositProduct;
+
+    @BeforeEach
+    void setUp() {
+        user = createUser(1L);
+        activeAccount = createAccount(1L, user, AccountStatus.ACTIVE);
+        depositProduct = createSavingProduct(1L, 100000L, 10000000L);
+    }
+
+    @Test
+    @DisplayName("예금 가입 요청이 유효하면 예금 가입 정보를 저장한다")
+    void createDeposit() {
+        DepositCreateReq request = new DepositCreateReq(1L, 1L, 1000000L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
+                .thenReturn(Optional.of(depositProduct));
+        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(depositRepository.save(any(Deposit.class))).thenAnswer(invocation -> {
+            Deposit deposit = invocation.getArgument(0);
+            ReflectionTestUtils.setField(deposit, "id", 1L);
+            return deposit;
+        });
+
+        DepositCreateRes response = savingDepositService.createDeposit(1L, request);
+
+        assertThat(response.depositId()).isEqualTo(1L);
+        assertThat(response.status()).isEqualTo(DepositStatus.ACTIVE);
+        assertThat(response.principal()).isEqualTo(1000000L);
+        assertThat(response.maturityDate()).isEqualTo(LocalDate.now().plusMonths(12));
+        assertThat(response.expectedInterest()).isEqualTo(35000L);
+        verify(depositRepository).save(any(Deposit.class));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 사용자는 예금에 가입할 수 없다")
+    void createDepositWithNotFoundUser() {
+        DepositCreateReq request = new DepositCreateReq(1L, 1L, 1000000L);
+
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> savingDepositService.createDeposit(999L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AccountErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("존재하지 않거나 비활성 예금 상품이면 예금 가입에 실패한다")
+    void createDepositWithNotFoundProduct() {
+        DepositCreateReq request = new DepositCreateReq(999L, 1L, 1000000L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(savingProductRepository.findByIdAndTypeAndActiveTrue(999L, SavingProductType.DEPOSIT))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.SAVING_PRODUCT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("출금 계좌가 본인 소유가 아니거나 존재하지 않으면 예금 가입에 실패한다")
+    void createDepositWithNotFoundWithdrawAccount() {
+        DepositCreateReq request = new DepositCreateReq(1L, 999L, 1000000L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
+                .thenReturn(Optional.of(depositProduct));
+        when(accountRepository.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("ACTIVE 상태가 아닌 계좌로는 예금에 가입할 수 없다")
+    void createDepositWithNotActiveWithdrawAccount() {
+        DepositCreateReq request = new DepositCreateReq(1L, 1L, 1000000L);
+        Account closedAccount = createAccount(1L, user, AccountStatus.CLOSED);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
+                .thenReturn(Optional.of(depositProduct));
+        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(closedAccount));
+
+        assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AccountErrorCode.ACCOUNT_NOT_ACTIVE);
+    }
+
+    @Test
+    @DisplayName("최소 가입 금액보다 작으면 예금 가입에 실패한다")
+    void createDepositWithLessThanMinAmount() {
+        DepositCreateReq request = new DepositCreateReq(1L, 1L, 50000L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
+                .thenReturn(Optional.of(depositProduct));
+        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+
+        assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.INVALID_DEPOSIT_AMOUNT);
+    }
+
+    @Test
+    @DisplayName("최대 가입 금액보다 크면 예금 가입에 실패한다")
+    void createDepositWithGreaterThanMaxAmount() {
+        DepositCreateReq request = new DepositCreateReq(1L, 1L, 20000000L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
+                .thenReturn(Optional.of(depositProduct));
+        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+
+        assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.INVALID_DEPOSIT_AMOUNT);
+    }
+
+    private User createUser(Long id) {
+        User user = User.create(
+                "user" + id + "@test.com",
+                "password",
+                "홍길동",
+                "01012345678",
+                LocalDate.of(1990, 1, 1)
+        );
+        ReflectionTestUtils.setField(user, "id", id);
+        ReflectionTestUtils.setField(user, "identityVerified", true);
+        return user;
+    }
+
+    private Account createAccount(Long id, User user, AccountStatus status) {
+        Account account = Account.create(user, "031412345678", "생활비 계좌", AccountType.DEPOSIT);
+        ReflectionTestUtils.setField(account, "id", id);
+        ReflectionTestUtils.setField(account, "status", status);
+        return account;
+    }
+
+    private SavingProduct createSavingProduct(Long id, Long minAmount, Long maxAmount) {
+        SavingProduct product = SavingProduct.builder()
+                .name("정기예금")
+                .bankName("국민은행")
+                .bankCode("KB")
+                .type(SavingProductType.DEPOSIT)
+                .interestRate(3.5)
+                .periodMonth(12)
+                .minAmount(minAmount)
+                .maxAmount(maxAmount)
+                .monthlyLimit(null)
+                .terms("가입 조건")
+                .active(true)
+                .build();
+        ReflectionTestUtils.setField(product, "id", id);
+        return product;
+    }
+}
