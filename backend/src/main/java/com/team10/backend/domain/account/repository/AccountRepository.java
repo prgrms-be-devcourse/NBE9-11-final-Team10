@@ -16,6 +16,8 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     List<Account> findAllByUserIdAndStatusNot(Long userId, AccountStatus status);
 
+    List<Account> findAllByUserIdAndStatus(Long userId, AccountStatus status);
+
     Optional<Account> findByIdAndUserId(Long accountId, Long userId);
 
     boolean existsByAccountNumber(String accountNumber);

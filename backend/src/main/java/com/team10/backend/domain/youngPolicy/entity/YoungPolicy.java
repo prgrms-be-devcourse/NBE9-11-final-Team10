@@ -36,7 +36,7 @@ public class YoungPolicy extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String applyMethod; // 정책신청방법내용 (plcyAplyMthdCn)
 
-    // 12개 항목을 모두 받는 생성자
+    // 외부 API 응답을 DB 엔티티로 만들 때 사용합니다.
     public YoungPolicy(String policyId,
                        String title,
                        String description,
@@ -63,7 +63,7 @@ public class YoungPolicy extends BaseEntity {
         this.applyMethod = applyMethod;
     }
 
-    //update 메서드: 12개 항목을 모두 받는 형태로 업데이트
+    // 같은 정책번호가 다시 들어오면 기존 데이터를 갱신합니다.
     public void updateFrom(
             String title,
             String description,

@@ -5,6 +5,6 @@ import jakarta.validation.constraints.NotNull;
 
 public record FxWalletCreateReq(
         @NotNull(message = "통화는 필수입니다.")
-        CurrencyCode currency
+        CurrencyCode currencyCode
 ) {
 }
