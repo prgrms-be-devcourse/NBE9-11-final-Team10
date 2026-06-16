@@ -1,14 +1,16 @@
 package com.team10.backend.domain.exchange.controller;
 
+import com.team10.backend.domain.exchange.dto.req.FxWalletCreateReq;
 import com.team10.backend.domain.exchange.dto.res.FxWalletRes;
+import com.team10.backend.domain.exchange.service.FxWalletService;
+import com.team10.backend.domain.exchange.type.CurrencyCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -18,27 +20,50 @@ import java.util.List;
 @RequiredArgsConstructor
 public class FxWalletController {
 
+    private final FxWalletService fxWalletService;
+
+
     @PostMapping
     @Operation(description = "외화 지갑 생성")
-    public ResponseEntity<FxWalletRes> createFxWallet() {
-        throw new UnsupportedOperationException("구현 예정 기능");
+    public ResponseEntity<FxWalletRes> createFxWallet(
+            // TODO: 인증된 사용자(@AuthenticationPrincipal)에서 userId 꺼내쓰도록 수정
+            @RequestParam Long userId,
+            @Valid @RequestBody FxWalletCreateReq request
+            ) {
+        CurrencyCode currencyCode = request.currencyCode();
+        FxWalletRes response = fxWalletService.createFxWallet(currencyCode, userId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping
     @Operation(description = "내 외화 지갑 목록 조회")
-    public ResponseEntity<List<FxWalletRes>> getFxWallets() {
-        throw new UnsupportedOperationException("구현 예정 기능");
+    public ResponseEntity<List<FxWalletRes>> getFxWallets(
+            // TODO: 인증된 사용자(@AuthenticationPrincipal)에서 userId 꺼내쓰도록 수정
+            @RequestParam Long userId
+    ) {
+        List<FxWalletRes> response = fxWalletService.getFxWallets(userId);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{fxWalletId}")
     @Operation(description = "외화 지갑 상세 조회")
-    public ResponseEntity<FxWalletRes> getFxWallet() {
-        throw new UnsupportedOperationException("구현 예정 기능");
+    public ResponseEntity<FxWalletRes> getFxWallet(
+            // TODO: 인증된 사용자(@AuthenticationPrincipal)에서 userId 꺼내쓰도록 수정
+            @RequestParam Long userId,
+            @PathVariable Long fxWalletId
+    ) {
+        FxWalletRes response = fxWalletService.getFxWallet(fxWalletId, userId);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{fxWalletId}/close")
     @Operation(description = "외화 지갑 해지/비활성화")
-    public ResponseEntity<FxWalletRes> closeFxWallet() {
-        throw new UnsupportedOperationException("구현 예정 기능");
+    public ResponseEntity<FxWalletRes> closeFxWallet(
+            // TODO: 인증된 사용자(@AuthenticationPrincipal)에서 userId 꺼내쓰도록 수정
+            @RequestParam Long userId,
+            @PathVariable Long fxWalletId
+    ) {
+        FxWalletRes response = fxWalletService.closeFxWallet(fxWalletId, userId);
+        return ResponseEntity.ok(response);
     }
 }
