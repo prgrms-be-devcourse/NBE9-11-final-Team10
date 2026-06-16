@@ -11,21 +11,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
- * CODEF OCR API 기반 신분증 인증 비동기 처리 서비스 (1단계 → 2단계 즉시 체이닝).
- *
- * <h2>처리 흐름</h2>
- * <pre>
- * [ocrExecutor 스레드]
- *   1. 이미지 바이트 → CODEF OCR API → 구조화된 응답 [이름, 주민번호, 발급일자]
- *      └─ OCR 실패 → FAILED 저장, 종료
- *   2. [즉시 체이닝] MockGovernmentVerifyService.verify()
- *      ├─ VERIFIED            → GOVERNMENT_VERIFIED (3단계 대기)
- *      ├─ ISSUE_DATE_MISMATCH → FAILED
- *      └─ IDENTITY_NOT_FOUND  → FAILED
- * </pre>
- *
- * <p>CODEF API 호출(느린 외부 I/O) 동안 DB 커넥션을 점유하지 않도록
- * DB 저장은 {@link OcrPersistenceService}에 위임한다.
+ * 신분증 OCR 비동기 처리 서비스 (1단계 → 2단계 즉시 체이닝).
+ * 외부 API 대기 중 DB 커넥션 점유를 피하기 위해 DB 저장은 {@link OcrPersistenceService}에 위임한다.
  */
 @Slf4j
 @Service
@@ -45,13 +32,9 @@ public class OcrService {
         if (verification == null) return;
 
         try {
-            // ── 1단계: CODEF OCR (트랜잭션 밖) ─────────────────────────────
             IdCardOcrResult result = codefOcrClient.extractIdCard(imageBytes);
-
             ocrPersistenceService.saveOcrSuccess(verificationId, result);
             log.info("[OCR] 1단계 완료 — verificationId={}, name={}", verificationId, result.name());
-
-            // ── 2단계: 행안부 진위 확인 즉시 체이닝 ────────────────────────
             chainGovernmentVerification(verificationId, result);
 
         } catch (Exception e) {

@@ -7,12 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * OCR 처리 결과를 DB에 저장하는 전용 서비스.
- *
- * <p>OcrService에서 self-injection(@Autowired @Lazy) 없이 @Transactional을 사용하기 위해 분리.
- * 각 메서드는 짧은 독립 트랜잭션으로 실행되어 CODEF API 대기 중 DB 커넥션을 점유하지 않는다.
- */
+/** OCR 결과 DB 저장 전담 서비스 — self-injection 없이 @Transactional 사용하기 위해 OcrService에서 분리 */
 @Slf4j
 @Service
 @RequiredArgsConstructor

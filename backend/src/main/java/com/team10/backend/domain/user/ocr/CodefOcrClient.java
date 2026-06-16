@@ -17,32 +17,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-// NOTE: CODEF EasyCodef SDK는 파라미터를 URL 인코딩 후 Content-Type 없이 전송하여
-//       신분증 OCR API에서 CF-00003 오류가 발생함.
-//       Spring RestClient로 직접 application/json 방식으로 호출하도록 대체.
+// CODEF EasyCodef SDK는 URL 인코딩 + Content-Type 누락으로 CF-00003 오류 발생
+// → Spring RestClient로 application/json 방식 직접 호출
 
-/**
- * CODEF API 기반 신분증 OCR 클라이언트.
- *
- * <h2>API 스펙</h2>
- * <pre>
- * POST /v1/kr/etc/a/ocr/registration-card
- *
- * Request:
- *   Type          : "0" (base64 방식)
- *   secret_mode   : "0" (암호화 미적용)
- *   IdCard_base64 : 신분증 이미지 Base64 인코딩 문자열
- *   image_return  : "0" (마스킹 이미지 리턴 안 함)
- *   image_save    : "0" (이미지 저장 안 함)
- *
- * Response (data):
- *   resIdCardType   : 신분증 종류 ("주민등록증")
- *   resUserName     : 이름
- *   resUserIdentity : 주민등록번호 13자리 (하이픈 없음, e.g. "9012011234567")
- *   resIssueDate    : 발급일자 yyyyMMdd (e.g. "20241121")
- *   resIdCard       : 신분증 번호 (주민등록증은 빈 값)
- * </pre>
- */
+/** CODEF 신분증 OCR 클라이언트 (POST /v1/kr/etc/a/ocr/registration-card) */
 @Slf4j
 @Component
 public class CodefOcrClient {
@@ -55,7 +33,7 @@ public class CodefOcrClient {
     private final String clientSecret;
     private final RestClient restClient;
 
-    // 토큰 캐시 (만료 전까지 재사용) — token과 만료시간을 원자적으로 관리
+    // AT 캐시 — 만료 5분 전 갱신, token+만료시간 원자적 관리
     private record TokenCache(String token, long expiryEpoch) {}
     private final AtomicReference<TokenCache> tokenCache = new AtomicReference<>();
 
@@ -120,7 +98,8 @@ public class CodefOcrClient {
             String rawIdentity = (String) data.get("resUserIdentity");
             String rawDate     = (String) data.get("resIssueDate");
 
-            if (isBlank(name) || isBlank(rawIdentity) || isBlank(rawDate) || rawIdentity.length() < 13) {
+            if (isBlank(name) || isBlank(rawIdentity) || isBlank(rawDate)
+                    || rawIdentity.length() < 13 || rawDate.length() < 8) {
                 log.warn("[CODEF OCR] 필수 필드 누락 — name={}, identity={}, date={}", name, rawIdentity, rawDate);
                 throw new BusinessException(UserErrorCode.OCR_FAILED);
             }

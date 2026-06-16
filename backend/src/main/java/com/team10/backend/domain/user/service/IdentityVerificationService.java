@@ -36,16 +36,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 
-/**
- * 신분증 본인인증 3단계(OCR → 행안부 → 1원 송금)를 담당하는 서비스.
- *
- * <h2>단계별 흐름</h2>
- * <pre>
- * 1단계 — submitIdCardOcr()       : 신분증 이미지 접수 → 비동기 OCR + 행안부 검증
- * 3단계 — startOneWonVerification(): 1원 송금 요청 → 인증코드 Redis 저장
- * 3단계 — verifyOneWonCode()       : 코드 검증 → 완료 시 identityVerified=true
- * </pre>
- */
+/** 신분증 본인인증 3단계(OCR → 행안부 → 1원 송금) 서비스 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -57,7 +48,7 @@ public class IdentityVerificationService {
     private static final int MAX_OCR_DAILY = 5;
     private static final Duration DAILY_TTL = Duration.ofDays(1);
 
-    /** 최초 생성 시에만 EXPIRE를 설정하는 Lua 스크립트 (OneWonVerificationService와 동일 패턴) */
+    // INCR 후 첫 생성 시에만 EXPIRE — TTL 덮어쓰기 방지
     private static final RedisScript<Long> INCR_WITH_EXPIRE_IF_NEW = RedisScript.of(
             "local v = redis.call('INCR', KEYS[1])\n" +
             "if v == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end\n" +
@@ -73,10 +64,6 @@ public class IdentityVerificationService {
     private final PlatformTransactionManager txManager;
     private final StringRedisTemplate redisTemplate;
 
-    /**
-     * 본인인증 1단계: 신분증 이미지를 접수하고 즉시 202를 반환한다.
-     * OCR과 행안부 검증은 백그라운드에서 비동기 처리된다.
-     */
     @Transactional
     public OcrAcceptedRes submitIdCardOcr(Long userId, MultipartFile imageFile) {
         validateImage(imageFile);
@@ -92,9 +79,7 @@ public class IdentityVerificationService {
         IdentityVerification verification = IdentityVerification.startOcr(user);
         IdentityVerification saved = identityVerificationRepository.save(verification);
 
-        // 메인 스레드에서 바이트를 미리 읽음
-        // MultipartFile은 요청 종료 시 Tomcat이 임시파일을 삭제하므로
-        // afterCommit() 시점엔 이미 파일이 사라진다
+        // afterCommit() 시점엔 Tomcat이 임시파일을 이미 삭제하므로 미리 바이트 읽기
         byte[] imageBytes;
         try {
             imageBytes = imageFile.getBytes();
@@ -117,15 +102,9 @@ public class IdentityVerificationService {
         );
     }
 
-    /**
-     * 본인인증 3단계: 인증코드를 생성하고 사용자 계좌로 1원을 송금한다.
-     *
-     * <p>외부 API(bankTransferService.sendOneWon) 호출이 포함되므로 트랜잭션 외부에서 수행한다.
-     * DB 조회 → Redis/외부 API → DB 쓰기 순으로 트랜잭션을 분리하여 커넥션 풀 고갈을 방지한다.
-     */
+    // 외부 송금 API 포함 → 트랜잭션 밖에서 실행, DB 쓰기만 TransactionTemplate으로 분리
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OneWonStartRes startOneWonVerification(Long userId, OneWonStartReq request) {
-        // Step 1: DB 조회 — Spring Data 자체 읽기 트랜잭션 사용
         IdentityVerification verification = identityVerificationRepository
                 .findTopByUserIdOrderByCreatedAtDesc(userId)
                 .filter(v -> v.getStatus() == VerificationStatus.GOVERNMENT_VERIFIED
@@ -134,21 +113,18 @@ public class IdentityVerificationService {
 
         Long verificationId = verification.getId();
 
-        // Step 2: 은행 점검 시간 검증
         validateBankAvailability(request.organization());
 
-        // Step 3: Redis 코드 생성 + 외부 송금 API — 트랜잭션 없음
         String code = oneWonVerificationService.generateAndStore(verificationId, userId);
         try {
             bankTransferService.sendOneWon(request.organization(), request.accountNumber(), code);
         } catch (Exception e) {
-            // 송금 실패 시 Redis 코드 + daily 카운터 모두 롤백
+            // 송금 실패 시 Redis 코드 + daily 카운터 보상 롤백
             oneWonVerificationService.deleteCode(verificationId);
             oneWonVerificationService.decrementDailyCount(userId);
             throw e;
         }
 
-        // Step 4: DB 상태 업데이트 — 별도 쓰기 트랜잭션
         return new TransactionTemplate(txManager).execute(status -> {
             IdentityVerification managed = identityVerificationRepository
                     .findById(verificationId)
@@ -162,9 +138,6 @@ public class IdentityVerificationService {
         });
     }
 
-    /**
-     * 본인인증 3단계 코드 검증: 성공 시 identityVerified=true로 인증을 완료한다.
-     */
     @Transactional
     public OneWonVerifyRes verifyOneWonCode(Long userId, OneWonVerifyReq request) {
         IdentityVerification verification = identityVerificationRepository
