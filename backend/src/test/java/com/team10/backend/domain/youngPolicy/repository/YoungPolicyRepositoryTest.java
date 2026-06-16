@@ -126,7 +126,7 @@ public class YoungPolicyRepositoryTest {
     }
 
     @Test
-    @DisplayName("service와 DTO 테스트에서 사용할 현재 API 정책 응답을 생성한다")
+    @DisplayName("service 테스트에서 사용할 OpenAPI 정책 응답을 생성한다")
     void createExternalResponse_returnsMockCurrentApiResponse() {
         YoungPolicyExternalRes response = createExternalResponse();
 
@@ -207,7 +207,10 @@ public class YoungPolicyRepositoryTest {
     public static YoungPolicyExternalRes createExternalResponse() {
         return new YoungPolicyExternalRes(
                 List.of(),
-                new YoungPolicyExternalRes.Result(List.of(createExternalPolicyItem()))
+                new YoungPolicyExternalRes.Result(
+                        List.of(createExternalPolicyItem()),
+                        List.of()
+                )
         );
     }
 

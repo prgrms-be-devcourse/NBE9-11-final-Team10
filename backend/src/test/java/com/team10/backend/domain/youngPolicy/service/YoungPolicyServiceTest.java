@@ -81,7 +81,7 @@ class YoungPolicyServiceTest {
     }
 
     @Test
-    @DisplayName("현재 청년정책 API 응답의 result.plcyList를 DB에 저장한다")
+    @DisplayName("청년정책 OpenAPI 응답의 youthPolicyList를 DB에 저장한다")
     void syncPolicies_savesPoliciesFromCurrentApiResult() {
         YoungPolicyReq request = new YoungPolicyReq(1, 10);
         YoungPolicyExternalRes response = YoungPolicyRepositoryTest.createExternalResponse();

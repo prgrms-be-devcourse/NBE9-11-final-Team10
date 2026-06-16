@@ -9,8 +9,8 @@ import java.util.List;
 // 청년센터 응답을 담습니다. 모르는 필드는 무시해 API 변경에 대비합니다.
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record YoungPolicyExternalRes(
-        List<PolicyItem> youthPolicyList, // 기존 공개 API 응답 구조
-        Result result // 현재 청년센터 정책 API 응답 구조
+        List<PolicyItem> youthPolicyList, // 예전 최상위 목록 구조
+        Result result // 공식 OpenAPI는 result 안에 목록을 담습니다.
 ) {
     public YoungPolicyExternalRes(List<PolicyItem> youthPolicyList) {
         this(youthPolicyList, null);
@@ -23,8 +23,14 @@ public record YoungPolicyExternalRes(
     }
 
     public List<PolicyItem> policyItems() {
-        // 현재 응답 구조를 먼저 보고, 없으면 기존 응답 구조를 사용합니다.
-        if (result != null && result.plcyList() != null) {
+        // 응답 구조가 달라도 서비스는 하나의 목록만 사용합니다.
+        if (!youthPolicyList.isEmpty()) {
+            return youthPolicyList;
+        }
+        if (result != null && !result.youthPolicyList().isEmpty()) {
+            return result.youthPolicyList();
+        }
+        if (result != null && !result.plcyList().isEmpty()) {
             return result.plcyList();
         }
         return youthPolicyList;
@@ -32,9 +38,17 @@ public record YoungPolicyExternalRes(
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Result(
+            List<PolicyItem> youthPolicyList,
             List<PolicyItem> plcyList
     ) {
+        public Result(List<PolicyItem> plcyList) {
+            this(List.of(), plcyList);
+        }
+
         public Result {
+            if (youthPolicyList == null) {
+                youthPolicyList = List.of();
+            }
             if (plcyList == null) {
                 plcyList = List.of();
             }
