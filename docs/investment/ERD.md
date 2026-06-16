@@ -92,14 +92,19 @@ UNIQUE(user_id, stock_id)
 
 ### 컬럼
 
-| 컬럼           | 설명    |
-|--------------|-------|
-| holiday_id   | PK    |
-| holiday_date | 날짜    |
-| market_type  | KRX   |
-| is_open      | 개장 여부 |
-| description  | 휴장 사유 |
-| created_at   | 생성일   |
+| 컬럼           | 설명  |
+|--------------|-----|
+| id           | PK  |
+| holiday_date | 휴장일 |
+| market_type  | KRX |
+| created_at   | 생성일 |
+| updated_at   | 수정일 |
+
+### 저장 대상
+
+KIS 국내휴장일조회 API 응답 중 `opnd_yn = N`인 실제 휴장일만 저장한다.
+
+`is_open`, `description`은 현재 코드 기준 저장하지 않는다.
 
 ### 목적
 
@@ -147,22 +152,32 @@ UNIQUE(user_id, stock_id)
 
 ### 컬럼
 
-| 컬럼                    | 설명             |
-|-----------------------|----------------|
-| investment_order_id   | PK             |
-| investment_account_id | FK             |
-| stock_id              | FK             |
-| trade_type            | BUY / SELL     |
-| price_type            | MARKET / LIMIT |
-| quantity              | 주문 수량          |
-| remaining_quantity    | 미체결 수량         |
-| order_price           | 지정가            |
-| executed_price        | 평균 체결가         |
-| total_amount          | 총 체결 금액        |
-| status                | 주문 상태          |
-| idempotency_key       | 중복 요청 방지       |
-| ordered_at            | 주문 시각          |
-| executed_at           | 최종 체결 시각       |
+| 컬럼                    | 설명                  |
+|-----------------------|---------------------|
+| investment_order_id   | PK                  |
+| investment_account_id | FK                  |
+| stock_id              | FK                  |
+| trade_type            | BUY / SELL          |
+| price_type            | MARKET / LIMIT      |
+| quantity              | 주문 수량               |
+| remaining_quantity    | 잔여 주문 수량 스냅샷        |
+| order_price           | 지정가 주문 요청가          |
+| status                | 주문 상태               |
+| idempotency_key       | 중복 요청 방지 UUID       |
+| created_at            | 생성일                 |
+| updated_at            | 수정일                 |
+
+### 제약 조건
+
+```sql
+UNIQUE(investment_account_id, idempotency_key)
+```
+
+### idempotency_key 정책
+
+클라이언트는 동일한 논리적 주문 요청에 동일한 UUID를 재사용해야 한다.
+
+백엔드는 `investment_account_id + idempotency_key` 유니크 제약으로 동일 키 주문의 중복 생성을 방지한다.
 
 ### 주문 상태
 
@@ -181,13 +196,15 @@ CANCELLED
 
 ### 컬럼
 
-| 컬럼                 | 설명    |
-|--------------------|-------|
-| execution_id       | PK    |
-| order_id           | FK    |
-| execution_price    | 체결가   |
-| execution_quantity | 체결 수량 |
-| executed_at        | 체결 시각 |
+| 컬럼                  | 설명    |
+|---------------------|-------|
+| id                  | PK    |
+| investment_order_id | FK    |
+| execution_price     | 체결가   |
+| execution_quantity  | 체결 수량 |
+| executed_at         | 체결 시각 |
+| created_at          | 생성일   |
+| updated_at          | 수정일   |
 
 ### 목적
 

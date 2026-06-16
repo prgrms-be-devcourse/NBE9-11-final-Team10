@@ -41,10 +41,13 @@ investment/client
 ```text
 investment
  └─ client
-     ├─ KisAuthClient
-     ├─ KisStockClient
-     ├─ KisHolidayClient
-     └─ KisWebSocketClient
+     ├─ auth
+     │   ├─ KisAuthClient
+     │   ├─ KisAccessTokenManager
+     │   ├─ KisWebSocketApprovalKeyManager
+     │   └─ KisWebSocketClient
+     └─ marketholiday
+         └─ KisHolidayClient
 ```
 
 ---
@@ -193,20 +196,26 @@ synchronized
 
 ## WebSocket 접속키
 
-애플리케이션 시작 시 발급
+WebSocket 연결 직전 최초 요청 시 발급한다.
 
 ```text
-Application Start
+getApprovalKey()
+↓
+메모리 접속키 없음
 ↓
 접속키 발급
 ↓
 메모리 보관
 ```
 
-연결 상실 시
+메모리에 접속키가 이미 있으면 추가 API 호출 없이 기존 값을 반환한다.
+
+현재 구현 기준으로 접속키 만료 시간 기반 재발급 로직은 두지 않는다.
+
+WebSocket 연결 상실 시
 
 ```text
-재발급
+기존 접속키 조회
 ↓
 재연결
 ```
@@ -221,11 +230,12 @@ Application Start
 
 ### 수행 작업
 
-- WebSocket 접속키 발급
 - 종목 마스터 파일 다운로드
 - 종목 정보 Upsert
 - 휴장일 정보 동기화
 - 스케줄러 활성화
+
+WebSocket 접속키는 시작 시 선발급하지 않고 최초 WebSocket 연결 요청 시 lazy 발급한다.
 
 ---
 

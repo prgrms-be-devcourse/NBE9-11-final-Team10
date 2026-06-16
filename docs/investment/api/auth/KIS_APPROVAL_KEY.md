@@ -64,17 +64,23 @@ Content-Type: application/json
 
 ## 발급 시점
 
-애플리케이션 시작 시 1회 발급한다.
+WebSocket 연결 직전 최초 `getApprovalKey()` 요청 시 1회 발급한다.
 
 ```text
-Application Start
+WebSocket 연결 요청
 ↓
-Approval Key 발급
+getApprovalKey()
+↓
+메모리 Approval Key 없음
+↓
+Approval Key 발급 API 호출
 ↓
 메모리 저장
 ↓
 WebSocket 연결
 ```
+
+메모리에 Approval Key가 이미 있으면 추가 발급 API를 호출하지 않고 기존 값을 반환한다.
 
 ---
 
@@ -95,6 +101,10 @@ In-Memory
 ```text
 24시간
 ```
+
+현재 코드는 만료 시각을 별도로 저장하거나 추적하지 않는다.
+
+Approval Key는 WebSocket 연결 수립 시 최초 1회 인증에만 사용하므로, 메모리에 값이 존재하면 그대로 사용한다.
 
 ---
 
@@ -128,26 +138,26 @@ WebSocket 연결 종료
 
 ## 재발급 정책
 
-다음 상황에서만 재발급한다.
+현재 구현 기준으로 애플리케이션 실행 중 재발급 로직을 두지 않는다.
 
-### 1. 애플리케이션 재시작
+### 애플리케이션 재시작
 
 ```text
 서버 재기동
 ↓
-Approval Key 재발급
+메모리 Approval Key 초기화
 ↓
-WebSocket 재연결
+최초 WebSocket 연결 요청 시 Approval Key 발급
 ```
 
 ---
 
-### 2. WebSocket 연결 상실
+### WebSocket 연결 상실
 
 ```text
 WebSocket Disconnect
 ↓
-Approval Key 재발급
+메모리에 저장된 Approval Key 조회
 ↓
 WebSocket 재연결
 ```
@@ -183,17 +193,15 @@ public class KisWebSocketKeyManager {
 
     private volatile String approvalKey;
 
-    @PostConstruct
-    public void initialize() {
-        approvalKey = requestApprovalKey();
-    }
-
     public String getApprovalKey() {
+        if (approvalKey == null) {
+            synchronized (this) {
+                if (approvalKey == null) {
+                    approvalKey = requestApprovalKey();
+                }
+            }
+        }
         return approvalKey;
-    }
-
-    public synchronized void refresh() {
-        approvalKey = requestApprovalKey();
     }
 }
 ```
@@ -205,7 +213,7 @@ public class KisWebSocketKeyManager {
 ```text
 WebSocket Disconnect
 ↓
-Approval Key 재발급
+메모리에 저장된 Approval Key 조회
 ↓
 WebSocket 재연결
 ↓
