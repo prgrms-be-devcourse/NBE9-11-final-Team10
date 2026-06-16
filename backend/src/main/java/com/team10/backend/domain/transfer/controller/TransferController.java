@@ -24,9 +24,9 @@ public class TransferController {
 
     private final TransferService transferService;
 
-    @PostMapping("/deposit")
+    @PostMapping("/topUp")
     @Operation(summary = "입금")
-    public ResponseEntity<DepositRes> deposit(
+    public ResponseEntity<DepositRes> topUp(
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody DepositReq request) {
         DepositRes response = transferService.topUp(userId, request.accountId(), request.amount(), request.memo());
