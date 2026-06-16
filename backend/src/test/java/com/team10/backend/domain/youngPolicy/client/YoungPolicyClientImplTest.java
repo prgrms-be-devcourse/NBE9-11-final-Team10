@@ -76,4 +76,66 @@ class YoungPolicyClientImplTest {
 
         server.verify();
     }
+
+    @Test
+    @DisplayName("세션 쿠키가 없으면 Cookie 헤더 없이 정책 목록을 요청한다")
+    void fetchPoliciesOmitsCookieHeaderWhenGuestCookieIsBlank() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        YoungPolicyClientImpl client = new YoungPolicyClientImpl(builder.build());
+
+        server.expect(requestTo("https://www.youthcenter.go.kr"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("<html></html>", MediaType.TEXT_HTML)
+                        .header(HttpHeaders.SET_COOKIE, "   "));
+
+        server.expect(requestTo("https://www.youthcenter.go.kr/wrk/yrm/plcyInfo/selectPlcy"))
+                .andExpect(method(POST))
+                .andExpect(request -> assertThat(request.getHeaders().containsHeader(HttpHeaders.COOKIE)).isFalse())
+                .andRespond(withSuccess("""
+                        {
+                          "result": {
+                            "plcyList": []
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        var response = client.fetchPolicies(new YoungPolicyReq(1, 10));
+
+        assertThat(response.policyItems()).isEmpty();
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("Set-Cookie 값은 공백과 속성을 제거해 Cookie 헤더로 결합한다")
+    void fetchPoliciesTrimsAndFiltersSetCookieValues() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        YoungPolicyClientImpl client = new YoungPolicyClientImpl(builder.build());
+
+        server.expect(requestTo("https://www.youthcenter.go.kr"))
+                .andExpect(method(GET))
+                .andRespond(withSuccess("<html></html>", MediaType.TEXT_HTML)
+                        .header(HttpHeaders.SET_COOKIE, "   ")
+                        .header(HttpHeaders.SET_COOKIE, " ygt=guest-token ; Path=/; HttpOnly")
+                        .header(HttpHeaders.SET_COOKIE, " XSRF-TOKEN=csrf-token ; Path=/"));
+
+        server.expect(requestTo("https://www.youthcenter.go.kr/wrk/yrm/plcyInfo/selectPlcy"))
+                .andExpect(method(POST))
+                .andExpect(header(HttpHeaders.COOKIE, "ygt=guest-token; XSRF-TOKEN=csrf-token"))
+                .andRespond(withSuccess("""
+                        {
+                          "result": {
+                            "plcyList": []
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        var response = client.fetchPolicies(new YoungPolicyReq(1, 10));
+
+        assertThat(response.policyItems()).isEmpty();
+
+        server.verify();
+    }
 }

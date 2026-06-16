@@ -5,6 +5,7 @@ import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyExternalRes;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
@@ -28,11 +29,16 @@ public class YoungPolicyClientImpl implements YoungPolicyClient {
         java.util.Objects.requireNonNull(request, "request must not be null");
         String cookie = fetchGuestCookie();
 
-        return restClient.post()
+        RestClient.RequestBodySpec requestSpec = restClient.post()
                 .uri(BASE_URL + POLICY_LIST_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header(HttpHeaders.COOKIE, cookie)
+                .accept(MediaType.APPLICATION_JSON);
+
+        if (StringUtils.hasText(cookie)) {
+            requestSpec.header(HttpHeaders.COOKIE, cookie);
+        }
+
+        return requestSpec
                 .body(YoungPolicyApiReq.from(request))
                 .retrieve()
                 .body(YoungPolicyExternalRes.class);
@@ -47,7 +53,9 @@ public class YoungPolicyClientImpl implements YoungPolicyClient {
                 .getOrEmpty(HttpHeaders.SET_COOKIE);
 
         return setCookies.stream()
-                .map(cookie -> cookie.split(";", 2)[0])
+                .filter(StringUtils::hasText)
+                .map(cookie -> cookie.split(";", 2)[0].trim())
+                .filter(StringUtils::hasText)
                 .reduce((left, right) -> left + "; " + right)
                 .orElse("");
     }

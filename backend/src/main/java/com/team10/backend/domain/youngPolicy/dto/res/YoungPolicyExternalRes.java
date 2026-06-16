@@ -96,12 +96,20 @@ public record YoungPolicyExternalRes(
         }
 
         private Integer parseAge(Object value) {
-            if (value == null || !StringUtils.hasText(value.toString())) {
+            if (value == null) {
+                return null;
+            }
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+
+            String strValue = value.toString();
+            if (!StringUtils.hasText(strValue)) {
                 return null;
             }
 
             try {
-                return Integer.valueOf(value.toString());
+                return (int) Double.parseDouble(strValue);
             } catch (NumberFormatException e) {
                 return null;
             }
