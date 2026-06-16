@@ -30,13 +30,20 @@ public class Stock extends BaseEntity {
     @Column(name = "stock_code", nullable = false, unique = true, length = 20)
     private String stockCode;
 
+    /**
+     * 표준코드
+     */
+    @Column(nullable = false, length = 20)
+    private String standardCode;
+
     @Column(name = "stock_name", nullable = false, length = 100)
     private String stockName;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private StockMarket market; // 코스피 | 코스닥
+    private StockMarket market; // 코스피 | 코스닥 ...
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 3)
     private CurrencyCode currencyCode;
 
@@ -82,6 +89,7 @@ public class Stock extends BaseEntity {
 
     public static Stock create(
             String stockCode,
+            String standardCode,
             String stockName,
             StockMarket market,
             CurrencyCode currencyCode,
@@ -95,6 +103,7 @@ public class Stock extends BaseEntity {
     ) {
         Stock stock = new Stock();
         stock.stockCode = stockCode;
+        stock.standardCode = standardCode;
         stock.stockName = stockName;
         stock.market = market;
         stock.currencyCode = currencyCode;
@@ -109,6 +118,7 @@ public class Stock extends BaseEntity {
     }
 
     public void updateMaster(
+            String standardCode,
             String stockName,
             StockMarket market,
             CurrencyCode currencyCode,
@@ -120,6 +130,7 @@ public class Stock extends BaseEntity {
             Long marketCap,
             Long previousVolume
     ) {
+        this.standardCode = standardCode;
         this.stockName = stockName;
         this.market = market;
         this.currencyCode = currencyCode;
