@@ -1,13 +1,17 @@
 package com.team10.backend.domain.youngPolicy.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicyReq;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyDetailRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySummaryRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySyncRes;
 import com.team10.backend.domain.youngPolicy.repository.YoungPolicyRepositoryTest;
 import com.team10.backend.domain.youngPolicy.service.YoungPolicyService;
 import java.util.List;
@@ -15,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -71,5 +76,28 @@ class YoungPolicyControllerTest {
                 .andExpect(jsonPath("$.applyMethod").value(YoungPolicyRepositoryTest.POLICY_APPLY_METHOD));
 
         verify(youngPolicyService).getPolicy(YoungPolicyRepositoryTest.POLICY_ID);
+    }
+
+    @Test
+    @DisplayName("청년 정책 동기화 API는 외부 호출 없이 service mock 결과를 반환한다")
+    void syncPolicies_returnsMockedSyncResult() throws Exception {
+        YoungPolicySyncRes response = new YoungPolicySyncRes(1, 1, 0, 0);
+        when(youngPolicyService.syncPolicies(any(YoungPolicyReq.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/youth-policies/sync")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "pageNum": 1,
+                                  "pageSize": 10
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fetchedCount").value(1))
+                .andExpect(jsonPath("$.createdCount").value(1))
+                .andExpect(jsonPath("$.updatedCount").value(0))
+                .andExpect(jsonPath("$.skippedCount").value(0));
+
+        verify(youngPolicyService).syncPolicies(new YoungPolicyReq(1, 10));
     }
 }

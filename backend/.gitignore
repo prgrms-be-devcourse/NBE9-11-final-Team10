@@ -37,3 +37,7 @@ out/
 .vscode/
 
 ### Secrets — 루트 .gitignore에서 통합 관리 ###
+/application-secret.yml
+
+### Local reports ###
+/docs/

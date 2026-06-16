@@ -1,8 +1,11 @@
 package com.team10.backend.domain.youngPolicy.service;
 
 import com.team10.backend.domain.youngPolicy.client.YoungPolicyClient;
+import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicyReq;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyDetailRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyExternalRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySummaryRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySyncRes;
 import com.team10.backend.domain.youngPolicy.entity.YoungPolicy;
 import com.team10.backend.domain.youngPolicy.exception.YoungPolicyErrorCode;
 import com.team10.backend.domain.youngPolicy.repository.YoungPolicyRepository;
@@ -20,6 +23,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,5 +78,23 @@ class YoungPolicyServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(YoungPolicyErrorCode.YOUNG_POLICY_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("청년정책 OpenAPI 응답의 youthPolicyList를 DB에 저장한다")
+    void syncPolicies_savesPoliciesFromCurrentApiResult() {
+        YoungPolicyReq request = new YoungPolicyReq(1, 10);
+        YoungPolicyExternalRes response = YoungPolicyRepositoryTest.createExternalResponse();
+        when(youngPolicyClient.fetchPolicies(request)).thenReturn(response);
+        when(youngPolicyRepository.findByPolicyId(YoungPolicyRepositoryTest.CURRENT_API_POLICY_ID))
+                .thenReturn(Optional.empty());
+
+        YoungPolicySyncRes syncResponse = youngPolicyService.syncPolicies(request);
+
+        assertThat(syncResponse.fetchedCount()).isEqualTo(1);
+        assertThat(syncResponse.createdCount()).isEqualTo(1);
+        assertThat(syncResponse.updatedCount()).isZero();
+        assertThat(syncResponse.skippedCount()).isZero();
+        verify(youngPolicyRepository).save(any(YoungPolicy.class));
     }
 }
