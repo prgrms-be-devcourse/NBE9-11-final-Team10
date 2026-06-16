@@ -1,6 +1,7 @@
 package com.team10.backend.domain.youngPolicy.repository;
 
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyDetailRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyExternalRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySummaryRes;
 import com.team10.backend.domain.youngPolicy.entity.YoungPolicy;
 import com.team10.backend.global.config.QuerydslConfig;
@@ -38,6 +39,9 @@ public class YoungPolicyRepositoryTest {
     public static final String POLICY_APPLY_PERIOD = "20260601~20260630";
     public static final String POLICY_APPLY_URL = "https://example.com/policies/YP-001";
     public static final String POLICY_APPLY_METHOD = "온라인 신청";
+    public static final String CURRENT_API_POLICY_ID = "20260305005400112100";
+    public static final String CURRENT_API_CATEGORY = "금융/복지/문화";
+    public static final String CURRENT_API_REGION = "서울특별시";
 
     @Test
     @DisplayName("정책번호로 청년 정책을 조회한다")
@@ -121,6 +125,26 @@ public class YoungPolicyRepositoryTest {
         assertThat(response.applyMethod()).isEqualTo(POLICY_APPLY_METHOD);
     }
 
+    @Test
+    @DisplayName("service와 DTO 테스트에서 사용할 현재 API 정책 응답을 생성한다")
+    void createExternalResponse_returnsMockCurrentApiResponse() {
+        YoungPolicyExternalRes response = createExternalResponse();
+
+        assertThat(response.policyItems()).hasSize(1);
+        assertThat(response.policyItems().get(0).plcyNo()).isEqualTo(CURRENT_API_POLICY_ID);
+        assertThat(response.policyItems().get(0).userLclsfNm()).isEqualTo(CURRENT_API_CATEGORY);
+        assertThat(response.policyItems().get(0).stdgCtpvSggCdList()).isEqualTo(CURRENT_API_REGION);
+    }
+
+    @Test
+    @DisplayName("현재 API 정책 응답의 소수 연령 값을 정수로 변환한다")
+    void createExternalPolicyItem_parsesDecimalAgeValues() {
+        YoungPolicy policy = createExternalPolicyItem(19.0, "20.0").toEntity();
+
+        assertThat(policy.getMinAge()).isEqualTo(19);
+        assertThat(policy.getMaxAge()).isEqualTo(20);
+    }
+
     public static List<YoungPolicy> createPolicies() {
         return List.of(createPolicy());
     }
@@ -177,6 +201,37 @@ public class YoungPolicyRepositoryTest {
                 POLICY_APPLY_PERIOD,
                 POLICY_APPLY_URL,
                 POLICY_APPLY_METHOD
+        );
+    }
+
+    public static YoungPolicyExternalRes createExternalResponse() {
+        return new YoungPolicyExternalRes(
+                List.of(),
+                new YoungPolicyExternalRes.Result(List.of(createExternalPolicyItem()))
+        );
+    }
+
+    public static YoungPolicyExternalRes.PolicyItem createExternalPolicyItem() {
+        return createExternalPolicyItem(19, 20);
+    }
+
+    public static YoungPolicyExternalRes.PolicyItem createExternalPolicyItem(Object minAge, Object maxAge) {
+        return new YoungPolicyExternalRes.PolicyItem(
+                CURRENT_API_POLICY_ID,
+                "청년문화예술패스",
+                "청년의 문화향유 기회를 제공",
+                null,
+                CURRENT_API_CATEGORY,
+                "문화",
+                minAge,
+                maxAge,
+                null,
+                CURRENT_API_REGION,
+                POLICY_JOB_CODE,
+                null,
+                "20260225 ~ 20260630",
+                "https://example.com",
+                "온라인 신청"
         );
     }
 }

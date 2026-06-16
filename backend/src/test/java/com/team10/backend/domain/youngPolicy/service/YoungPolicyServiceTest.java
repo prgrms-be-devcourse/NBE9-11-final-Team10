@@ -84,29 +84,10 @@ class YoungPolicyServiceTest {
     @DisplayName("현재 청년정책 API 응답의 result.plcyList를 DB에 저장한다")
     void syncPolicies_savesPoliciesFromCurrentApiResult() {
         YoungPolicyReq request = new YoungPolicyReq(1, 10);
-        YoungPolicyExternalRes.PolicyItem item = new YoungPolicyExternalRes.PolicyItem(
-                "20260305005400112100",
-                "청년문화예술패스",
-                "청년의 문화향유 기회를 제공",
-                null,
-                "금융/복지/문화",
-                "문화",
-                19,
-                20,
-                null,
-                "서울특별시",
-                "001",
-                null,
-                "20260225 ~ 20260630",
-                "https://example.com",
-                "온라인 신청"
-        );
-        YoungPolicyExternalRes response = new YoungPolicyExternalRes(
-                List.of(),
-                new YoungPolicyExternalRes.Result(List.of(item))
-        );
+        YoungPolicyExternalRes response = YoungPolicyRepositoryTest.createExternalResponse();
         when(youngPolicyClient.fetchPolicies(request)).thenReturn(response);
-        when(youngPolicyRepository.findByPolicyId("20260305005400112100")).thenReturn(Optional.empty());
+        when(youngPolicyRepository.findByPolicyId(YoungPolicyRepositoryTest.CURRENT_API_POLICY_ID))
+                .thenReturn(Optional.empty());
 
         YoungPolicySyncRes syncResponse = youngPolicyService.syncPolicies(request);
 

@@ -6,11 +6,11 @@ import org.springframework.util.StringUtils;
 
 import java.util.List;
 
-// 필요없는 데이터 무시하는 설정 추가하여 시스템 안정성 향상
+// 청년센터 응답을 담습니다. 모르는 필드는 무시해 API 변경에 대비합니다.
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record YoungPolicyExternalRes(
-        List<PolicyItem> youthPolicyList, // 기존 공개 API 응답 필드
-        Result result // 현재 청년센터 정책 API 응답 필드
+        List<PolicyItem> youthPolicyList, // 기존 공개 API 응답 구조
+        Result result // 현재 청년센터 정책 API 응답 구조
 ) {
     public YoungPolicyExternalRes(List<PolicyItem> youthPolicyList) {
         this(youthPolicyList, null);
@@ -23,6 +23,7 @@ public record YoungPolicyExternalRes(
     }
 
     public List<PolicyItem> policyItems() {
+        // 현재 응답 구조를 먼저 보고, 없으면 기존 응답 구조를 사용합니다.
         if (result != null && result.plcyList() != null) {
             return result.plcyList();
         }
@@ -62,6 +63,7 @@ public record YoungPolicyExternalRes(
             return StringUtils.hasText(plcyNo);
         }
 
+        // 외부 API 응답을 DB 엔티티로 바꿉니다.
         public YoungPolicy toEntity() {
             return new YoungPolicy(
                     plcyNo,
@@ -79,6 +81,7 @@ public record YoungPolicyExternalRes(
             );
         }
 
+        // 이미 저장된 정책이면 최신 값으로 덮어씁니다.
         public void update(YoungPolicy policy) {
             policy.updateFrom(
                     plcyNm,
@@ -109,6 +112,7 @@ public record YoungPolicyExternalRes(
             }
 
             try {
+                // "19.0"처럼 내려온 값도 19로 저장합니다.
                 return (int) Double.parseDouble(strValue);
             } catch (NumberFormatException e) {
                 return null;
@@ -116,6 +120,7 @@ public record YoungPolicyExternalRes(
         }
 
         private String firstText(String primary, String fallback) {
+            // 기존 필드가 비어 있으면 새 API 필드를 사용합니다.
             return StringUtils.hasText(primary) ? primary : fallback;
         }
     }

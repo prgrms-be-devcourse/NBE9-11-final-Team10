@@ -23,21 +23,21 @@ public class YoungPolicyService {
     private final YoungPolicyRepository youngPolicyRepository;
     private final YoungPolicyClient youngPolicyClient;
 
-    // 청년 정책 목록 조회
+    // 저장된 청년정책 목록을 요약 응답으로 조회합니다.
     public List<YoungPolicySummaryRes> getPolicies() {
         return youngPolicyRepository.findAll().stream()
                 .map(YoungPolicySummaryRes::from)
                 .toList();
     }
 
-    // 청년 정책 상세 조회
+    // 저장된 청년정책 한 건을 상세 응답으로 조회합니다.
     public YoungPolicyDetailRes getPolicy(Long id) {
         return youngPolicyRepository.findById(id)
                 .map(YoungPolicyDetailRes::from)
                 .orElseThrow(() -> new BusinessException(YoungPolicyErrorCode.YOUNG_POLICY_NOT_FOUND));
     }
 
-    // 청년 정책 외부 API 연동 및 동기화
+    // 외부 정책을 정책번호 기준으로 새로 저장하거나 갱신합니다.
     @Transactional
     public YoungPolicySyncRes syncPolicies(YoungPolicyReq request) {
         YoungPolicyExternalRes response = fetchPolicies(request);
@@ -48,6 +48,7 @@ public class YoungPolicyService {
         List<YoungPolicyExternalRes.PolicyItem> policyItems = response.policyItems();
 
         for (YoungPolicyExternalRes.PolicyItem item : policyItems) {
+            // 정책번호가 없으면 중복 확인이 불가능해 저장하지 않습니다.
             if (!item.hasPolicyId()) {
                 skippedCount++;
                 continue;
@@ -71,7 +72,7 @@ public class YoungPolicyService {
         );
     }
 
-    // 청년 정책 외부 API 호출 및 응답 처리
+    // 외부 API 오류를 청년정책 도메인 예외로 바꿉니다.
     private YoungPolicyExternalRes fetchPolicies(YoungPolicyReq request) {
         try {
             YoungPolicyExternalRes response = youngPolicyClient.fetchPolicies(request);
