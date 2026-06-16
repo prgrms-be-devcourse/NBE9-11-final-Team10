@@ -45,7 +45,9 @@ public class YoungPolicyService {
         int updatedCount = 0;
         int skippedCount = 0;
 
-        for (YoungPolicyExternalRes.PolicyItem item : response.youthPolicyList()) {
+        List<YoungPolicyExternalRes.PolicyItem> policyItems = response.policyItems();
+
+        for (YoungPolicyExternalRes.PolicyItem item : policyItems) {
             if (!item.hasPolicyId()) {
                 skippedCount++;
                 continue;
@@ -62,7 +64,7 @@ public class YoungPolicyService {
         }
 
         return new YoungPolicySyncRes(
-                response.youthPolicyList().size(),
+                policyItems.size(),
                 createdCount,
                 updatedCount,
                 skippedCount

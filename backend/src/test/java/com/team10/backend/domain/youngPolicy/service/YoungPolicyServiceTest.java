@@ -1,8 +1,11 @@
 package com.team10.backend.domain.youngPolicy.service;
 
 import com.team10.backend.domain.youngPolicy.client.YoungPolicyClient;
+import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicyReq;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyDetailRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyExternalRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySummaryRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySyncRes;
 import com.team10.backend.domain.youngPolicy.entity.YoungPolicy;
 import com.team10.backend.domain.youngPolicy.exception.YoungPolicyErrorCode;
 import com.team10.backend.domain.youngPolicy.repository.YoungPolicyRepository;
@@ -20,6 +23,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,5 +78,42 @@ class YoungPolicyServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(YoungPolicyErrorCode.YOUNG_POLICY_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("현재 청년정책 API 응답의 result.plcyList를 DB에 저장한다")
+    void syncPolicies_savesPoliciesFromCurrentApiResult() {
+        YoungPolicyReq request = new YoungPolicyReq(1, 10);
+        YoungPolicyExternalRes.PolicyItem item = new YoungPolicyExternalRes.PolicyItem(
+                "20260305005400112100",
+                "청년문화예술패스",
+                "청년의 문화향유 기회를 제공",
+                null,
+                "금융/복지/문화",
+                "문화",
+                19,
+                20,
+                null,
+                "서울특별시",
+                "001",
+                null,
+                "20260225 ~ 20260630",
+                "https://example.com",
+                "온라인 신청"
+        );
+        YoungPolicyExternalRes response = new YoungPolicyExternalRes(
+                List.of(),
+                new YoungPolicyExternalRes.Result(List.of(item))
+        );
+        when(youngPolicyClient.fetchPolicies(request)).thenReturn(response);
+        when(youngPolicyRepository.findByPolicyId("20260305005400112100")).thenReturn(Optional.empty());
+
+        YoungPolicySyncRes syncResponse = youngPolicyService.syncPolicies(request);
+
+        assertThat(syncResponse.fetchedCount()).isEqualTo(1);
+        assertThat(syncResponse.createdCount()).isEqualTo(1);
+        assertThat(syncResponse.updatedCount()).isZero();
+        assertThat(syncResponse.skippedCount()).isZero();
+        verify(youngPolicyRepository).save(any(YoungPolicy.class));
     }
 }
