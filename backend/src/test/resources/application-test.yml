@@ -27,24 +27,32 @@ spring:
 cors:
   allowed-origins: http://localhost:3000
 
+ocr:
+  google-vision-key-path: classpath:gcp-key.json
+
+exchange-rate:
+  sync:
+    enabled: false
+
+
+kis:
+  app-key: test-key
+  app-secret: test-secret
+
+young-policy:
+  api-key: test-key
+
 jwt:
   secret: test-secret-key-must-be-at-least-32-characters-long!
   access-token-expiration-seconds: 3600
   refresh-token-expiration-seconds: 604800
-
-ocr:
-  google-vision-key-path: classpath:gcp-key.json
-
-portone:
-  api-secret: test-portone-secret
-  store-id: test-store-id
-  channel-key: test-channel-key
 
 codef:
   client-id: test-client-id
   client-secret: test-client-secret
   public-key: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzvtHhUxMWqCSoQhLpjjPocR3/Dt2ryZx8pu6Z5jCYhkwKg5AktRXP+1VbixKh8OfVHaDhPZ8Daqpf3pi5zS/feyJZ9Nd8Qzdll6PZbl7opKbFy2QKH85aOwaMGdu6Zdq1fEXOOYTMkGBvPtGoF20lxNM0FdcZEFEFDilcfQkQ/q2mq78+ItjY6DUrIIHPYzKQh3M70cab7X6pvK0eBWIFTbtwBx5hvV0ftYZWWUxnGgK1IOjxOUqNpJrfz2YiN/NyybHXhdR/4fsLmiC2J7wymBTTC/q/4XVhLj6FM//svFigXBNDLl9uBi1LTeCiQQky+0xVy3J2KC3hBCPSSP1mQIDAQAB
 
-exchange-rate:
-  sync:
-    enabled: false
+portone:
+  api-secret: test-portone-secret
+  store-id: test-store-id
+  channel-key: test-channel-key
