@@ -1,5 +1,6 @@
 package com.team10.backend.domain.investment.client.auth;
 
+import static com.team10.backend.domain.investment.config.KisConstants.SEOUL_ZONE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -159,6 +160,6 @@ class KisAccessTokenManagerTest {
     }
 
     private KisAccessToken token(String accessToken, long expiresAfterMinutes) {
-        return new KisAccessToken(accessToken, LocalDateTime.now().plusMinutes(expiresAfterMinutes));
+        return new KisAccessToken(accessToken, LocalDateTime.now(SEOUL_ZONE).plusMinutes(expiresAfterMinutes));
     }
 }
