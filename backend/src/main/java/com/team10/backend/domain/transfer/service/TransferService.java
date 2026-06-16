@@ -28,15 +28,13 @@ public class TransferService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public DepositRes topUp(Long accountId, Long amount, String memo) {
-        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
-        Long loginUserId = 1L;
+    public DepositRes topUp(Long userId, Long accountId, Long amount, String memo) {
 
         // amount 1원 이상 확인
         if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
 
         // accountId로 계좌 조회 & 로그인 사용자 소유 계좌인지 확인 -> 비관적락
-        Account account = accountRepository.findByIdAndUserIdForUpdate(accountId, loginUserId).orElseThrow(
+        Account account = accountRepository.findByIdAndUserIdForUpdate(accountId, userId).orElseThrow(
                 () -> new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND)
         );
 
@@ -68,9 +66,7 @@ public class TransferService {
     }
 
     @Transactional
-    public TransferRes transfer(Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
-        // TODO: 인증도메인 구현 이후 UserDetails 에서 인증된 userId 입력받도록 수정
-        Long loginUserId = 1L;
+    public TransferRes transfer(Long userId, Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
 
         // amount 1원 이상 확인
         if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
@@ -82,7 +78,7 @@ public class TransferService {
         Account receiverAccount = accounts.receiver();
 
         // 출금 계좌가 로그인 유저의 소유인지 확인
-        validateSenderOwner(senderAccount, loginUserId);
+        validateSenderOwner(senderAccount, userId);
         // 서로 다른 계좌인지 확인
         validateDifferentAccounts(senderAccount, receiverAccount);
         // 두 계좌 모두 ACTIVE인지 확인

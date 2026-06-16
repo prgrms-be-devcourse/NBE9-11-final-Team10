@@ -65,9 +65,10 @@ class TransferServiceIntegrationTest {
     @Test
     @DisplayName("입금 성공 시 실제 DB에 잔액과 입금 거래내역이 저장된다")
     void deposit_success_persistsBalanceAndDepositHistory() {
-        Account account = saveAccount(saveUser("sender@example.com", "홍길동"), "100200300001", 10_000L);
+        User user = saveUser("sender@example.com", "홍길동");
+        Account account = saveAccount(user, "100200300001", 10_000L);
 
-        DepositRes response = transferService.topUp(account.getId(), 5_000L, "입금 메모");
+        DepositRes response = transferService.topUp(user.getId(), account.getId(), 5_000L, "입금 메모");
         flushAndClear();
 
         Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
@@ -96,7 +97,7 @@ class TransferServiceIntegrationTest {
         Account senderAccount = saveAccount(sender, "100200300001", 100_000L);
         Account receiverAccount = saveAccount(receiver, "100200300002", 10_000L);
 
-        TransferRes response = transferService.transfer(senderAccount.getId(), "100200300002", 50_000L, "점심값");
+        TransferRes response = transferService.transfer(sender.getId(), senderAccount.getId(), "100200300002", 50_000L, "점심값");
         flushAndClear();
 
         Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
@@ -146,11 +147,12 @@ class TransferServiceIntegrationTest {
     @Test
     @DisplayName("송금 금액이 유효하지 않으면 DB 변경 없이 INVALID_INPUT_VALUE 예외를 발생시킨다")
     void transfer_invalidAmount_doesNotPersistAnything() {
-        Account account = saveAccount(saveUser("sender@example.com", "홍길동"), "100200300001", 10_000L);
+        User user = saveUser("sender@example.com", "홍길동");
+        Account account = saveAccount(user, "100200300001", 10_000L);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.transfer(account.getId(), "100200300002", 0L, "잘못된 송금")
+                () -> transferService.transfer(user.getId(), account.getId(), "100200300002", 0L, "잘못된 송금")
         );
         flushAndClear();
 
@@ -171,7 +173,7 @@ class TransferServiceIntegrationTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.transfer(senderAccount.getId(), "100200300002", 50_000L, "잔액 부족")
+                () -> transferService.transfer(sender.getId(), senderAccount.getId(), "100200300002", 50_000L, "잔액 부족")
         );
         flushAndClear();
 
@@ -196,13 +198,14 @@ class TransferServiceIntegrationTest {
     @Test
     @DisplayName("같은 계좌에 동시 입금이 발생해도 모든 입금 잔액과 거래내역이 반영된다")
     void concurrentDeposits_sameAccount_persistsAllBalanceAndHistories() throws InterruptedException {
-        Account account = saveAccount(saveUser("sender@example.com", "홍길동"), "100200300001", 0L);
+        User user = saveUser("sender@example.com", "홍길동");
+        Account account = saveAccount(user, "100200300001", 0L);
         int threadCount = 20;
         long amount = 1_000L;
 
         List<Throwable> failures = runConcurrently(
                 threadCount,
-                () -> transferService.topUp(account.getId(), amount, "동시 입금")
+                () -> transferService.topUp(user.getId(), account.getId(), amount, "동시 입금")
         );
         entityManager.clear();
 
@@ -229,7 +232,7 @@ class TransferServiceIntegrationTest {
 
         List<Throwable> failures = runConcurrently(
                 threadCount,
-                () -> transferService.transfer(senderAccount.getId(), receiverAccount.getAccountNumber(), amount, "동시 송금")
+                () -> transferService.transfer(sender.getId(), senderAccount.getId(), receiverAccount.getAccountNumber(), amount, "동시 송금")
         );
         entityManager.clear();
 
@@ -264,9 +267,9 @@ class TransferServiceIntegrationTest {
                 threadCount,
                 () -> {
                     if (sequence.getAndIncrement() % 2 == 0) {
-                        transferService.transfer(firstAccount.getId(), secondAccount.getAccountNumber(), amount, "교차 송금");
+                        transferService.transfer(owner.getId(), firstAccount.getId(), secondAccount.getAccountNumber(), amount, "교차 송금");
                     } else {
-                        transferService.transfer(secondAccount.getId(), firstAccount.getAccountNumber(), amount, "교차 송금");
+                        transferService.transfer(owner.getId(), secondAccount.getId(), firstAccount.getAccountNumber(), amount, "교차 송금");
                     }
                 }
         );

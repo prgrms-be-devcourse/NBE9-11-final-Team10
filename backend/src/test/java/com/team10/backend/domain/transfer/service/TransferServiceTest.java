@@ -63,7 +63,7 @@ class TransferServiceTest {
                     return history;
                 });
 
-        DepositRes response = transferService.topUp(1L, 5_000L, "입금 메모");
+        DepositRes response = transferService.topUp(1L, 1L, 5_000L, "입금 메모");
 
         assertEquals(15_000L, account.getBalance());
         assertEquals(100L, response.transactionId());
@@ -93,7 +93,7 @@ class TransferServiceTest {
     void deposit_invalidAmount_throwsInvalidInputValue() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.topUp(1L, 0L, "입금 메모")
+                () -> transferService.topUp(1L, 1L, 0L, "입금 메모")
         );
 
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
@@ -108,7 +108,7 @@ class TransferServiceTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.topUp(1L, 5_000L, "입금 메모")
+                () -> transferService.topUp(1L, 1L, 5_000L, "입금 메모")
         );
 
         assertEquals(TransferErrorCode.ACCOUNT_NOT_FOUND, exception.getErrorCode());
@@ -134,7 +134,7 @@ class TransferServiceTest {
         when(transactionHistoryRepository.save(any(TransactionHistory.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        TransferRes response = transferService.transfer(1L, "100200300002", 50_000L, "점심값");
+        TransferRes response = transferService.transfer(1L, 1L, "100200300002", 50_000L, "점심값");
 
         assertEquals(50_000L, senderAccount.getBalance());
         assertEquals(60_000L, receiverAccount.getBalance());
@@ -180,7 +180,7 @@ class TransferServiceTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.transfer(1L, "100200300001", 50_000L, "점심값")
+                () -> transferService.transfer(1L, 1L, "100200300001", 50_000L, "점심값")
         );
 
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
@@ -202,7 +202,7 @@ class TransferServiceTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.transfer(1L, "100200300002", 50_000L, "잔액 부족")
+                () -> transferService.transfer(1L, 1L, "100200300002", 50_000L, "잔액 부족")
         );
 
         ArgumentCaptor<TransferFailedEvent> eventCaptor = ArgumentCaptor.forClass(TransferFailedEvent.class);
