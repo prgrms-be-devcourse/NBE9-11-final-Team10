@@ -319,7 +319,7 @@ class UserServiceTest {
         void success() {
             when(userRepository.findById(1L)).thenReturn(Optional.of(activeUser));
 
-            userService.withdraw(1L);
+            userService.withdraw(1L, null);
 
             assertThat(activeUser.getStatus()).isEqualTo(UserStatus.WITHDRAWN);
             verify(refreshTokenService).delete(1L);
@@ -330,7 +330,7 @@ class UserServiceTest {
         void userNotFound() {
             when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> userService.withdraw(99L))
+            assertThatThrownBy(() -> userService.withdraw(99L, null))
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
         }
