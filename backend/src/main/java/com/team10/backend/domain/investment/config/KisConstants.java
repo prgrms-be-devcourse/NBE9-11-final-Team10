@@ -45,4 +45,16 @@ public final class KisConstants {
 
     }
 
+    public static final class StockMaster {
+
+        public static final String KOSPI_MASTER_DOWNLOAD_URL =
+                "https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip";
+        public static final String KOSPI_MASTER_FILE_NAME = "kospi_code.mst";
+
+        private StockMaster() {
+
+        }
+
+    }
+
 }
