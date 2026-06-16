@@ -7,16 +7,26 @@ import com.team10.backend.domain.transaction.repository.TransactionHistoryReposi
 import com.team10.backend.domain.transfer.dto.res.DepositRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.Transfer;
+import com.team10.backend.domain.transfer.entity.TransferIdempotency;
 import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.transfer.event.TransferFailedEvent;
+import com.team10.backend.domain.transfer.repository.TransferIdempotencyRepository;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
+import com.team10.backend.domain.transfer.type.IdempotencyStatus;
+import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +36,8 @@ public class TransferService {
     private final AccountRepository accountRepository;
     private final TransferRepository transferRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final TransferIdempotencyRepository transferIdempotencyRepository;
+    private final UserRepository userRepository;
 
     @Transactional
     public DepositRes topUp(Long userId, Long accountId, Long amount, String memo) {
@@ -66,11 +78,47 @@ public class TransferService {
     }
 
     @Transactional
-    public TransferRes transfer(Long userId, Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
+    public TransferRes transfer(Long userId, String idempotencyKey, Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
+        // 송금 시작 전에 멱등성 검증/선점
+
+        // 멱등성 키 존재 검증
+        validateIdempotencyKey(idempotencyKey);
+
+        // 요청 바디값으로 해시값 생성 (동일 멱등성 키여도 다른 작업이면 해시값 달라짐)
+        String requestHash = generateRequestHash(senderAccountId, receiverAccountNumber, amount, memo);
+
+        // 존재하는 객체
+        Optional<TransferIdempotency> existing =
+                transferIdempotencyRepository.findByUser_IdAndIdempotencyKey(userId, idempotencyKey);
+
+        if (existing.isPresent()) {
+            TransferIdempotency idempotency = existing.get();
+
+            if (!idempotency.getRequestHash().equals(requestHash)) {
+                throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_CONFLICT);
+            }
+
+            if (idempotency.getStatus() == IdempotencyStatus.PROCESSING) {
+                throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_PROCESSING);
+            }
+
+            if (idempotency.getStatus() == IdempotencyStatus.SUCCESS) {
+                Transfer transfer = idempotency.getTransfer();
+                return TransferRes.from(transfer, idempotency.getCompletedAt());
+            }
+
+        }
 
         // amount 1원 이상 확인
         if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
 
+        // 락 획득 전에 멱등성 키 처리
+        User user = userRepository.getReferenceById(userId); // 이 ID를 가진 User를 참조하는 프록시 객체를 생성
+        TransferIdempotency idempotency = transferIdempotencyRepository.save(
+                TransferIdempotency.processing(user, idempotencyKey, requestHash)
+        );
+
+        // 락 획득
         LockedTransferAccounts accounts =
                 lockTransferAccounts(senderAccountId, receiverAccountNumber);
 
@@ -101,8 +149,11 @@ public class TransferService {
 
         // Transfer(SUCCESS) 저장
         Transfer transfer = transferRepository.save(Transfer.success(senderAccount, receiverAccount, amount, memo));
+        // Transfer 저장 직후 complete 호출
+        idempotency.complete(transfer);
 
-        LocalDateTime transferredAt = LocalDateTime.now();
+        // 멱등성 키 객체의 완료시간 가져오기
+        LocalDateTime transferredAt = idempotency.getCompletedAt();
         // 출금 계좌 TransactionHistory(TRANSFER, OUT) 저장
         TransactionHistory senderHistory = TransactionHistory.createTransferOut(
                 senderAccount,
@@ -133,6 +184,12 @@ public class TransferService {
         transactionHistoryRepository.save(receiverHistory);
 
         return TransferRes.from(transfer, transferredAt);
+    }
+
+    private void validateIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new BusinessException(TransferErrorCode.IDEMPOTENCY_KEY_REQUIRED);
+        }
     }
 
     private LockedTransferAccounts lockTransferAccounts(
@@ -197,5 +254,36 @@ public class TransferService {
             String memo
     ) {
         eventPublisher.publishEvent(new TransferFailedEvent(senderAccountId, receiverAccountId, amount, memo));
+    }
+
+/*
+    요청
+    {
+        "senderAccountId": 1,
+            "receiverAccountNumber": "100200300002",
+            "amount": 50000,
+            "memo": "점심값"
+    }
+    -> 내부 문자열: 1|100200300002|50000|점심값
+    -> SHA-256 해시로 바꿔 저장
+*/
+    private String generateRequestHash(Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
+        String normalizedMemo = memo == null ? "" : memo.trim();
+
+        String raw = String.join("|",
+                String.valueOf(senderAccountId),
+                receiverAccountNumber,
+                String.valueOf(amount),
+                normalizedMemo
+        );
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(raw.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm is not available", e);
+        }
+
     }
 }

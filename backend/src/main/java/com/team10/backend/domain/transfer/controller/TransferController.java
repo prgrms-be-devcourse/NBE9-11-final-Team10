@@ -11,10 +11,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/transfers")
@@ -37,9 +34,11 @@ public class TransferController {
     @Operation(summary = "계좌 간 송금")
     public ResponseEntity<TransferRes> transfer(
             @AuthenticationPrincipal Long userId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody TransferReq request) {
         TransferRes response = transferService.transfer(
                 userId,
+                idempotencyKey,
                 request.senderAccountId(),
                 request.receiverAccountNumber(),
                 request.amount(),
