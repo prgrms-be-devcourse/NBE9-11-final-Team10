@@ -15,8 +15,11 @@ import com.team10.backend.domain.user.type.VerificationStatus;
 import com.team10.backend.domain.user.verification.BankTransferService;
 import com.team10.backend.domain.user.verification.OneWonVerificationService;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.exception.GlobalErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -27,6 +30,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
 
 /**
  * 신분증 본인인증 3단계(OCR → 행안부 → 1원 송금)를 담당하는 서비스.
@@ -45,6 +50,17 @@ import java.io.IOException;
 public class IdentityVerificationService {
 
     private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024L; // 10 MB
+    private static final String OCR_DAILY_KEY_PREFIX = "identity:ocr:daily:";
+    private static final int MAX_OCR_DAILY = 5;
+    private static final Duration DAILY_TTL = Duration.ofDays(1);
+
+    /** 최초 생성 시에만 EXPIRE를 설정하는 Lua 스크립트 (OneWonVerificationService와 동일 패턴) */
+    private static final RedisScript<Long> INCR_WITH_EXPIRE_IF_NEW = RedisScript.of(
+            "local v = redis.call('INCR', KEYS[1])\n" +
+            "if v == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end\n" +
+            "return v",
+            Long.class
+    );
 
     private final UserRepository userRepository;
     private final IdentityVerificationRepository identityVerificationRepository;
@@ -52,6 +68,7 @@ public class IdentityVerificationService {
     private final BankTransferService bankTransferService;
     private final OneWonVerificationService oneWonVerificationService;
     private final PlatformTransactionManager txManager;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 본인인증 1단계: 신분증 이미지를 접수하고 즉시 202를 반환한다.
@@ -60,6 +77,7 @@ public class IdentityVerificationService {
     @Transactional
     public OcrAcceptedRes submitIdCardOcr(Long userId, MultipartFile imageFile) {
         validateImage(imageFile);
+        checkOcrDailyLimit(userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
@@ -170,6 +188,23 @@ public class IdentityVerificationService {
                 verification.getStatus(),
                 "본인인증이 완료되었습니다."
         );
+    }
+
+    private void checkOcrDailyLimit(Long userId) {
+        String key = OCR_DAILY_KEY_PREFIX + userId;
+        Long count = redisTemplate.execute(
+                INCR_WITH_EXPIRE_IF_NEW,
+                List.of(key),
+                String.valueOf(DAILY_TTL.toSeconds())
+        );
+        if (count == null) {
+            throw new BusinessException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
+        }
+        if (count > MAX_OCR_DAILY) {
+            log.warn("[OCR] 하루 요청 한도 초과 — userId={}, count={}", userId, count);
+            throw new BusinessException(UserErrorCode.OCR_DAILY_LIMIT_EXCEEDED);
+        }
+        log.debug("[OCR] 일일 요청 카운트 — userId={}, count={}/{}", userId, count, MAX_OCR_DAILY);
     }
 
     private void validateImage(MultipartFile imageFile) {
