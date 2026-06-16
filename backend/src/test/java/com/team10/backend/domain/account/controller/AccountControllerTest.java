@@ -19,29 +19,22 @@ import com.team10.backend.domain.account.dto.res.AccountSummaryRes;
 import com.team10.backend.domain.account.service.AccountService;
 import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
+import com.team10.backend.support.security.AuthenticationPrincipalTestConfig;
+import com.team10.backend.support.security.WithMockLongUser;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.web.method.support.HandlerMethodArgumentResolver;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.test.context.support.WithSecurityContext;
-import org.springframework.security.test.context.support.WithSecurityContextFactory;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @WebMvcTest(AccountController.class)
-@AccountControllerTest.WithMockLongUser
+@Import(AuthenticationPrincipalTestConfig.class)
+@WithMockLongUser
 class AccountControllerTest {
 
     @Autowired
@@ -221,34 +214,6 @@ class AccountControllerTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
 
         verify(accountService).getAccount(1L, 1L);
-    }
-
-    @TestConfiguration
-    static class AuthenticationPrincipalResolverConfig implements WebMvcConfigurer {
-
-        @Override
-        public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-            resolvers.add(new AuthenticationPrincipalArgumentResolver());
-        }
-    }
-
-    @Retention(RetentionPolicy.RUNTIME)
-    @WithSecurityContext(factory = WithMockLongUserSecurityContextFactory.class)
-    @interface WithMockLongUser {
-        long userId() default 1L;
-    }
-
-    static class WithMockLongUserSecurityContextFactory
-            implements WithSecurityContextFactory<WithMockLongUser> {
-
-        @Override
-        public SecurityContext createSecurityContext(WithMockLongUser annotation) {
-            SecurityContext context = SecurityContextHolder.createEmptyContext();
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(annotation.userId(), null, List.of());
-            context.setAuthentication(authentication);
-            return context;
-        }
     }
 
     private AccountCreateReq createAccountCreateReq(String nickname, AccountType accountType) {
