@@ -132,8 +132,8 @@ public class YoungPolicyRepositoryTest {
 
         assertThat(response.policyItems()).hasSize(1);
         assertThat(response.policyItems().get(0).plcyNo()).isEqualTo(CURRENT_API_POLICY_ID);
-        assertThat(response.policyItems().get(0).userLclsfNm()).isEqualTo(CURRENT_API_CATEGORY);
-        assertThat(response.policyItems().get(0).stdgCtpvSggCdList()).isEqualTo(CURRENT_API_REGION);
+        assertThat(response.policyItems().get(0).lclsfNm()).isEqualTo(CURRENT_API_CATEGORY);
+        assertThat(response.policyItems().get(0).zipCd()).isEqualTo(CURRENT_API_REGION);
     }
 
     @Test
@@ -206,11 +206,7 @@ public class YoungPolicyRepositoryTest {
 
     public static YoungPolicyExternalRes createExternalResponse() {
         return new YoungPolicyExternalRes(
-                List.of(),
-                new YoungPolicyExternalRes.Result(
-                        List.of(createExternalPolicyItem()),
-                        List.of()
-                )
+                new YoungPolicyExternalRes.Result(List.of(createExternalPolicyItem()))
         );
     }
 
@@ -223,15 +219,12 @@ public class YoungPolicyRepositoryTest {
                 CURRENT_API_POLICY_ID,
                 "청년문화예술패스",
                 "청년의 문화향유 기회를 제공",
-                null,
                 CURRENT_API_CATEGORY,
                 "문화",
                 minAge,
                 maxAge,
-                null,
                 CURRENT_API_REGION,
                 POLICY_JOB_CODE,
-                null,
                 "20260225 ~ 20260630",
                 "https://example.com",
                 "온라인 신청"

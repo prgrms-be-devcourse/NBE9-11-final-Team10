@@ -76,7 +76,7 @@ public class YoungPolicyService {
     private YoungPolicyExternalRes fetchPolicies(YoungPolicyReq request) {
         try {
             YoungPolicyExternalRes response = youngPolicyClient.fetchPolicies(request);
-            return response == null ? new YoungPolicyExternalRes(List.of()) : response;
+            return response == null ? new YoungPolicyExternalRes(new YoungPolicyExternalRes.Result(List.of())) : response;
         } catch (RuntimeException e) {
             throw new BusinessException(YoungPolicyErrorCode.YOUNG_POLICY_SYNC_FAILED, e);
         }
