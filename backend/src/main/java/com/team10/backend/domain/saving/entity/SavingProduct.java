@@ -18,36 +18,36 @@ import lombok.NoArgsConstructor;
 public class SavingProduct extends BaseEntity {
 
     @Column(nullable = false, length = 100)
-    private String name;
+    private String name; // 저축 상품명
 
     @Column(nullable = false, length = 50)
-    private String bankName;
+    private String bankName; // 은행명
 
     @Column(nullable = false, length = 20)
-    private String bankCode;
+    private String bankCode; // 은행 코드
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private SavingProductType type;
+    private SavingProductType type; // 저축 상품 타입
 
     @Column(nullable = false)
-    private Double interestRate;
+    private Double interestRate; // 기본 금리
 
     @Column(nullable = false)
-    private Integer periodMonth;
+    private Integer periodMonth; // 가입 기간 개월 수
 
     @Column(nullable = false)
-    private Long minAmount;
+    private Long minAmount; // 최소 가입 금액
 
-    private Long maxAmount;
+    private Long maxAmount; // 최대 가입 금액
 
-    private Long monthlyLimit;
+    private Long monthlyLimit; // 월 납입 한도
 
     @Column(length = 1000)
-    private String terms;
+    private String terms; // 가입 조건
 
     @Column(nullable = false)
-    private boolean active;
+    private boolean active; // 상품 활성 여부
 
 
 }
