@@ -51,7 +51,7 @@ public class KisAuthClient {
                 .retrieve()
                 .body(KisAccessTokenRes.class);
 
-        if (response == null || response.accessToken() == null) {
+        if (response == null || response.accessToken() == null || response.accessTokenExpiredAt() == null) {
             throw new BusinessException(InvestmentErrorCode.KIS_AUTH_FAILED);
         }
 

@@ -20,13 +20,7 @@ public enum InvestmentErrorCode implements ErrorCode {
     INVESTMENT_ACCOUNT_PASSWORD_MISMATCH(HttpStatus.FORBIDDEN, "투자 계좌 비밀번호가 일치하지 않습니다."),
 
     INSUFFICIENT_CASH_BALANCE(HttpStatus.CONFLICT, "예수금이 부족합니다."),
-    INSUFFICIENT_HOLDING_QUANTITY(HttpStatus.CONFLICT, "보유 수량이 부족합니다."),
-    DUPLICATED_ORDER_REQUEST(HttpStatus.CONFLICT, "중복 주문 요청입니다."),
-    MARKET_CLOSED(HttpStatus.CONFLICT, "현재 주문을 체결할 수 있는 장 시간이 아닙니다."),
-
-    ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
-    ORDER_NOT_MODIFIABLE(HttpStatus.CONFLICT, "수정할 수 없는 주문 상태입니다."),
-    ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "취소할 수 없는 주문 상태입니다."),
+    INVALID_CASH_AMOUNT(HttpStatus.BAD_REQUEST, "입/출금액은 양수여야합니다"),
 
     KIS_AUTH_FAILED(HttpStatus.BAD_GATEWAY, "KIS 인증 처리에 실패했습니다."),
     KIS_API_FAILED(HttpStatus.BAD_GATEWAY, "KIS API 호출에 실패했습니다.");

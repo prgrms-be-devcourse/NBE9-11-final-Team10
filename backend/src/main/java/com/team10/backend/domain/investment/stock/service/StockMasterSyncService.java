@@ -88,6 +88,7 @@ public class StockMasterSyncService {
 
         /**
          * stockCode를 기준으로 기존 종목을 한 번에 조회해 N+1 조회를 피한다.
+         * TODO: 추후 거래소, 시장 확대 시 IN절 파라미터 수 제어를 위해 CHUNK 단위로 쿼리 분할 고려
          */
         Map<String, Stock> existingStocks = stockRepository.findAllByStockCodeIn(stockCodes).stream()
                 .collect(Collectors.toMap(Stock::getStockCode, Function.identity()));

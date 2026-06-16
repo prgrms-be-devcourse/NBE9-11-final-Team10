@@ -5,7 +5,6 @@ import com.team10.backend.domain.investment.marketholiday.type.MarketType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +12,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class MarketStatusValidator {
 
-    public static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
     public static final LocalTime CONTINUOUS_MARKET_OPEN = LocalTime.of(9, 0);
     public static final LocalTime CONTINUOUS_MARKET_CLOSE = LocalTime.of(15, 20);
 

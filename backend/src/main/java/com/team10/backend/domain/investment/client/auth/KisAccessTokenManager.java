@@ -1,5 +1,7 @@
 package com.team10.backend.domain.investment.client.auth;
 
+import static com.team10.backend.domain.investment.config.KisConstants.SEOUL_ZONE;
+
 import com.team10.backend.domain.investment.client.auth.dto.KisAccessToken;
 import jakarta.annotation.PreDestroy;
 import java.time.LocalDateTime;
@@ -49,7 +51,7 @@ public class KisAccessTokenManager {
      */
     private boolean needRefresh() {
         return (accessToken == null || expiresAt == null)
-                || LocalDateTime.now().plusMinutes(REFRESH_BUFFER_MINUTES).isAfter(expiresAt);
+                || LocalDateTime.now(SEOUL_ZONE).plusMinutes(REFRESH_BUFFER_MINUTES).isAfter(expiresAt);
     }
 
     /**

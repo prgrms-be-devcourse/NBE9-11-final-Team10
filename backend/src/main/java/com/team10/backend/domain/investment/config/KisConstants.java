@@ -1,5 +1,7 @@
 package com.team10.backend.domain.investment.config;
 
+import java.time.ZoneId;
+
 public final class KisConstants {
 
     private KisConstants() {
@@ -7,6 +9,8 @@ public final class KisConstants {
 
     public static final String BASE_URL = "https://openapi.koreainvestment.com:9443";
     public static final String WEB_SOCKET_URL = "ws://ops.koreainvestment.com:21000";
+
+    public static final ZoneId SEOUL_ZONE = ZoneId.of("Asia/Seoul");
 
     public static final class Header {
 

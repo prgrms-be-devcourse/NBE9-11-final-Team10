@@ -73,12 +73,15 @@ public class InvestmentAccount extends BaseEntity {
     }
 
     public void depositCash(Long amount) {
+        validateAmount(amount);
         this.cashBalance += amount;
     }
 
     // TODO : 추구 구현하면서 JPQL 원자적 연산으로 전환 가능성 고려
     public void withdrawCash(Long amount) {
-        if (this.cashBalance - amount < 0) {
+        validateAmount(amount);
+
+        if (this.cashBalance < amount) {
             throw new BusinessException(InvestmentErrorCode.INSUFFICIENT_CASH_BALANCE);
         }
         this.cashBalance -= amount;
@@ -94,6 +97,14 @@ public class InvestmentAccount extends BaseEntity {
     ) {
         if (!encoder.matches(rawPassword, accountPasswordHash)) {
             throw new BusinessException((InvestmentErrorCode.INVESTMENT_ACCOUNT_PASSWORD_MISMATCH));
+        }
+    }
+
+    private void validateAmount(Long amount) {
+        if (amount == null || amount <= 0) {
+            throw new BusinessException(
+                    InvestmentErrorCode.INVALID_CASH_AMOUNT
+            );
         }
     }
 }

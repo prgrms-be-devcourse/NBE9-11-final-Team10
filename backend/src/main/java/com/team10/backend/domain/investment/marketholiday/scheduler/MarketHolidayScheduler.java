@@ -1,8 +1,9 @@
 package com.team10.backend.domain.investment.marketholiday.scheduler;
 
+import static com.team10.backend.domain.investment.config.KisConstants.SEOUL_ZONE;
+
 import com.team10.backend.domain.investment.marketholiday.service.MarketHolidaySyncService;
 import com.team10.backend.domain.investment.marketholiday.type.MarketType;
-import com.team10.backend.domain.investment.marketholiday.util.MarketStatusValidator;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,7 @@ public class MarketHolidayScheduler {
     }
 
     private void syncSafely(String trigger) {
-        LocalDate baseDate = LocalDate.now(MarketStatusValidator.SEOUL_ZONE);
+        LocalDate baseDate = LocalDate.now(SEOUL_ZONE);
         try {
             marketHolidaySyncService.sync(MarketType.KRX, baseDate);
         } catch (RuntimeException e) {
