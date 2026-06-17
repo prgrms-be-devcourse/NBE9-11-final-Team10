@@ -1,6 +1,6 @@
-package com.team10.backend.domain.transfer.scheduler;
+package com.team10.backend.global.idempotency.scheduler;
 
-import com.team10.backend.domain.transfer.service.TransferIdempotencyService;
+import com.team10.backend.global.idempotency.service.IdempotencyService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,19 +13,19 @@ import java.time.Duration;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
-class TransferIdempotencyCleanupSchedulerTest {
+class IdempotencyCleanupSchedulerTest {
 
     @Mock
-    private TransferIdempotencyService transferIdempotencyService;
+    private IdempotencyService idempotencyService;
 
     @InjectMocks
-    private TransferIdempotencyCleanupScheduler scheduler;
+    private IdempotencyCleanupScheduler scheduler;
 
     @Test
     @DisplayName("스케줄러는 10분 이상 방치된 PROCESSING 멱등성 레코드 만료 처리를 호출한다")
     void expireStaleProcessing_callsServiceWithTenMinuteTimeout() {
         scheduler.expireStaleProcessing();
 
-        verify(transferIdempotencyService).expireStaleProcessing(Duration.ofMinutes(10));
+        verify(idempotencyService).expireStaleProcessing(Duration.ofMinutes(10));
     }
 }

@@ -16,16 +16,6 @@ public enum TransferErrorCode implements ErrorCode {
     ACCOUNT_NOT_ACTIVE(HttpStatus.CONFLICT, "활성 계좌가 아닙니다."),
     INSUFFICIENT_BALANCE(HttpStatus.CONFLICT, "잔액이 부족합니다."),
     TRANSFER_FAILED(HttpStatus.CONFLICT, "송금 처리에 실패했습니다."),
-
-
-    IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "Idempotency-Key 헤더가 없습니다."),
-    IDEMPOTENCY_REQUEST_CONFLICT(HttpStatus.CONFLICT, "같은 키인데 요청 내용이 다릅니다."),
-    IDEMPOTENCY_REQUEST_PROCESSING(HttpStatus.CONFLICT, "같은 키 요청이 아직 처리 중입니다."),
-    IDEMPOTENCY_KEY_INVALID(HttpStatus.BAD_REQUEST, "유효하지 않은 키 형식입니다."),
-    IDEMPOTENCY_REQUEST_FAILED(HttpStatus.CONFLICT, "같은 키 요청은 이미 실패 처리되었습니다."),
-    IDEMPOTENCY_REQUEST_EXPIRED(HttpStatus.CONFLICT, "만료된 멱등성 요청입니다."),
-
-
     ;
 
     private final HttpStatus status;

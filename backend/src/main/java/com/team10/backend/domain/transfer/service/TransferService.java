@@ -7,11 +7,15 @@ import com.team10.backend.domain.transaction.repository.TransactionHistoryReposi
 import com.team10.backend.domain.transfer.dto.res.DepositRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.Transfer;
-import com.team10.backend.domain.transfer.entity.TransferIdempotency;
 import com.team10.backend.domain.transfer.event.TransferFailedEvent;
 import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.idempotency.entity.Idempotency;
+import com.team10.backend.global.idempotency.service.IdempotencyRequestHasher;
+import com.team10.backend.global.idempotency.service.IdempotencyReserveResult;
+import com.team10.backend.global.idempotency.service.IdempotencyService;
+import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -27,63 +31,84 @@ public class TransferService {
     private final AccountRepository accountRepository;
     private final TransferRepository transferRepository;
     private final ApplicationEventPublisher eventPublisher;
-    private final TransferIdempotencyService transferIdempotencyService;
+    private final IdempotencyService idempotencyService;
+    private final IdempotencyRequestHasher idempotencyRequestHasher;
 
     @Transactional
-    public DepositRes topUp(Long userId, Long accountId, Long amount, String memo) {
-
-        // amount 1원 이상 확인
-        if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
-
-        // accountId로 계좌 조회 & 로그인 사용자 소유 계좌인지 확인 -> 비관적락
-        Account account = accountRepository.findByIdAndUserIdForUpdate(accountId, userId).orElseThrow(
-                () -> new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND)
+    public DepositRes topUp(Long userId, String idempotencyKey, Long accountId, Long amount, String memo) {
+        IdempotencyReserveResult<DepositRes> reserveResult = idempotencyService.reserve(
+                userId,
+                IdempotencyOperationType.DEPOSIT,
+                idempotencyKey,
+                idempotencyRequestHasher.generate(accountId, amount, memo),
+                DepositRes.class
         );
 
-        // 계좌 상태 ACTIVE 확인
-        if (!account.isActive()) {
-            throw new BusinessException(TransferErrorCode.ACCOUNT_NOT_ACTIVE);
+        if (reserveResult.replay()) {
+            return reserveResult.storedResponse();
         }
 
-        // 입금 전 잔액 캡쳐
-        Long balanceBefore = account.getBalance();
-        // 입금
-        account.deposit(amount);
+        Idempotency idempotency = reserveResult.idempotency();
 
-        // TransactionHistory(DEPOSIT, IN) 저장
-        LocalDateTime transactedAt = LocalDateTime.now();
+        try {
+            // amount 1원 이상 확인
+            if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
 
-        TransactionHistory transactionHistory = TransactionHistory.createDeposit(
-                account,
-                amount,
-                balanceBefore,
-                account.getBalance(),
-                memo,
-                transactedAt
-        );
+            // accountId로 계좌 조회 & 로그인 사용자 소유 계좌인지 확인 -> 비관적락
+            Account account = accountRepository.findByIdAndUserIdForUpdate(accountId, userId).orElseThrow(
+                    () -> new BusinessException(TransferErrorCode.ACCOUNT_NOT_FOUND)
+            );
 
-        TransactionHistory savedHistory = transactionHistoryRepository.save(transactionHistory);
+            // 계좌 상태 ACTIVE 확인
+            if (!account.isActive()) {
+                throw new BusinessException(TransferErrorCode.ACCOUNT_NOT_ACTIVE);
+            }
 
-        return DepositRes.from(savedHistory);
+            // 입금 전 잔액 캡쳐
+            Long balanceBefore = account.getBalance();
+            // 입금
+            account.deposit(amount);
+
+            // TransactionHistory(DEPOSIT, IN) 저장
+            LocalDateTime transactedAt = LocalDateTime.now();
+
+            TransactionHistory transactionHistory = TransactionHistory.createDeposit(
+                    account,
+                    amount,
+                    balanceBefore,
+                    account.getBalance(),
+                    memo,
+                    transactedAt
+            );
+
+            TransactionHistory savedHistory = transactionHistoryRepository.save(transactionHistory);
+            DepositRes response = DepositRes.from(savedHistory);
+
+            idempotencyService.completeSuccess(idempotency.getId(), response);
+
+            return response;
+        } catch (BusinessException e) {
+            idempotencyService.completeFailure(idempotency.getId());
+            throw e;
+        }
     }
 
     @Transactional
     public TransferRes transfer(Long userId, String idempotencyKey, Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
         // 송금 시작 전에 멱등성 검증/선점
-        TransferIdempotencyReserveResult reserveResult = transferIdempotencyService.reserve(
+        IdempotencyReserveResult<TransferRes> reserveResult = idempotencyService.reserve(
                 userId,
+                IdempotencyOperationType.TRANSFER,
                 idempotencyKey,
-                senderAccountId,
-                receiverAccountNumber,
-                amount,
-                memo);
+                idempotencyRequestHasher.generate(senderAccountId, receiverAccountNumber, amount, memo),
+                TransferRes.class);
 
         // 만약 이전에 들어왔던 요청이면 저장된 응답객체 반환하고 종료
         if (reserveResult.replay()) {
             return reserveResult.storedResponse();
         }
 
-        TransferIdempotency idempotency = reserveResult.idempotency();
+        Idempotency idempotency = reserveResult.idempotency();
 
         try {
             // amount 1원 이상 확인
@@ -151,12 +176,12 @@ public class TransferService {
             transactionHistoryRepository.save(receiverHistory);
 
             TransferRes response = TransferRes.from(transfer, transferredAt);
-            // TransferIdempotency 객체의 상태를 SUCCESS로 변경 및 JSON 송금 성공 당시의 응답객체 저장
-            transferIdempotencyService.completeSuccess(idempotency.getId(), transfer, response);
+            // Idempotency 객체의 상태를 SUCCESS로 변경 및 JSON 송금 성공 당시의 응답객체 저장
+            idempotencyService.completeSuccess(idempotency.getId(), response);
 
             return response;
         } catch (BusinessException e) { // 비즈니스 예외가 발생했을 때에만(멱등 검증은 통과한 경우) 송금 멱등성 실패상태 기록
-            transferIdempotencyService.completeFailure(idempotency.getId());
+            idempotencyService.completeFailure(idempotency.getId());
             throw e;
         }
     }

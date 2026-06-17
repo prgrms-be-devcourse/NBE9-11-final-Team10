@@ -25,8 +25,9 @@ public class TransferController {
     @Operation(summary = "입금")
     public ResponseEntity<DepositRes> topUp(
             @AuthenticationPrincipal Long userId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             @Valid @RequestBody DepositReq request) {
-        DepositRes response = transferService.topUp(userId, request.accountId(), request.amount(), request.memo());
+        DepositRes response = transferService.topUp(userId, idempotencyKey, request.accountId(), request.amount(), request.memo());
         return ResponseEntity.ok(response);
     }
 
