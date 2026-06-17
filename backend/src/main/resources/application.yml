@@ -21,14 +21,6 @@ spring:
 springdoc:
   default-produces-media-type: application/json;charset=UTF-8
 
-
-
-
-
-
-
-
-
 upbit:
   base-url: https://crix-api-cdn.upbit.com
 exchange-rate:

@@ -55,6 +55,13 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
 
+    // WebSocket
+    implementation("org.springframework.boot:spring-boot-starter-websocket")
+
+    // Retry
+    implementation("org.springframework.retry:spring-retry:2.0.12")
+    implementation("org.aspectj:aspectjweaver")
+
     // Lombok
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
