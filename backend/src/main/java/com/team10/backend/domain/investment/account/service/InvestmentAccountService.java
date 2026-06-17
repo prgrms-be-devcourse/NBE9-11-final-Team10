@@ -5,10 +5,13 @@ import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCre
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountUpdateReq;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCloseRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCreateRes;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountDetailRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountOpenVerificationRes;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountSummaryRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountUpdateRes;
 import com.team10.backend.domain.investment.account.entity.InvestmentAccount;
 import com.team10.backend.domain.investment.account.repository.InvestmentAccountRepository;
+import com.team10.backend.domain.investment.account.type.InvestmentAccountStatus;
 import com.team10.backend.domain.investment.account.util.InvestmentAccountNumberGenerator;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
 import com.team10.backend.domain.investment.order.repository.InvestmentOrderRepository;
@@ -37,6 +40,20 @@ public class InvestmentAccountService {
     private final InvestmentAccountOpenVerificationKeyService verificationKeyService;
     private final InvestmentHoldingRepository investmentHoldingRepository;
     private final InvestmentOrderRepository investmentOrderRepository;
+
+    public List<InvestmentAccountSummaryRes> getAccounts(Long userId) {
+        return investmentAccountRepository.findAllByUserIdAndStatusNot(userId, InvestmentAccountStatus.CLOSED).stream()
+                .map(InvestmentAccountSummaryRes::from)
+                .toList();
+    }
+
+    public InvestmentAccountDetailRes getAccount(Long userId, Long accountId) {
+        InvestmentAccount account = investmentAccountRepository
+                .findByIdAndUserIdAndStatusNot(accountId, userId, InvestmentAccountStatus.CLOSED)
+                .orElseThrow(() -> new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
+
+        return InvestmentAccountDetailRes.from(account);
+    }
 
     public InvestmentAccountOpenVerificationRes issueOpenVerificationKey(Long userId) {
         User user = getVerifiedUser(userId);
@@ -140,17 +157,14 @@ public class InvestmentAccountService {
     }
 
     private void validateClosable(InvestmentAccount account) {
-        /** 에수금이 없어야한다 */
         if (!account.getCashBalance().equals(0L)) {
             throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_CASH_BALANCE_NOT_ZERO);
         }
 
-        /** 보유 주식이 없어야한다 */
         if (investmentHoldingRepository.existsByInvestmentAccountId(account.getId())) {
             throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_HOLDING_EXISTS);
         }
 
-        /** 미체결 예약 주문이 없어야한다 */
         if (investmentOrderRepository.existsByInvestmentAccountIdAndStatusIn(
                 account.getId(),
                 List.of(InvestmentOrderStatus.PENDING, InvestmentOrderStatus.PARTIALLY_FILLED)

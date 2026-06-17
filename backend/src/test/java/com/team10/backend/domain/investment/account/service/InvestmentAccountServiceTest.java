@@ -13,7 +13,9 @@ import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCre
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountUpdateReq;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCloseRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCreateRes;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountDetailRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountOpenVerificationRes;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountSummaryRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountUpdateRes;
 import com.team10.backend.domain.investment.account.entity.InvestmentAccount;
 import com.team10.backend.domain.investment.account.repository.InvestmentAccountRepository;
@@ -72,6 +74,55 @@ class InvestmentAccountServiceTest {
     void setUp() {
         verifiedUser = createUser(1L, true);
         unverifiedUser = createUser(2L, false);
+    }
+
+    @Test
+    @DisplayName("사용자 ID로 해지되지 않은 투자 계좌 목록을 조회한다")
+    void getAccounts() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+
+        when(investmentAccountRepository.findAllByUserIdAndStatusNot(1L, InvestmentAccountStatus.CLOSED))
+                .thenReturn(List.of(account));
+
+        List<InvestmentAccountSummaryRes> responses = investmentAccountService.getAccounts(1L);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).id()).isEqualTo(1L);
+        assertThat(responses.get(0).accountNumber()).isEqualTo("1234567890-12");
+        assertThat(responses.get(0).nickname()).isEqualTo("모의투자 계좌");
+        assertThat(responses.get(0).cashBalance()).isZero();
+        assertThat(responses.get(0).currencyCode()).isEqualTo(CurrencyCode.KRW);
+        assertThat(responses.get(0).status()).isEqualTo(InvestmentAccountStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("사용자 ID와 계좌 ID로 해지되지 않은 투자 계좌 상세를 조회한다")
+    void getAccount() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+
+        when(investmentAccountRepository.findByIdAndUserIdAndStatusNot(1L, 1L, InvestmentAccountStatus.CLOSED))
+                .thenReturn(Optional.of(account));
+
+        InvestmentAccountDetailRes response = investmentAccountService.getAccount(1L, 1L);
+
+        assertThat(response.id()).isEqualTo(1L);
+        assertThat(response.accountNumber()).isEqualTo("1234567890-12");
+        assertThat(response.nickname()).isEqualTo("모의투자 계좌");
+        assertThat(response.cashBalance()).isZero();
+        assertThat(response.currencyCode()).isEqualTo(CurrencyCode.KRW);
+        assertThat(response.status()).isEqualTo(InvestmentAccountStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("내 계좌가 아니거나 해지된 투자 계좌는 상세 조회에 실패한다")
+    void getAccountWithNotFoundAccount() {
+        when(investmentAccountRepository.findByIdAndUserIdAndStatusNot(999L, 1L, InvestmentAccountStatus.CLOSED))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> investmentAccountService.getAccount(1L, 999L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND);
     }
 
     @Test
