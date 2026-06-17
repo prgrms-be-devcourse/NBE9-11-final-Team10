@@ -27,7 +27,7 @@ public class OneWonVerificationService {
     private static final String LOCK_PREFIX    = "identity:one-won:lock:";
     private static final Duration TTL          = Duration.ofMinutes(10);
     private static final Duration DAILY_TTL    = Duration.ofDays(1);
-    private static final Duration LOCK_TTL     = Duration.ofSeconds(10);
+    private static final Duration LOCK_TTL     = Duration.ofSeconds(35);
     private static final int MAX_ATTEMPTS      = 5;
     private static final int MAX_DAILY         = 10;
     private static final SecureRandom RANDOM   = new SecureRandom();
