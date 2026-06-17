@@ -28,7 +28,6 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
 
-    // 계좌 개설
     @Transactional
     public AccountCreateRes createAccount(Long userId, AccountCreateReq request) {
         User user = userRepository.findById(userId)
@@ -52,7 +51,6 @@ public class AccountService {
         return AccountCreateRes.from(savedAccount);
     }
 
-    // 계좌 별칭 수정
     @Transactional
     public AccountDetailRes updateNickname(Long userId, Long accountId, AccountNicknameUpdateReq request) {
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
@@ -68,7 +66,6 @@ public class AccountService {
         return AccountDetailRes.from(account);
     }
 
-    // 계좌 해지
     @Transactional
     public AccountDetailRes closeAccount(Long userId, Long accountId) {
         Account account = accountRepository.findByIdAndUserIdForUpdate(accountId, userId)
@@ -88,21 +85,18 @@ public class AccountService {
         return AccountDetailRes.from(account);
     }
 
-    // 내 계좌 목록 조회
     public List<AccountSummaryRes> getAccounts(Long userId) {
         return accountRepository.findAllByUserIdAndStatusNot(userId, AccountStatus.CLOSED).stream()
                 .map(AccountSummaryRes::from)
                 .toList();
     }
 
-    // 해지 계좌 목록 조회
     public List<AccountSummaryRes> getClosedAccounts(Long userId) {
         return accountRepository.findAllByUserIdAndStatus(userId, AccountStatus.CLOSED).stream()
                 .map(AccountSummaryRes::from)
                 .toList();
     }
 
-    // 계좌 상세 조회
     public AccountDetailRes getAccount(Long userId, Long accountId) {
         Account account = accountRepository.findByIdAndUserId(accountId, userId)
                 .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
@@ -110,7 +104,6 @@ public class AccountService {
         return AccountDetailRes.from(account);
     }
 
-    // 중복되지 않는 계좌번호 생성
     private String generateUniqueAccountNumber() {
         for (int i = 0; i < MAX_ACCOUNT_NUMBER_GENERATION_RETRY; i++) {
             String accountNumber = AccountNumberGenerator.generate();
