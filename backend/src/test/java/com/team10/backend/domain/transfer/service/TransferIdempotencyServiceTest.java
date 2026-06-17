@@ -23,8 +23,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -288,6 +290,48 @@ class TransferIdempotencyServiceTest {
         verify(transferIdempotencyRepository, never()).saveAndFlush(any());
     }
 
+    @Test
+    @DisplayName("오래된 PROCESSING 레코드를 EXPIRED 상태로 변경하고 만료 건수를 반환한다")
+    void expireStaleProcessing_expiresProcessingRecordsAndReturnsCount() {
+        TransferIdempotency first = processing(mock(User.class), "first-key", "request-hash-1");
+        TransferIdempotency second = processing(mock(User.class), "second-key", "request-hash-2");
+        when(transferIdempotencyRepository.findStaleProcessing(any()))
+                .thenReturn(List.of(first, second));
+
+        int expiredCount = transferIdempotencyService.expireStaleProcessing(Duration.ofMinutes(10));
+
+        assertEquals(2, expiredCount);
+        assertEquals(IdempotencyStatus.EXPIRED, first.getStatus());
+        assertEquals(IdempotencyStatus.EXPIRED, second.getStatus());
+        assertNotNull(first.getCompletedAt());
+        assertNotNull(second.getCompletedAt());
+        verify(transferIdempotencyRepository).findStaleProcessing(any());
+    }
+
+    @Test
+    @DisplayName("기존 멱등성 레코드가 EXPIRED이면 만료 예외를 발생시킨다")
+    void reserve_existingExpired_throwsExpired() {
+        String requestHash = requestHash(10L, "100200300002", 50_000L, "점심값");
+        TransferIdempotency existing = expired(mock(User.class), "expired-key", requestHash);
+        when(transferIdempotencyRepository.findByUser_IdAndIdempotencyKey(1L, "expired-key"))
+                .thenReturn(Optional.of(existing));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> transferIdempotencyService.reserve(
+                        1L,
+                        "expired-key",
+                        10L,
+                        "100200300002",
+                        50_000L,
+                        "점심값"
+                )
+        );
+
+        assertEquals(TransferErrorCode.IDEMPOTENCY_REQUEST_EXPIRED, exception.getErrorCode());
+        verify(transferIdempotencyRepository, never()).saveAndFlush(any());
+    }
+
     private TransferIdempotency processing(User user, String idempotencyKey, String requestHash) {
         return TransferIdempotency.processing(user, idempotencyKey, requestHash);
     }
@@ -295,6 +339,12 @@ class TransferIdempotencyServiceTest {
     private TransferIdempotency failed(User user, String idempotencyKey, String requestHash) {
         TransferIdempotency idempotency = TransferIdempotency.processing(user, idempotencyKey, requestHash);
         idempotency.fail();
+        return idempotency;
+    }
+
+    private TransferIdempotency expired(User user, String idempotencyKey, String requestHash) {
+        TransferIdempotency idempotency = TransferIdempotency.processing(user, idempotencyKey, requestHash);
+        idempotency.expire();
         return idempotency;
     }
 
