@@ -34,7 +34,7 @@ public class InvestmentAccount extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, unique = true, length = 10)
+    @Column(nullable = false, unique = true, length = 13)
     private String accountNumber;
 
     @Column(length = 50)
