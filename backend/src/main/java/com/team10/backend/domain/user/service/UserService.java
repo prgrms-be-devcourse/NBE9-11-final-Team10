@@ -63,7 +63,7 @@ public class UserService {
             );
             User saved;
             try {
-                saved = userRepository.save(user);
+                saved = userRepository.saveAndFlush(user);
             } catch (DataIntegrityViolationException e) {
                 // 동시 요청으로 existsByEmail 체크를 통과한 경우 DB unique 제약조건에서 잡힘
                 throw new BusinessException(UserErrorCode.DUPLICATE_EMAIL);
