@@ -45,13 +45,13 @@ class TransferControllerTest {
                 "초기 입금",
                 LocalDateTime.of(2026, 6, 9, 10, 0)
         );
-        when(transferService.topUp(1L, 1L, 100_000L, "초기 입금")).thenReturn(response);
+        when(transferService.topUp(1L, "deposit-key", 1L, 100_000L, "초기 입금")).thenReturn(response);
 
-        ResponseEntity<DepositRes> result = transferController.topUp(1L, request);
+        ResponseEntity<DepositRes> result = transferController.topUp(1L, "deposit-key", request);
 
         assertEquals(200, result.getStatusCode().value());
         assertSame(response, result.getBody());
-        verify(transferService).topUp(1L, 1L, 100_000L, "초기 입금");
+        verify(transferService).topUp(1L, "deposit-key", 1L, 100_000L, "초기 입금");
     }
 
     @Test

@@ -10,13 +10,17 @@ import com.team10.backend.domain.transaction.type.TransactionType;
 import com.team10.backend.domain.transfer.dto.res.DepositRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.Transfer;
-import com.team10.backend.domain.transfer.entity.TransferIdempotency;
 import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.transfer.event.TransferFailedEvent;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
 import com.team10.backend.domain.transfer.type.TransferStatus;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.idempotency.entity.Idempotency;
+import com.team10.backend.global.idempotency.service.IdempotencyRequestHasher;
+import com.team10.backend.global.idempotency.service.IdempotencyReserveResult;
+import com.team10.backend.global.idempotency.service.IdempotencyService;
+import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +54,10 @@ class TransferServiceTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Mock
-    private TransferIdempotencyService transferIdempotencyService;
+    private IdempotencyService idempotencyService;
+
+    @Mock
+    private IdempotencyRequestHasher idempotencyRequestHasher;
 
     @InjectMocks
     private TransferService transferService;
@@ -59,6 +66,10 @@ class TransferServiceTest {
     @DisplayName("입금 성공 시 잔액을 증가시키고 입금 거래내역을 저장한다")
     void deposit_success_increasesBalanceAndSavesDepositHistory() {
         Account account = account(1L, user(), "100200300001", 10_000L);
+        Idempotency idempotency = idempotency(9L, user(), IdempotencyOperationType.DEPOSIT, "deposit-key");
+        when(idempotencyRequestHasher.generate(1L, 5_000L, "입금 메모")).thenReturn("deposit-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", DepositRes.class))
+                .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
         when(transactionHistoryRepository.save(any(TransactionHistory.class)))
                 .thenAnswer(invocation -> {
@@ -67,7 +78,7 @@ class TransferServiceTest {
                     return history;
                 });
 
-        DepositRes response = transferService.topUp(1L, 1L, 5_000L, "입금 메모");
+        DepositRes response = transferService.topUp(1L, "deposit-key", 1L, 5_000L, "입금 메모");
 
         assertEquals(15_000L, account.getBalance());
         assertEquals(100L, response.transactionId());
@@ -81,6 +92,7 @@ class TransferServiceTest {
 
         ArgumentCaptor<TransactionHistory> historyCaptor = ArgumentCaptor.forClass(TransactionHistory.class);
         verify(transactionHistoryRepository).save(historyCaptor.capture());
+        verify(idempotencyService).completeSuccess(9L, response);
 
         TransactionHistory savedHistory = historyCaptor.getValue();
         assertSame(account, savedHistory.getAccount());
@@ -95,28 +107,39 @@ class TransferServiceTest {
     @Test
     @DisplayName("입금 금액이 유효하지 않으면 INVALID_INPUT_VALUE 예외를 발생시킨다")
     void deposit_invalidAmount_throwsInvalidInputValue() {
+        Idempotency idempotency = idempotency(10L, user(), IdempotencyOperationType.DEPOSIT, "invalid-deposit-key");
+        when(idempotencyRequestHasher.generate(1L, 0L, "입금 메모")).thenReturn("invalid-deposit-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "invalid-deposit-key", "invalid-deposit-request-hash", DepositRes.class))
+                .thenReturn(IdempotencyReserveResult.reserved(idempotency));
+
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.topUp(1L, 1L, 0L, "입금 메모")
+                () -> transferService.topUp(1L, "invalid-deposit-key", 1L, 0L, "입금 메모")
         );
 
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
         verify(accountRepository, never()).findByIdAndUserIdForUpdate(any(), any());
         verify(transactionHistoryRepository, never()).save(any());
+        verify(idempotencyService).completeFailure(10L);
     }
 
     @Test
     @DisplayName("입금 대상 계좌를 찾을 수 없으면 ACCOUNT_NOT_FOUND 예외를 발생시킨다")
     void deposit_accountNotFound_throwsAccountNotFound() {
+        Idempotency idempotency = idempotency(11L, user(), IdempotencyOperationType.DEPOSIT, "missing-account-key");
+        when(idempotencyRequestHasher.generate(1L, 5_000L, "입금 메모")).thenReturn("missing-account-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "missing-account-key", "missing-account-request-hash", DepositRes.class))
+                .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.empty());
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.topUp(1L, 1L, 5_000L, "입금 메모")
+                () -> transferService.topUp(1L, "missing-account-key", 1L, 5_000L, "입금 메모")
         );
 
         assertEquals(TransferErrorCode.ACCOUNT_NOT_FOUND, exception.getErrorCode());
         verify(transactionHistoryRepository, never()).save(any());
+        verify(idempotencyService).completeFailure(11L);
     }
 
     @Test
@@ -130,9 +153,10 @@ class TransferServiceTest {
 
         Account senderAccount = account(1L, sender, "100200300001", 100_000L);
         Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
-        TransferIdempotency idempotency = idempotency(10L, sender, "transfer-key");
-        when(transferIdempotencyService.reserve(1L, "transfer-key", 1L, "100200300002", 50_000L, "점심값"))
-                .thenReturn(TransferIdempotencyReserveResult.reserved(idempotency));
+        Idempotency idempotency = idempotency(12L, sender, IdempotencyOperationType.TRANSFER, "transfer-key");
+        when(idempotencyRequestHasher.generate(1L, "100200300002", 50_000L, "점심값")).thenReturn("transfer-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.TRANSFER, "transfer-key", "transfer-request-hash", TransferRes.class))
+                .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
         when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
         when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
@@ -157,7 +181,7 @@ class TransferServiceTest {
         ArgumentCaptor<TransactionHistory> historyCaptor = ArgumentCaptor.forClass(TransactionHistory.class);
         verify(transactionHistoryRepository, times(2)).save(historyCaptor.capture());
         verify(transferRepository).save(any(Transfer.class));
-        verify(transferIdempotencyService).completeSuccess(eq(10L), any(Transfer.class), eq(response));
+        verify(idempotencyService).completeSuccess(12L, response);
 
         List<TransactionHistory> histories = historyCaptor.getAllValues();
         TransactionHistory senderHistory = histories.get(0);
@@ -185,9 +209,10 @@ class TransferServiceTest {
     void transfer_sameAccount_throwsInvalidInputValue() {
         User user = user();
         Account account = account(1L, user, "100200300001", 100_000L);
-        TransferIdempotency idempotency = idempotency(11L, user, "same-account-key");
-        when(transferIdempotencyService.reserve(1L, "same-account-key", 1L, "100200300001", 50_000L, "점심값"))
-                .thenReturn(TransferIdempotencyReserveResult.reserved(idempotency));
+        Idempotency idempotency = idempotency(13L, user, IdempotencyOperationType.TRANSFER, "same-account-key");
+        when(idempotencyRequestHasher.generate(1L, "100200300001", 50_000L, "점심값")).thenReturn("same-account-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.TRANSFER, "same-account-key", "same-account-request-hash", TransferRes.class))
+                .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findIdByAccountNumber("100200300001")).thenReturn(Optional.of(1L));
 
         BusinessException exception = assertThrows(
@@ -197,8 +222,8 @@ class TransferServiceTest {
 
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
         verify(transactionHistoryRepository, never()).save(any());
-        verify(transferIdempotencyService, never()).completeSuccess(any(), any(), any());
-        verify(transferIdempotencyService).completeFailure(11L);
+        verify(idempotencyService, never()).completeSuccess(any(), any());
+        verify(idempotencyService).completeFailure(13L);
     }
 
     @Test
@@ -210,9 +235,10 @@ class TransferServiceTest {
 
         Account senderAccount = account(1L, sender, "100200300001", 10_000L);
         Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
-        TransferIdempotency idempotency = idempotency(12L, sender, "insufficient-key");
-        when(transferIdempotencyService.reserve(1L, "insufficient-key", 1L, "100200300002", 50_000L, "잔액 부족"))
-                .thenReturn(TransferIdempotencyReserveResult.reserved(idempotency));
+        Idempotency idempotency = idempotency(14L, sender, IdempotencyOperationType.TRANSFER, "insufficient-key");
+        when(idempotencyRequestHasher.generate(1L, "100200300002", 50_000L, "잔액 부족")).thenReturn("insufficient-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.TRANSFER, "insufficient-key", "insufficient-request-hash", TransferRes.class))
+                .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
         when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
         when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
@@ -227,8 +253,8 @@ class TransferServiceTest {
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         verify(transferRepository, never()).save(any(Transfer.class));
         verify(transactionHistoryRepository, never()).save(any());
-        verify(transferIdempotencyService, never()).completeSuccess(any(), any(), any());
-        verify(transferIdempotencyService).completeFailure(12L);
+        verify(idempotencyService, never()).completeSuccess(any(), any());
+        verify(idempotencyService).completeFailure(14L);
 
         TransferFailedEvent event = eventCaptor.getValue();
         assertEquals(1L, event.senderAccountId());
@@ -244,8 +270,8 @@ class TransferServiceTest {
         return account;
     }
 
-    private TransferIdempotency idempotency(Long id, User user, String idempotencyKey) {
-        TransferIdempotency idempotency = TransferIdempotency.processing(user, idempotencyKey, "request-hash");
+    private Idempotency idempotency(Long id, User user, IdempotencyOperationType operationType, String idempotencyKey) {
+        Idempotency idempotency = Idempotency.processing(user, operationType, idempotencyKey, "request-hash");
         ReflectionTestUtils.setField(idempotency, "id", id);
         return idempotency;
     }

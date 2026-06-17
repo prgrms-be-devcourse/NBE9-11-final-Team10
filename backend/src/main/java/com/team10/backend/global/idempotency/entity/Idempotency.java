@@ -1,8 +1,9 @@
-package com.team10.backend.domain.transfer.entity;
+package com.team10.backend.global.idempotency.entity;
 
-import com.team10.backend.domain.transfer.type.IdempotencyStatus;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.entity.BaseEntity;
+import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
+import com.team10.backend.global.idempotency.type.IdempotencyStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -13,20 +14,24 @@ import java.time.LocalDateTime;
 @Getter
 @Entity
 @Table(
-        name = "transfer_idempotency_keys",
+        name = "idempotency_keys",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_user_id_idempotency_key",
-                        columnNames = {"user_id", "idempotency_key"}
+                        name = "uk_idempotency_user_operation_key",
+                        columnNames = {"user_id", "operation_type", "idempotency_key"}
                 )
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class TransferIdempotency extends BaseEntity {
+public class Idempotency extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "operation_type", nullable = false, length = 50)
+    private IdempotencyOperationType operationType;
 
     @Column(name = "idempotency_key", nullable = false, length = 100)
     private String idempotencyKey;
@@ -38,30 +43,36 @@ public class TransferIdempotency extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     private IdempotencyStatus status;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "transfer_id", nullable = true) // 멱등성 레코드를 송금처리 전에 만들기때문에 nullable
-    private Transfer transfer;
-
-    @Column(name = "completed_at")
-    private LocalDateTime completedAt;
-
     @Lob
     @Column(name = "response_body", columnDefinition = "TEXT")
     private String responseBody;
 
-    private TransferIdempotency(User user, String idempotencyKey, String requestHash) {
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+    private Idempotency(
+            User user,
+            IdempotencyOperationType operationType,
+            String idempotencyKey,
+            String requestHash
+    ) {
         this.user = user;
+        this.operationType = operationType;
         this.idempotencyKey = idempotencyKey;
         this.requestHash = requestHash;
         this.status = IdempotencyStatus.PROCESSING;
     }
 
-    public static TransferIdempotency processing(User user, String idempotencyKey, String requestHash) {
-        return new TransferIdempotency(user, idempotencyKey, requestHash);
+    public static Idempotency processing(
+            User user,
+            IdempotencyOperationType operationType,
+            String idempotencyKey,
+            String requestHash
+    ) {
+        return new Idempotency(user, operationType, idempotencyKey, requestHash);
     }
 
-    public void complete(Transfer transfer, String responseBody) {
-        this.transfer = transfer;
+    public void complete(String responseBody) {
         this.responseBody = responseBody;
         this.status = IdempotencyStatus.SUCCESS;
         this.completedAt = LocalDateTime.now();
