@@ -1,7 +1,9 @@
 package com.team10.backend.domain.investment.account.controller;
 
+import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCloseReq;
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCreateReq;
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountUpdateReq;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCloseRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCreateRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountOpenVerificationRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountUpdateRes;
@@ -61,6 +63,20 @@ public class InvestmentAccountController {
             @Valid @RequestBody InvestmentAccountUpdateReq request
     ) {
         InvestmentAccountUpdateRes response = investmentAccountService.updateAccount(userId, accountId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "투자 계좌 해지", description = "계좌 비밀번호 검증 후 예수금, 보유 종목, 미체결 주문이 없는 투자 계좌를 CLOSED 상태로 변경합니다.")
+    @PostMapping("/{accountId}/close")
+    public ResponseEntity<InvestmentAccountCloseRes> closeAccount(
+            @Parameter(hidden = true)
+            @AuthenticationPrincipal Long userId,
+
+            @PathVariable Long accountId,
+
+            @Valid @RequestBody InvestmentAccountCloseReq request
+    ) {
+        InvestmentAccountCloseRes response = investmentAccountService.closeAccount(userId, accountId, request);
         return ResponseEntity.ok(response);
     }
 }

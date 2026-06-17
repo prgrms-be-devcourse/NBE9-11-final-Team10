@@ -1,7 +1,9 @@
 package com.team10.backend.domain.investment.account.service;
 
+import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCloseReq;
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCreateReq;
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountUpdateReq;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCloseRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCreateRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountOpenVerificationRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountUpdateRes;
@@ -9,10 +11,14 @@ import com.team10.backend.domain.investment.account.entity.InvestmentAccount;
 import com.team10.backend.domain.investment.account.repository.InvestmentAccountRepository;
 import com.team10.backend.domain.investment.account.util.InvestmentAccountNumberGenerator;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
+import com.team10.backend.domain.investment.order.repository.InvestmentOrderRepository;
+import com.team10.backend.domain.investment.order.type.InvestmentOrderStatus;
+import com.team10.backend.domain.investment.portfolio.repository.InvestmentHoldingRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -29,6 +35,8 @@ public class InvestmentAccountService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final InvestmentAccountOpenVerificationKeyService verificationKeyService;
+    private final InvestmentHoldingRepository investmentHoldingRepository;
+    private final InvestmentOrderRepository investmentOrderRepository;
 
     public InvestmentAccountOpenVerificationRes issueOpenVerificationKey(Long userId) {
         User user = getVerifiedUser(userId);
@@ -70,7 +78,6 @@ public class InvestmentAccountService {
         InvestmentAccount account = getActiveAccountForUpdate(userId, accountId);
         account.verifyPassword(passwordEncoder, request.pastPassword());
 
-        /** dto 검증과 별개로 서비스 레이어에서 입력값 검증 */
         if (request.nickname() == null && request.newPassword() == null) {
             throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_UPDATE_VALUE_REQUIRED);
         }
@@ -82,6 +89,20 @@ public class InvestmentAccountService {
         }
 
         return InvestmentAccountUpdateRes.from(account);
+    }
+
+    @Transactional
+    public InvestmentAccountCloseRes closeAccount(
+            Long userId,
+            Long accountId,
+            InvestmentAccountCloseReq request
+    ) {
+        InvestmentAccount account = getActiveAccountForUpdate(userId, accountId);
+        account.verifyPassword(passwordEncoder, request.accountPassword());
+        validateClosable(account);
+        account.close();
+
+        return InvestmentAccountCloseRes.from(account);
     }
 
     private User getVerifiedUser(Long userId) {
@@ -116,5 +137,25 @@ public class InvestmentAccountService {
         }
 
         return account;
+    }
+
+    private void validateClosable(InvestmentAccount account) {
+        /** 에수금이 없어야한다 */
+        if (!account.getCashBalance().equals(0L)) {
+            throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_CASH_BALANCE_NOT_ZERO);
+        }
+
+        /** 보유 주식이 없어야한다 */
+        if (investmentHoldingRepository.existsByInvestmentAccountId(account.getId())) {
+            throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_HOLDING_EXISTS);
+        }
+
+        /** 미체결 예약 주문이 없어야한다 */
+        if (investmentOrderRepository.existsByInvestmentAccountIdAndStatusIn(
+                account.getId(),
+                List.of(InvestmentOrderStatus.PENDING, InvestmentOrderStatus.PARTIALLY_FILLED)
+        )) {
+            throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_OPEN_ORDER_EXISTS);
+        }
     }
 }

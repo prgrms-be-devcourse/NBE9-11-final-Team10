@@ -3,12 +3,15 @@ package com.team10.backend.domain.investment.account.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCloseReq;
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCreateReq;
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountUpdateReq;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCloseRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCreateRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountOpenVerificationRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountUpdateRes;
@@ -16,12 +19,16 @@ import com.team10.backend.domain.investment.account.entity.InvestmentAccount;
 import com.team10.backend.domain.investment.account.repository.InvestmentAccountRepository;
 import com.team10.backend.domain.investment.account.type.InvestmentAccountStatus;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
+import com.team10.backend.domain.investment.order.repository.InvestmentOrderRepository;
+import com.team10.backend.domain.investment.order.type.InvestmentOrderStatus;
+import com.team10.backend.domain.investment.portfolio.repository.InvestmentHoldingRepository;
 import com.team10.backend.domain.investment.type.CurrencyCode;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +55,12 @@ class InvestmentAccountServiceTest {
 
     @Mock
     private InvestmentAccountOpenVerificationKeyService verificationKeyService;
+
+    @Mock
+    private InvestmentHoldingRepository investmentHoldingRepository;
+
+    @Mock
+    private InvestmentOrderRepository investmentOrderRepository;
 
     @InjectMocks
     private InvestmentAccountService investmentAccountService;
@@ -305,6 +318,123 @@ class InvestmentAccountServiceTest {
                 .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("예수금, 보유 종목, 미체결 주문이 없고 비밀번호가 일치하면 투자 계좌를 해지한다")
+    void closeAccount() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("123456");
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
+        when(investmentHoldingRepository.existsByInvestmentAccountId(1L)).thenReturn(false);
+        when(investmentOrderRepository.existsByInvestmentAccountIdAndStatusIn(
+                eq(1L),
+                eq(openOrderStatuses())
+        )).thenReturn(false);
+
+        InvestmentAccountCloseRes response = investmentAccountService.closeAccount(1L, 1L, request);
+
+        assertThat(response.status()).isEqualTo(InvestmentAccountStatus.CLOSED);
+        assertThat(account.getStatus()).isEqualTo(InvestmentAccountStatus.CLOSED);
+        verify(investmentOrderRepository).existsByInvestmentAccountIdAndStatusIn(
+                eq(1L),
+                eq(openOrderStatuses())
+        );
+    }
+
+    @Test
+    @DisplayName("투자 계좌 비밀번호가 일치하지 않으면 해지에 실패한다")
+    void closeAccountWithPasswordMismatch() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("000000");
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("000000", "encoded-password")).thenReturn(false);
+
+        assertThatThrownBy(() -> investmentAccountService.closeAccount(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_PASSWORD_MISMATCH);
+
+        assertThat(account.getStatus()).isEqualTo(InvestmentAccountStatus.ACTIVE);
+        verify(investmentHoldingRepository, never()).existsByInvestmentAccountId(any(Long.class));
+    }
+
+    @Test
+    @DisplayName("예수금이 남아 있으면 투자 계좌를 해지할 수 없다")
+    void closeAccountWithCashBalance() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        ReflectionTestUtils.setField(account, "cashBalance", 1000L);
+        InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("123456");
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
+
+        assertThatThrownBy(() -> investmentAccountService.closeAccount(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_CASH_BALANCE_NOT_ZERO);
+
+        assertThat(account.getStatus()).isEqualTo(InvestmentAccountStatus.ACTIVE);
+        verify(investmentHoldingRepository, never()).existsByInvestmentAccountId(any(Long.class));
+    }
+
+    @Test
+    @DisplayName("보유 종목이 있으면 투자 계좌를 해지할 수 없다")
+    void closeAccountWithHolding() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("123456");
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
+        when(investmentHoldingRepository.existsByInvestmentAccountId(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> investmentAccountService.closeAccount(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_HOLDING_EXISTS);
+
+        assertThat(account.getStatus()).isEqualTo(InvestmentAccountStatus.ACTIVE);
+        verify(investmentOrderRepository, never()).existsByInvestmentAccountIdAndStatusIn(any(Long.class), any());
+    }
+
+    @Test
+    @DisplayName("미체결 주문이 있으면 투자 계좌를 해지할 수 없다")
+    void closeAccountWithOpenOrder() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("123456");
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
+        when(investmentHoldingRepository.existsByInvestmentAccountId(1L)).thenReturn(false);
+        when(investmentOrderRepository.existsByInvestmentAccountIdAndStatusIn(eq(1L), eq(openOrderStatuses())))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> investmentAccountService.closeAccount(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_OPEN_ORDER_EXISTS);
+
+        assertThat(account.getStatus()).isEqualTo(InvestmentAccountStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("ACTIVE 상태가 아닌 투자 계좌는 해지할 수 없다")
+    void closeAccountWithNotActiveStatus() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        ReflectionTestUtils.setField(account, "status", InvestmentAccountStatus.CLOSED);
+        InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("123456");
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> investmentAccountService.closeAccount(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_ACTIVE);
+
+        verify(passwordEncoder, never()).matches(any(String.class), any(String.class));
+    }
+
     private User createUser(Long id, boolean identityVerified) {
         User user = User.create(
                 "user" + id + "@example.com",
@@ -328,5 +458,9 @@ class InvestmentAccountServiceTest {
         );
         ReflectionTestUtils.setField(account, "id", id);
         return account;
+    }
+
+    private List<InvestmentOrderStatus> openOrderStatuses() {
+        return List.of(InvestmentOrderStatus.PENDING, InvestmentOrderStatus.PARTIALLY_FILLED);
     }
 }

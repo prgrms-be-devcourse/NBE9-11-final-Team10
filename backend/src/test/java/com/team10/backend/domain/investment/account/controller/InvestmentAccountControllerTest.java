@@ -10,8 +10,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCloseReq;
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCreateReq;
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountUpdateReq;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCloseRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCreateRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountOpenVerificationRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountUpdateRes;
@@ -233,6 +235,39 @@ class InvestmentAccountControllerTest {
                 new InvestmentAccountUpdateReq("123456", null, null);
 
         mockMvc.perform(patch("/api/v1/investment/accounts/{accountId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("투자 계좌 해지 API는 인증 사용자, accountId, 요청 본문을 받아 CLOSED 상태를 반환한다")
+    void closeAccount() throws Exception {
+        InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("123456");
+        InvestmentAccountCloseRes response = new InvestmentAccountCloseRes(
+                InvestmentAccountStatus.CLOSED,
+                LocalDateTime.of(2026, 6, 17, 11, 0)
+        );
+
+        when(investmentAccountService.closeAccount(eq(1L), eq(1L), any(InvestmentAccountCloseReq.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/investment/accounts/{accountId}/close", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"))
+                .andExpect(jsonPath("$.updatedAt").value("2026-06-17T11:00:00"));
+
+        verify(investmentAccountService).closeAccount(eq(1L), eq(1L), any(InvestmentAccountCloseReq.class));
+    }
+
+    @Test
+    @DisplayName("투자 계좌 해지 API는 비밀번호가 숫자 6자리가 아니면 400을 반환한다")
+    void closeAccountWithInvalidPassword() throws Exception {
+        InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("12345a");
+
+        mockMvc.perform(post("/api/v1/investment/accounts/{accountId}/close", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());

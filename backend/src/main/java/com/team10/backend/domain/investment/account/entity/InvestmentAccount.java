@@ -99,11 +99,12 @@ public class InvestmentAccount extends BaseEntity {
         this.accountPasswordHash = accountPasswordHash;
     }
 
-    public void verifyPassword(
-            PasswordEncoder encoder,
-            String rawPassword
-    ) {
-        if (!encoder.matches(rawPassword, accountPasswordHash)) {
+    public void close() {
+        this.status = InvestmentAccountStatus.CLOSED;
+    }
+
+    public void verifyPassword(PasswordEncoder encoder, String pastPassword) {
+        if (!encoder.matches(pastPassword, accountPasswordHash)) {
             throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_PASSWORD_MISMATCH);
         }
     }
