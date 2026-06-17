@@ -18,8 +18,8 @@ public interface InvestmentAccountRepository extends JpaRepository<InvestmentAcc
     List<InvestmentAccount> findAllByUserIdAndStatusNot(Long userId, InvestmentAccountStatus status);
 
     Optional<InvestmentAccount> findByIdAndUserIdAndStatusNot(
-            Long userId,
             Long accountId,
+            Long userId,
             InvestmentAccountStatus status
     );
 
