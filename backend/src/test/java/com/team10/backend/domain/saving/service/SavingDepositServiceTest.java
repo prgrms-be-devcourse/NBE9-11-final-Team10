@@ -13,6 +13,7 @@ import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
+import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
 import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.SavingProduct;
@@ -234,6 +235,40 @@ class SavingDepositServiceTest {
         assertThat(responses.get(0).depositId()).isEqualTo(1L);
         assertThat(responses.get(0).status()).isEqualTo(DepositStatus.MATURED);
         verify(depositRepository).findAllByUserIdAndStatusWithProduct(1L, DepositStatus.MATURED);
+    }
+
+
+    @Test
+    @DisplayName("내 예금 상세를 조회한다")
+    void getDeposit() {
+        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
+
+        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(deposit));
+
+        DepositDetailRes response = savingDepositService.getDeposit(1L, 1L);
+
+        assertThat(response.depositId()).isEqualTo(1L);
+        assertThat(response.productName()).isEqualTo("정기예금");
+        assertThat(response.bankName()).isEqualTo("국민은행");
+        assertThat(response.principal()).isEqualTo(1000000L);
+        assertThat(response.interestRate()).isEqualTo(3.5);
+        assertThat(response.expectedInterest()).isEqualTo(35000L);
+        assertThat(response.maturityDate()).isEqualTo(LocalDate.now().plusMonths(12));
+        assertThat(response.status()).isEqualTo(DepositStatus.ACTIVE);
+        verify(depositRepository).findByIdAndUserIdWithProduct(1L, 1L);
+    }
+
+    @Test
+    @DisplayName("본인 예금이 아니거나 존재하지 않으면 상세 조회에 실패한다")
+    void getDepositWithNotFoundDeposit() {
+        when(depositRepository.findByIdAndUserIdWithProduct(999L, 1L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> savingDepositService.getDeposit(1L, 999L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.DEPOSIT_NOT_FOUND);
     }
 
     private User createUser(Long id) {

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface DepositRepository extends JpaRepository<Deposit, Long> {
 
@@ -32,5 +33,17 @@ public interface DepositRepository extends JpaRepository<Deposit, Long> {
     List<Deposit> findAllByUserIdAndStatusWithProduct(
             @Param("userId") Long userId,
             @Param("status") DepositStatus status
+    );
+
+    @Query("""
+        select d
+        from Deposit d
+        join fetch d.savingProduct
+        where d.id = :depositId
+        and d.user.id = :userId
+        """)
+    Optional<Deposit> findByIdAndUserIdWithProduct(
+            @Param("depositId") Long depositId,
+            @Param("userId") Long userId
     );
 }

@@ -7,7 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.util.Objects;
 
-public record DepositSummaryRes(
+public record DepositDetailRes(
         @Schema(description = "예금 가입 ID", example = "1")
         Long depositId,
 
@@ -20,21 +20,28 @@ public record DepositSummaryRes(
         @Schema(description = "예치 원금", example = "1000000")
         Long principal,
 
+        @Schema(description = "가입 당시 금리", example = "3.5")
+        Double interestRate,
+
+        @Schema(description = "예상 이자", example = "35000")
+        Long expectedInterest,
+
         @Schema(description = "만기일", example = "2027-06-16")
         LocalDate maturityDate,
 
         @Schema(description = "예금 상태", example = "ACTIVE")
         DepositStatus status
 ) {
-
-    public static DepositSummaryRes from(Deposit deposit) {
+    public static DepositDetailRes from(Deposit deposit) {
         Objects.requireNonNull(deposit, "deposit는 null일 수 없습니다.");
 
-        return new DepositSummaryRes(
+        return new DepositDetailRes(
                 deposit.getId(),
                 deposit.getSavingProduct().getName(),
                 deposit.getSavingProduct().getBankName(),
                 deposit.getPrincipal(),
+                deposit.getInterestRate(),
+                deposit.getExpectedInterest(),
                 deposit.getMaturityDate(),
                 deposit.getStatus()
         );

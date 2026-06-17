@@ -5,6 +5,7 @@ import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
+import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
 import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.SavingProduct;
@@ -103,5 +104,14 @@ public class SavingDepositService {
         return deposits.stream()
                 .map(DepositSummaryRes::from)
                 .toList();
+    }
+
+    public DepositDetailRes getDeposit(Long userId, Long depositId) {
+        Deposit deposit =
+                depositRepository.findByIdAndUserIdWithProduct(depositId, userId)
+                        .orElseThrow(() -> new
+                                BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
+
+        return DepositDetailRes.from(deposit);
     }
 }
