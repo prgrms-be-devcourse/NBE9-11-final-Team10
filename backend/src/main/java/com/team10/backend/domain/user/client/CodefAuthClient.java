@@ -65,8 +65,8 @@ public class CodefAuthClient {
             log.info("[CODEF] 토큰 발급 완료");
             return accessToken;
         } catch (Exception e) {
-            // 호출부에서 각자의 도메인 예외로 변환하도록 그대로 전파
-            throw new IllegalStateException("CODEF 토큰 응답 파싱 실패", e);
+            // 호출부에서 각자의 도메인 예외로 변환하도록 그대로 전파 (BusinessException이면 호출부에서 가로채지 못함)
+            throw new CodefAuthException("CODEF 토큰 응답 파싱 실패", e);
         }
     }
 }

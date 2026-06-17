@@ -55,7 +55,6 @@ public class CodefOcrClient {
                     .body(String.class);
 
             String decoded = URLDecoder.decode(response != null ? response : "", StandardCharsets.UTF_8);
-            log.debug("[CODEF OCR] 응답 — {}", decoded.substring(0, Math.min(200, decoded.length())));
 
             Map<?, ?> responseMap = OBJECT_MAPPER.readValue(decoded, Map.class);
             if (responseMap == null) {
@@ -68,6 +67,7 @@ public class CodefOcrClient {
             }
 
             String code = (String) result.get("code");
+            log.debug("[CODEF OCR] 응답 수신 — code={}", code);
             if (!"CF-00000".equals(code)) {
                 log.error("[CODEF OCR] 실패 — code={}, message={}", code, result.get("message"));
                 throw new BusinessException(UserErrorCode.OCR_FAILED);
@@ -84,7 +84,7 @@ public class CodefOcrClient {
 
             if (isBlank(name) || isBlank(rawIdentity) || isBlank(rawDate)
                     || rawIdentity.length() < 13 || rawDate.length() < 8) {
-                log.warn("[CODEF OCR] 필수 필드 누락 — name={}, identity={}, date={}", name, rawIdentity, rawDate);
+                log.warn("[CODEF OCR] 필수 필드 누락 — name={}, identity={}, date={}", name, maskIdentity(rawIdentity), rawDate);
                 throw new BusinessException(UserErrorCode.OCR_FAILED);
             }
 
@@ -104,5 +104,13 @@ public class CodefOcrClient {
 
     private boolean isBlank(String s) {
         return s == null || s.isBlank();
+    }
+
+    /** 주민등록번호 등 식별 정보를 로그용으로 마스킹한다 (앞 6자리만 노출). */
+    private String maskIdentity(String raw) {
+        if (raw == null || raw.length() < 6) {
+            return "***";
+        }
+        return raw.substring(0, 6) + "-*******";
     }
 }
