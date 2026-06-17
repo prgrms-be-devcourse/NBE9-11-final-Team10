@@ -19,6 +19,8 @@ import com.team10.backend.domain.transaction.service.TransactionHistoryService;
 import com.team10.backend.domain.transaction.type.TransactionDirection;
 import com.team10.backend.domain.transaction.type.TransactionType;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.support.security.AuthenticationPrincipalTestConfig;
+import com.team10.backend.support.security.WithMockLongUser;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -34,6 +37,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(TransactionHistoryController.class)
+@Import(AuthenticationPrincipalTestConfig.class)
+@WithMockLongUser(userId = 10L)
 class TransactionHistoryControllerTest {
 
     @Autowired
@@ -65,8 +70,7 @@ class TransactionHistoryControllerTest {
                 1
         ));
 
-        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10"))
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.content[0].transactionHistoryId").value(1))
@@ -104,7 +108,6 @@ class TransactionHistoryControllerTest {
         ));
 
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("page", "2")
                         .param("sortDirection", "ASC"))
                 .andExpect(status().isOk())
@@ -136,7 +139,6 @@ class TransactionHistoryControllerTest {
         ));
 
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("startDate", "2026-06-01")
                         .param("endDate", "2026-06-09")
                         .param("direction", "OUT")
@@ -180,8 +182,7 @@ class TransactionHistoryControllerTest {
         given(transactionHistoryService.getTransactionHistoryDetail(1L, 100L, 10L))
                 .willReturn(response);
 
-        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions/{transactionId}", 1L, 100L)
-                        .param("userId", "10"))
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions/{transactionId}", 1L, 100L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.transactionHistoryId").value(100))
                 .andExpect(jsonPath("$.type").value("TRANSFER"))
@@ -201,8 +202,7 @@ class TransactionHistoryControllerTest {
         given(transactionHistoryService.getTransactionHistoryDetail(1L, 100L, 10L))
                 .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_ACCESS_DENIED));
 
-        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions/{transactionId}", 1L, 100L)
-                        .param("userId", "10"))
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions/{transactionId}", 1L, 100L))
                 .andExpect(status().isForbidden());
     }
 
@@ -212,39 +212,21 @@ class TransactionHistoryControllerTest {
         given(transactionHistoryService.getTransactionHistoryDetail(1L, 100L, 10L))
                 .willThrow(new BusinessException(TransactionHistoryErrorCode.TRANSACTION_HISTORY_NOT_FOUND));
 
-        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions/{transactionId}", 1L, 100L)
-                        .param("userId", "10"))
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions/{transactionId}", 1L, 100L))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     @DisplayName("단건 조회 transactionId가 양수가 아니면 400을 반환한다")
     void invalidWhenTransactionIdIsNotPositive() throws Exception {
-        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions/{transactionId}", 1L, 0L)
-                        .param("userId", "10"))
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions/{transactionId}", 1L, 0L))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     @DisplayName("accountId가 양수가 아니면 400을 반환한다")
     void invalidWhenAccountIdIsNotPositive() throws Exception {
-        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 0L)
-                        .param("userId", "10"))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    @DisplayName("userId가 양수가 아니면 400을 반환한다")
-    void invalidWhenUserIdIsNotPositive() throws Exception {
-        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "0"))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    @DisplayName("userId가 없으면 400을 반환한다")
-    void invalidWhenUserIdIsMissing() throws Exception {
-        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L))
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 0L))
                 .andExpect(status().isBadRequest());
     }
 
@@ -252,7 +234,6 @@ class TransactionHistoryControllerTest {
     @DisplayName("page가 음수이면 400을 반환한다")
     void invalidWhenPageIsNegative() throws Exception {
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("page", "-1"))
                 .andExpect(status().isBadRequest());
     }
@@ -261,7 +242,6 @@ class TransactionHistoryControllerTest {
     @DisplayName("정렬 방향 값이 ASC 또는 DESC가 아니면 400을 반환한다")
     void invalidWhenSortDirectionIsNotEnumValue() throws Exception {
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("sortDirection", "LATEST"))
                 .andExpect(status().isBadRequest());
     }
@@ -270,7 +250,6 @@ class TransactionHistoryControllerTest {
     @DisplayName("입출금 방향 값이 IN 또는 OUT이 아니면 400을 반환한다")
     void invalidWhenDirectionIsNotEnumValue() throws Exception {
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("direction", "INVALID"))
                 .andExpect(status().isBadRequest());
     }
@@ -279,7 +258,6 @@ class TransactionHistoryControllerTest {
     @DisplayName("시작일이 종료일보다 이후이면 400을 반환한다")
     void invalidWhenStartDateIsAfterEndDate() throws Exception {
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("startDate", "2026-06-10")
                         .param("endDate", "2026-06-09"))
                 .andExpect(status().isBadRequest());
@@ -289,7 +267,6 @@ class TransactionHistoryControllerTest {
     @DisplayName("최소 거래액이 최대 거래액보다 크면 400을 반환한다")
     void invalidWhenMinAmountIsGreaterThanMaxAmount() throws Exception {
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("minAmount", "10000")
                         .param("maxAmount", "1000"))
                 .andExpect(status().isBadRequest());
@@ -299,7 +276,6 @@ class TransactionHistoryControllerTest {
     @DisplayName("최소 거래액이 음수이면 400을 반환한다")
     void invalidWhenMinAmountIsNegative() throws Exception {
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("minAmount", "-1"))
                 .andExpect(status().isBadRequest());
     }
@@ -308,7 +284,6 @@ class TransactionHistoryControllerTest {
     @DisplayName("최대 거래액이 음수이면 400을 반환한다")
     void invalidWhenMaxAmountIsNegative() throws Exception {
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("maxAmount", "-1"))
                 .andExpect(status().isBadRequest());
     }
@@ -317,7 +292,6 @@ class TransactionHistoryControllerTest {
     @DisplayName("거래 상대명이 30자를 초과하면 400을 반환한다")
     void invalidWhenCounterpartyNameIsTooLong() throws Exception {
         mockMvc.perform(get("/api/v1/accounts/{accountId}/transactions", 1L)
-                        .param("userId", "10")
                         .param("counterpartyName", "a".repeat(31)))
                 .andExpect(status().isBadRequest());
     }
