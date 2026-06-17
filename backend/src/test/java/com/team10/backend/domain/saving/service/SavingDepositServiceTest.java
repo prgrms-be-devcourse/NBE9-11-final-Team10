@@ -13,6 +13,7 @@ import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
+import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.SavingProduct;
 import com.team10.backend.domain.saving.exception.SavingErrorCode;
@@ -25,6 +26,7 @@ import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -200,6 +202,40 @@ class SavingDepositServiceTest {
                 .isEqualTo(TransferErrorCode.INSUFFICIENT_BALANCE);
     }
 
+    @Test
+    @DisplayName("상태 필터 없이 내 예금 목록을 조회한다")
+    void getDeposits() {
+        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
+
+        when(depositRepository.findAllByUserIdWithProduct(1L)).thenReturn(List.of(deposit));
+
+        List<DepositSummaryRes> responses = savingDepositService.getDeposits(1L, null);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).depositId()).isEqualTo(1L);
+        assertThat(responses.get(0).productName()).isEqualTo("정기예금");
+        assertThat(responses.get(0).bankName()).isEqualTo("국민은행");
+        assertThat(responses.get(0).principal()).isEqualTo(1000000L);
+        assertThat(responses.get(0).status()).isEqualTo(DepositStatus.ACTIVE);
+        verify(depositRepository).findAllByUserIdWithProduct(1L);
+    }
+
+    @Test
+    @DisplayName("상태 필터로 내 예금 목록을 조회한다")
+    void getDepositsWithStatus() {
+        Deposit deposit = createDeposit(1L, DepositStatus.MATURED);
+
+        when(depositRepository.findAllByUserIdAndStatusWithProduct(1L, DepositStatus.MATURED))
+                .thenReturn(List.of(deposit));
+
+        List<DepositSummaryRes> responses = savingDepositService.getDeposits(1L, DepositStatus.MATURED);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).depositId()).isEqualTo(1L);
+        assertThat(responses.get(0).status()).isEqualTo(DepositStatus.MATURED);
+        verify(depositRepository).findAllByUserIdAndStatusWithProduct(1L, DepositStatus.MATURED);
+    }
+
     private User createUser(Long id) {
         User user = User.create(
                 "user" + id + "@test.com",
@@ -223,6 +259,21 @@ class SavingDepositServiceTest {
         ReflectionTestUtils.setField(account, "status", status);
         ReflectionTestUtils.setField(account, "balance", balance);
         return account;
+    }
+
+    private Deposit createDeposit(Long id, DepositStatus status) {
+        Deposit deposit = Deposit.create(
+                user,
+                depositProduct,
+                activeAccount,
+                1000000L,
+                3.5,
+                LocalDate.now().plusMonths(12),
+                35000L
+        );
+        ReflectionTestUtils.setField(deposit, "id", id);
+        ReflectionTestUtils.setField(deposit, "status", status);
+        return deposit;
     }
 
     private SavingProduct createSavingProduct(Long id, Long minAmount, Long maxAmount) {
