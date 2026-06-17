@@ -28,6 +28,7 @@ public class CodefAuthClient {
     // AT 캐시 — 만료 5분 전 갱신, token+만료시간 원자적 관리
     private record TokenCache(String token, long expiryEpoch) {}
     private final AtomicReference<TokenCache> tokenCache = new AtomicReference<>();
+    private final Object tokenLock = new Object();
 
     public CodefAuthClient(
             @Value("${codef.client-id}") String clientId,
@@ -42,10 +43,25 @@ public class CodefAuthClient {
     /** 캐시된 토큰이 유효하면 재사용, 만료 5분 이내로 남았으면 새로 발급한다 */
     public String getAccessToken() {
         TokenCache cache = tokenCache.get();
-        if (cache != null && Instant.now().getEpochSecond() < cache.expiryEpoch() - 300) {
+        if (isValid(cache)) {
             return cache.token();
         }
 
+        // Double-Checked Locking — 동시 만료 시 여러 스레드가 동시에 OAuth API를 호출하는 것을 방지
+        synchronized (tokenLock) {
+            cache = tokenCache.get();
+            if (isValid(cache)) {
+                return cache.token();
+            }
+            return fetchAndCacheToken();
+        }
+    }
+
+    private boolean isValid(TokenCache cache) {
+        return cache != null && Instant.now().getEpochSecond() < cache.expiryEpoch() - 300;
+    }
+
+    private String fetchAndCacheToken() {
         String credentials = Base64.getEncoder().encodeToString(
                 (clientId + ":" + clientSecret).getBytes(StandardCharsets.UTF_8));
         String response = restClient.post()
