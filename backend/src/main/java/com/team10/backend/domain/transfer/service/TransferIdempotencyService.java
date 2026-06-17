@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +36,8 @@ public class TransferIdempotencyService {
     private final TransferIdempotencyRepository transferIdempotencyRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+
+    private static final Pattern IDEMPOTENCY_KEY_PATTERN = Pattern.compile("^[A-Za-z0-9._:-]{1,100}$");
 
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -126,6 +129,10 @@ public class TransferIdempotencyService {
     private void validateIdempotencyKey(String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new BusinessException(TransferErrorCode.IDEMPOTENCY_KEY_REQUIRED);
+        }
+
+        if (!IDEMPOTENCY_KEY_PATTERN.matcher(idempotencyKey).matches()) {
+            throw new BusinessException(TransferErrorCode.IDEMPOTENCY_KEY_INVALID);
         }
     }
 
