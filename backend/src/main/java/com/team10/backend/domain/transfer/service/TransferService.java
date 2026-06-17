@@ -1,7 +1,5 @@
 package com.team10.backend.domain.transfer.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.transaction.entity.TransactionHistory;
@@ -10,25 +8,16 @@ import com.team10.backend.domain.transfer.dto.res.DepositRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.Transfer;
 import com.team10.backend.domain.transfer.entity.TransferIdempotency;
-import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.transfer.event.TransferFailedEvent;
-import com.team10.backend.domain.transfer.repository.TransferIdempotencyRepository;
+import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
-import com.team10.backend.domain.transfer.type.IdempotencyStatus;
-import com.team10.backend.domain.user.entity.User;
-import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -38,11 +27,8 @@ public class TransferService {
     private final AccountRepository accountRepository;
     private final TransferRepository transferRepository;
     private final ApplicationEventPublisher eventPublisher;
-    private final TransferIdempotencyRepository transferIdempotencyRepository;
-    private final UserRepository userRepository;
-    private final ObjectMapper objectMapper;
+    private final TransferIdempotencyService transferIdempotencyService;
 
-    // todo: 개선 및 고도화 진행
     @Transactional
     public DepositRes topUp(Long userId, Long accountId, Long amount, String memo) {
 
@@ -84,43 +70,23 @@ public class TransferService {
     @Transactional
     public TransferRes transfer(Long userId, String idempotencyKey, Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
         // 송금 시작 전에 멱등성 검증/선점
+        TransferIdempotencyReserveResult reserveResult = transferIdempotencyService.reserve(
+                userId,
+                idempotencyKey,
+                senderAccountId,
+                receiverAccountNumber,
+                amount,
+                memo);
 
-        // 멱등성 키 존재 검증
-        validateIdempotencyKey(idempotencyKey);
-
-        // 요청 바디값으로 해시값 생성 (동일 멱등성 키여도 다른 작업이면 해시값 달라짐)
-        String requestHash = generateRequestHash(senderAccountId, receiverAccountNumber, amount, memo);
-
-        // 존재하는 객체
-        Optional<TransferIdempotency> existing =
-                transferIdempotencyRepository.findByUser_IdAndIdempotencyKey(userId, idempotencyKey);
-
-        if (existing.isPresent()) {
-            TransferIdempotency idempotency = existing.get();
-
-            if (!idempotency.getRequestHash().equals(requestHash)) {
-                throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_CONFLICT);
-            }
-
-            if (idempotency.getStatus() == IdempotencyStatus.PROCESSING) {
-                throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_PROCESSING);
-            }
-
-            // 같은 key 재요청 -> idempotency에 저장된 responseBody 읽어서 TransferRes변환 후 return
-            if (idempotency.getStatus() == IdempotencyStatus.SUCCESS) {
-                return deserializeTransferResponse(idempotency.getResponseBody());
-            }
-
+        // 만약 이전에 들어왔던 요청이면 저장된 응답객체 반환하고 종료
+        if (reserveResult.replay()) {
+            return reserveResult.storedResponse();
         }
+
+        TransferIdempotency idempotency = reserveResult.idempotency();
 
         // amount 1원 이상 확인
         if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
-
-        // 락 획득 전에 멱등성 키 처리
-        User user = userRepository.getReferenceById(userId); // 이 ID를 가진 User를 참조하는 프록시 객체를 생성
-        TransferIdempotency idempotency = transferIdempotencyRepository.save(
-                TransferIdempotency.processing(user, idempotencyKey, requestHash)
-        );
 
         // 락 획득
         LockedTransferAccounts accounts =
@@ -184,16 +150,13 @@ public class TransferService {
         transactionHistoryRepository.save(receiverHistory);
 
         TransferRes response = TransferRes.from(transfer, transferredAt);
-        idempotency.complete(transfer, serializeTransferResponse(response)); // 응답 JSON 형태로 저장
+        // TransferIdempotency 객체의 상태를 SUCCESS로 변경 및 JSON 송금 성공 당시의 응답객체 저장
+        transferIdempotencyService.completeSuccess(idempotency.getId(), transfer, response);
 
         return response;
     }
 
-    private void validateIdempotencyKey(String idempotencyKey) {
-        if (idempotencyKey == null || idempotencyKey.isBlank()) {
-            throw new BusinessException(TransferErrorCode.IDEMPOTENCY_KEY_REQUIRED);
-        }
-    }
+
 
     private LockedTransferAccounts lockTransferAccounts(
             Long senderAccountId,
@@ -259,52 +222,5 @@ public class TransferService {
         eventPublisher.publishEvent(new TransferFailedEvent(senderAccountId, receiverAccountId, amount, memo));
     }
 
-/*
-    요청
-    {
-        "senderAccountId": 1,
-            "receiverAccountNumber": "100200300002",
-            "amount": 50000,
-            "memo": "점심값"
-    }
-    -> 내부 문자열: 1|100200300002|50000|점심값
-    -> SHA-256 해시로 바꿔 저장
-*/
-    private String generateRequestHash(Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
-        String normalizedMemo = memo == null ? "" : memo.trim();
 
-        String raw = String.join("|",
-                String.valueOf(senderAccountId),
-                receiverAccountNumber,
-                String.valueOf(amount),
-                normalizedMemo
-        );
-
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(raw.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm is not available", e);
-        }
-
-    }
-
-    // 직렬화 (자바객체 -> JSON)
-    private String serializeTransferResponse(TransferRes response) {
-        try {
-            return objectMapper.writeValueAsString(response);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to serialize transfer response", e);
-        }
-    }
-
-    // 역직렬화 (JSON -> 자바객체)
-    private TransferRes deserializeTransferResponse(String responseBody) {
-        try {
-            return objectMapper.readValue(responseBody, TransferRes.class);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Failed to deserialize transfer response", e);
-        }
-    }
 }
