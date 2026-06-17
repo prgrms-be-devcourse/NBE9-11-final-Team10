@@ -1,6 +1,5 @@
 package com.team10.backend.domain.transfer.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountType;
@@ -11,13 +10,12 @@ import com.team10.backend.domain.transaction.type.TransactionType;
 import com.team10.backend.domain.transfer.dto.res.DepositRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.Transfer;
+import com.team10.backend.domain.transfer.entity.TransferIdempotency;
 import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.transfer.event.TransferFailedEvent;
-import com.team10.backend.domain.transfer.repository.TransferIdempotencyRepository;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
 import com.team10.backend.domain.transfer.type.TransferStatus;
 import com.team10.backend.domain.user.entity.User;
-import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,7 +23,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -53,13 +50,7 @@ class TransferServiceTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Mock
-    private TransferIdempotencyRepository transferIdempotencyRepository;
-
-    @Mock
-    private UserRepository userRepository;
-
-    @Spy
-    private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private TransferIdempotencyService transferIdempotencyService;
 
     @InjectMocks
     private TransferService transferService;
@@ -139,11 +130,9 @@ class TransferServiceTest {
 
         Account senderAccount = account(1L, sender, "100200300001", 100_000L);
         Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
-        when(transferIdempotencyRepository.findByUser_IdAndIdempotencyKey(1L, "transfer-key"))
-                .thenReturn(Optional.empty());
-        when(userRepository.getReferenceById(1L)).thenReturn(sender);
-        when(transferIdempotencyRepository.save(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        TransferIdempotency idempotency = idempotency(10L, sender, "transfer-key");
+        when(transferIdempotencyService.reserve(1L, "transfer-key", 1L, "100200300002", 50_000L, "점심값"))
+                .thenReturn(TransferIdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
         when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
         when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
@@ -168,6 +157,7 @@ class TransferServiceTest {
         ArgumentCaptor<TransactionHistory> historyCaptor = ArgumentCaptor.forClass(TransactionHistory.class);
         verify(transactionHistoryRepository, times(2)).save(historyCaptor.capture());
         verify(transferRepository).save(any(Transfer.class));
+        verify(transferIdempotencyService).completeSuccess(eq(10L), any(Transfer.class), eq(response));
 
         List<TransactionHistory> histories = historyCaptor.getAllValues();
         TransactionHistory senderHistory = histories.get(0);
@@ -195,11 +185,9 @@ class TransferServiceTest {
     void transfer_sameAccount_throwsInvalidInputValue() {
         User user = user();
         Account account = account(1L, user, "100200300001", 100_000L);
-        when(transferIdempotencyRepository.findByUser_IdAndIdempotencyKey(1L, "same-account-key"))
-                .thenReturn(Optional.empty());
-        when(userRepository.getReferenceById(1L)).thenReturn(user);
-        when(transferIdempotencyRepository.save(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        TransferIdempotency idempotency = idempotency(11L, user, "same-account-key");
+        when(transferIdempotencyService.reserve(1L, "same-account-key", 1L, "100200300001", 50_000L, "점심값"))
+                .thenReturn(TransferIdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findIdByAccountNumber("100200300001")).thenReturn(Optional.of(1L));
 
         BusinessException exception = assertThrows(
@@ -209,6 +197,7 @@ class TransferServiceTest {
 
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
         verify(transactionHistoryRepository, never()).save(any());
+        verify(transferIdempotencyService, never()).completeSuccess(any(), any(), any());
     }
 
     @Test
@@ -220,11 +209,9 @@ class TransferServiceTest {
 
         Account senderAccount = account(1L, sender, "100200300001", 10_000L);
         Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
-        when(transferIdempotencyRepository.findByUser_IdAndIdempotencyKey(1L, "insufficient-key"))
-                .thenReturn(Optional.empty());
-        when(userRepository.getReferenceById(1L)).thenReturn(sender);
-        when(transferIdempotencyRepository.save(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        TransferIdempotency idempotency = idempotency(12L, sender, "insufficient-key");
+        when(transferIdempotencyService.reserve(1L, "insufficient-key", 1L, "100200300002", 50_000L, "잔액 부족"))
+                .thenReturn(TransferIdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
         when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
         when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
@@ -239,6 +226,7 @@ class TransferServiceTest {
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         verify(transferRepository, never()).save(any(Transfer.class));
         verify(transactionHistoryRepository, never()).save(any());
+        verify(transferIdempotencyService, never()).completeSuccess(any(), any(), any());
 
         TransferFailedEvent event = eventCaptor.getValue();
         assertEquals(1L, event.senderAccountId());
@@ -252,6 +240,12 @@ class TransferServiceTest {
         account.deposit(balance);
         ReflectionTestUtils.setField(account, "id", id);
         return account;
+    }
+
+    private TransferIdempotency idempotency(Long id, User user, String idempotencyKey) {
+        TransferIdempotency idempotency = TransferIdempotency.processing(user, idempotencyKey, "request-hash");
+        ReflectionTestUtils.setField(idempotency, "id", id);
+        return idempotency;
     }
 
     private User user() {
