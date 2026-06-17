@@ -21,6 +21,8 @@ public enum TransferErrorCode implements ErrorCode {
     IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "Idempotency-Key 헤더가 없습니다."),
     IDEMPOTENCY_REQUEST_CONFLICT(HttpStatus.CONFLICT, "같은 키인데 요청 내용이 다릅니다."),
     IDEMPOTENCY_REQUEST_PROCESSING(HttpStatus.CONFLICT, "같은 키 요청이 아직 처리 중입니다."),
+    IDEMPOTENCY_KEY_INVALID(HttpStatus.BAD_REQUEST, "유효하지 않은 키 형식입니다."),
+
 
     ;
 
