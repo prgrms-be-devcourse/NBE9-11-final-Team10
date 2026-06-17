@@ -33,8 +33,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ExchangeRateService {
 
-    private static final Set<CurrencyCode> SUPPORTED_CURRENCIES = Arrays.stream(CurrencyCode.values())
-            .collect(Collectors.toUnmodifiableSet()); // 현재 서비스에서 제공하는 외화
+    private static final Set<CurrencyCode> SUPPORTED_FOREIGN_CURRENCIES =
+            Arrays.stream(CurrencyCode.values())
+                .filter(code -> code != CurrencyCode.KRW) // 현재 서비스에서 제공하는 외화(KRW 제외)
+                .collect(Collectors.toUnmodifiableSet());
 
     private final UpbitExchangeRateClient upbitExchangeRateClient;
     private final CurrencyRepository currencyRepository;
@@ -43,7 +45,7 @@ public class ExchangeRateService {
 
     // 지원 통화 목록 조회
     public List<CurrencyRes> getCurrencies() {
-        return SUPPORTED_CURRENCIES.stream()
+        return SUPPORTED_FOREIGN_CURRENCIES.stream()
                 .sorted(Comparator.comparing(Enum::name)) // 통화코드 알파벳순 정렬
                 .map(currencyRepository::findByCurrencyCode)
                 .flatMap(Optional::stream)
@@ -61,7 +63,7 @@ public class ExchangeRateService {
             throw new BusinessException(ExchangeErrorCode.EXCHANGE_RATE_SYNC_FAILED);
         }
 
-        responses.forEach(this::saveIfSupported); // 지원하는 통화면 동기화
+        responses.forEach(this::saveIfSupported); // 지원하는 외화면 동기화
 
         List<ExchangeRateRes> latestRates = getLatestRatesFromDb(); // DB에서 조회
 
@@ -82,7 +84,7 @@ public class ExchangeRateService {
     }
 
     private List<CurrencyCode> getSupportedForeignCurrencies() {
-        return new ArrayList<>(SUPPORTED_CURRENCIES);
+        return new ArrayList<>(SUPPORTED_FOREIGN_CURRENCIES);
     }
 
     private List<UpbitExchangeRateRes> fetchRates(List<CurrencyCode> currencyCodes) {
@@ -100,7 +102,7 @@ public class ExchangeRateService {
                 .map(ExchangeRateRes::currencyCode)
                 .collect(Collectors.toSet());
 
-        return cachedCurrencyCodes.containsAll(SUPPORTED_CURRENCIES);
+        return cachedCurrencyCodes.containsAll(SUPPORTED_FOREIGN_CURRENCIES);
     }
 
     // 최신 환율 리스트 조회(Redis에서 우선 조회)
@@ -189,7 +191,7 @@ public class ExchangeRateService {
         LocalDateTime rateAt = LocalDateTime.of(response.date(), response.time()); // 날짜 + 시간 => rateAt 생성
 
         toCurrencyCode(response.currencyCode())
-                .filter(SUPPORTED_CURRENCIES::contains) // 현재 지원하는 통화만 필터링
+                .filter(SUPPORTED_FOREIGN_CURRENCIES::contains) // 현재 지원하는 외화만 필터링
                 .ifPresent(code -> upsertRate(code, response, rateAt));
     }
 
