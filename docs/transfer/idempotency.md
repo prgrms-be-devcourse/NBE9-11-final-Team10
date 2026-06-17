@@ -1,21 +1,22 @@
-# 송금 멱등성 정책
+# 입금/송금 멱등성 정책
 
 ## 목적
 
-송금 API는 네트워크 재시도, 중복 클릭, 클라이언트 타임아웃 상황에서도 같은 송금 요청이 중복 실행되지 않도록 `Idempotency-Key` 기반 멱등성 처리를 적용한다.
+입금/송금 API는 네트워크 재시도, 중복 클릭, 클라이언트 타임아웃 상황에서도 같은 금전 이동 요청이 중복 실행되지 않도록 `Idempotency-Key` 기반 멱등성 처리를 적용한다.
 
 ## 적용 API
 
 ```http
+POST /api/v1/transfers/topUp
+Idempotency-Key: deposit-20260618-0001
+
 POST /api/v1/transfers
 Idempotency-Key: transfer-20260618-0001
 ```
 
-입금 API(`POST /api/v1/transfers/topUp`)에는 아직 멱등성 키가 적용되어 있지 않다.
-
 ## Idempotency-Key 규칙
 
-`Idempotency-Key` 헤더는 송금 API에서 필수다.
+`Idempotency-Key` 헤더는 입금/송금 API에서 필수다.
 
 ```text
 길이: 1~100자
@@ -29,11 +30,17 @@ Idempotency-Key: transfer-20260618-0001
 
 ## 요청 동일성 판단
 
-같은 사용자의 같은 `Idempotency-Key`라도 요청 내용이 다르면 다른 요청으로 판단한다.
+같은 사용자의 같은 operation type과 같은 `Idempotency-Key`라도 요청 내용이 다르면 다른 요청으로 판단한다.
 
 요청 동일성은 아래 값으로 만든 SHA-256 해시로 비교한다.
 
 ```text
+입금:
+accountId
+amount
+memo
+
+송금:
 senderAccountId
 receiverAccountNumber
 amount
@@ -49,7 +56,7 @@ memo
 2. requestHash 생성
 3. 기존 멱등성 레코드 조회
 4. 없으면 PROCESSING 선점 저장
-5. 송금 처리
+5. 입금/송금 처리
 6. 성공 시 SUCCESS 저장 및 최초 응답 저장
 7. 비즈니스 실패 시 FAILED 저장
 ```
@@ -63,8 +70,8 @@ memo
 | 상태 | 의미 | 같은 키 + 같은 요청 재요청 |
 | --- | --- | --- |
 | `PROCESSING` | 최초 요청이 처리 중 | `IDEMPOTENCY_REQUEST_PROCESSING` |
-| `SUCCESS` | 송금 성공 및 최초 응답 저장 완료 | 저장된 최초 `TransferRes` 반환 |
-| `FAILED` | 비즈니스 예외로 송금 실패 확정 | `IDEMPOTENCY_REQUEST_FAILED` |
+| `SUCCESS` | 처리 성공 및 최초 응답 저장 완료 | 저장된 최초 응답 반환 |
+| `FAILED` | 비즈니스 예외로 처리 실패 확정 | `IDEMPOTENCY_REQUEST_FAILED` |
 | `EXPIRED` | 장기 방치된 처리중 요청 만료 | `IDEMPOTENCY_REQUEST_EXPIRED` |
 
 같은 키이지만 요청 내용이 다르면 상태와 무관하게 `IDEMPOTENCY_REQUEST_CONFLICT`를 반환한다.
@@ -95,7 +102,7 @@ memo
 현재 스케줄러 정책은 다음과 같다.
 
 ```text
-실행 주기: transfer.idempotency.cleanup-fixed-delay-ms, 기본 60000ms
+실행 주기: idempotency.cleanup-fixed-delay-ms, 기본 60000ms
 만료 기준: 10분 이상 PROCESSING 상태로 남은 레코드
 만료 후 상태: EXPIRED
 ```
@@ -105,9 +112,7 @@ memo
 ## 후속 작업
 
 ```text
-입금 API 멱등성 적용
 환전/1원 인증 등 외부 연동 작업으로 멱등성 적용 범위 확장
-공통 Idempotency 도메인 설계
 FAILED 응답 재사용 여부 검토
 EXPIRED 상태 재시도 허용 정책 검토
 ```
