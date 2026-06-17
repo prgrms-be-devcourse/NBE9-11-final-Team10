@@ -19,24 +19,24 @@ public class Account extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    private User user; // 계좌 소유 사용자
 
     @Column(nullable = false, unique = true, length = 30)
-    private String accountNumber;
+    private String accountNumber; // 계좌번호
 
     @Column(length = 50)
-    private String nickname;
+    private String nickname; // 계좌 별칭
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private AccountType accountType;
+    private AccountType accountType; // 계좌 타입
 
     @Column(nullable = false)
-    private Long balance;
+    private Long balance; // 계좌 잔액
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private AccountStatus status;
+    private AccountStatus status; // 계좌 상태
 
     public static Account create(
             User user,

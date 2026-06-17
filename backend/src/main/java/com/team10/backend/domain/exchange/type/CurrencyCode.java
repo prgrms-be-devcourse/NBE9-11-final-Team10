@@ -1,7 +1,8 @@
 package com.team10.backend.domain.exchange.type;
 
-// 외화 지갑이라 원화 제외
+
 public enum CurrencyCode {
+    KRW, // 한국 원
     USD, // 미국 달러
     JPY, // 일본 엔
     EUR, // 유럽 유로

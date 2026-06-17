@@ -90,7 +90,7 @@ class ExchangeRateServiceIntegrationTest {
         List<ExchangeRateRes> responses = exchangeRateService.syncCurrentRates();
 
         assertThat(responses).hasSize(3);
-        assertThat(currencyRepository.count()).isEqualTo(3);
+        assertThat(currencyRepository.count()).isEqualTo(4); // Currency에는 ExchangeRate와 달리 원화(KRW)가 초기화되어있음
         assertThat(exchangeRateRepository.count()).isEqualTo(3);
 
         Currency usdCurrency = currencyRepository.findByCurrencyCode(CurrencyCode.USD).orElseThrow();
@@ -127,7 +127,7 @@ class ExchangeRateServiceIntegrationTest {
         exchangeRateService.syncCurrentRates();
         exchangeRateService.syncCurrentRates();
 
-        assertThat(currencyRepository.count()).isEqualTo(1);
+        assertThat(currencyRepository.count()).isEqualTo(2); // Currency에는 ExchangeRate와 달리 원화(KRW)가 초기화되어있음
         assertThat(exchangeRateRepository.count()).isEqualTo(1);
 
         ExchangeRate usdRate = exchangeRateRepository.findByCurrencyCurrencyCode(CurrencyCode.USD).orElseThrow();

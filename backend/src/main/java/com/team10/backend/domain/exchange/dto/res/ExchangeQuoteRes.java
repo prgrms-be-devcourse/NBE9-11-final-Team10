@@ -2,6 +2,7 @@ package com.team10.backend.domain.exchange.dto.res;
 
 import com.team10.backend.domain.exchange.entity.ExchangeQuote;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
