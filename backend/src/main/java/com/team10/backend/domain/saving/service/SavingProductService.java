@@ -19,7 +19,6 @@ public class SavingProductService {
 
     private final SavingProductRepository savingProductRepository;
 
-    // 예금 상품 목록 조회
     public List<SavingProductSummaryRes> getDepositProducts() {
         return
                 savingProductRepository.findAllByTypeAndActiveTrue(SavingProductType.DEPOSIT).stream()
@@ -27,7 +26,6 @@ public class SavingProductService {
                         .toList();
     }
 
-    // 적금 상품 목록 조회
     public List<SavingProductSummaryRes> getInstallmentProducts() {
         return
                 savingProductRepository.findAllByTypeAndActiveTrue(SavingProductType.INSTALLMENT).stream()
@@ -35,7 +33,6 @@ public class SavingProductService {
                         .toList();
     }
 
-    // 예금 상품 상세 조회
     public SavingProductRes getDepositProduct(Long productId) {
         return
                 savingProductRepository.findByIdAndTypeAndActiveTrue(productId,
@@ -45,7 +42,6 @@ public class SavingProductService {
                                 BusinessException(SavingErrorCode.SAVING_PRODUCT_NOT_FOUND));
     }
 
-    // 적금 상품 상세 조회
     public SavingProductRes getInstallmentProduct(Long productId) {
         return
                 savingProductRepository.findByIdAndTypeAndActiveTrue(productId,
