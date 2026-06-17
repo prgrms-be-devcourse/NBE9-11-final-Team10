@@ -53,20 +53,17 @@ class InvestmentAccountControllerTest {
     @DisplayName("내 투자 계좌 목록 조회 API는 인증 사용자의 해지되지 않은 투자 계좌 목록을 반환한다")
     void getAccounts() throws Exception {
         InvestmentAccountSummaryRes response = new InvestmentAccountSummaryRes(
-                1L,
                 "1234567890-12",
                 "모의투자 계좌",
                 10000L,
                 CurrencyCode.KRW,
-                InvestmentAccountStatus.ACTIVE,
-                LocalDateTime.of(2026, 6, 17, 10, 30)
+                InvestmentAccountStatus.ACTIVE
         );
 
         when(investmentAccountService.getAccounts(1L)).thenReturn(List.of(response));
 
         mockMvc.perform(get("/api/v1/investment/accounts"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(1L))
                 .andExpect(jsonPath("$[0].accountNumber").value("1234567890-12"))
                 .andExpect(jsonPath("$[0].nickname").value("모의투자 계좌"))
                 .andExpect(jsonPath("$[0].cashBalance").value(10000L))
@@ -80,21 +77,18 @@ class InvestmentAccountControllerTest {
     @DisplayName("내 투자 계좌 상세 조회 API는 인증 사용자와 accountId로 투자 계좌 상세를 반환한다")
     void getAccount() throws Exception {
         InvestmentAccountDetailRes response = new InvestmentAccountDetailRes(
-                1L,
                 "1234567890-12",
                 "모의투자 계좌",
                 10000L,
                 CurrencyCode.KRW,
                 InvestmentAccountStatus.ACTIVE,
-                LocalDateTime.of(2026, 6, 17, 10, 30),
-                LocalDateTime.of(2026, 6, 17, 11, 0)
+                LocalDateTime.of(2026, 6, 17, 10, 30)
         );
 
         when(investmentAccountService.getAccount(1L, 1L)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/investment/accounts/{accountId}", 1L))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1L))
                 .andExpect(jsonPath("$.accountNumber").value("1234567890-12"))
                 .andExpect(jsonPath("$.nickname").value("모의투자 계좌"))
                 .andExpect(jsonPath("$.cashBalance").value(10000L))
