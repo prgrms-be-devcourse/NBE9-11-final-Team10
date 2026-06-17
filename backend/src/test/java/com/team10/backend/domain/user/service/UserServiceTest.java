@@ -87,7 +87,7 @@ class UserServiceTest {
             when(txManager.getTransaction(any())).thenReturn(txStatus);
             when(userRepository.existsByEmail("test@test.com")).thenReturn(false);
             when(passwordEncoder.encode("Password1!")).thenReturn("encoded");
-            when(userRepository.save(any())).thenAnswer(inv -> {
+            when(userRepository.saveAndFlush(any())).thenAnswer(inv -> {
                 User u = inv.getArgument(0);
                 ReflectionTestUtils.setField(u, "id", 1L);
                 return u;
