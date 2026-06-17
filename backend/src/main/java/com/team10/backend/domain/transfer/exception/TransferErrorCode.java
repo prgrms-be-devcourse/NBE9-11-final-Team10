@@ -23,6 +23,7 @@ public enum TransferErrorCode implements ErrorCode {
     IDEMPOTENCY_REQUEST_PROCESSING(HttpStatus.CONFLICT, "같은 키 요청이 아직 처리 중입니다."),
     IDEMPOTENCY_KEY_INVALID(HttpStatus.BAD_REQUEST, "유효하지 않은 키 형식입니다."),
     IDEMPOTENCY_REQUEST_FAILED(HttpStatus.CONFLICT, "같은 키 요청은 이미 실패 처리되었습니다."),
+    IDEMPOTENCY_REQUEST_EXPIRED(HttpStatus.CONFLICT, "만료된 멱등성 요청입니다."),
 
 
     ;

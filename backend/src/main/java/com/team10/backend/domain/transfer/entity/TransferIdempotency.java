@@ -4,7 +4,6 @@ import com.team10.backend.domain.transfer.type.IdempotencyStatus;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Pattern;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -70,6 +69,11 @@ public class TransferIdempotency extends BaseEntity {
 
     public void fail() {
         this.status = IdempotencyStatus.FAILED;
+        this.completedAt = LocalDateTime.now();
+    }
+
+    public void expire() {
+        this.status = IdempotencyStatus.EXPIRED;
         this.completedAt = LocalDateTime.now();
     }
 }

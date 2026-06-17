@@ -20,7 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.regex.Pattern;
 
 @Service
@@ -82,6 +85,19 @@ public class TransferIdempotencyService {
         idempotency.fail();
     }
 
+    // 특정기한보다 오래된 TransferIdempotency 상태를 EXPIRE로 만료처리
+    @Transactional
+    public int expireStaleProcessing(Duration timeout) {
+        LocalDateTime threshold = LocalDateTime.now().minus(timeout);
+
+        List<TransferIdempotency> staleRecords =
+                transferIdempotencyRepository.findStaleProcessing(threshold);
+
+        staleRecords.forEach(TransferIdempotency::expire);
+
+        return staleRecords.size();
+    }
+
 /*
     Race 처리 메서드
     1. 일단 PROCESSING insert를 시도한다.
@@ -136,6 +152,11 @@ public class TransferIdempotencyService {
         // 기존 FAILED 멱등성 키 재요청 -> 실패 예외로 막힘
         if (idempotency.getStatus() == IdempotencyStatus.FAILED) {
             throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_FAILED);
+        }
+
+        // 만료된 키 -> 만료 예외로 막힘
+        if (idempotency.getStatus() == IdempotencyStatus.EXPIRED) {
+            throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_EXPIRED);
         }
 
         throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_PROCESSING);
