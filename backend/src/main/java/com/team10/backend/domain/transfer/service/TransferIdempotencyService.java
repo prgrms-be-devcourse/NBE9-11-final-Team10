@@ -72,6 +72,16 @@ public class TransferIdempotencyService {
         idempotency.complete(transfer, serializeTransferResponse(response));
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void completeFailure(
+            Long idempotencyId
+    ) {
+        TransferIdempotency idempotency = transferIdempotencyRepository.findById(idempotencyId)
+                .orElseThrow();
+
+        idempotency.fail();
+    }
+
 /*
     Race 처리 메서드
     1. 일단 PROCESSING insert를 시도한다.
@@ -121,6 +131,11 @@ public class TransferIdempotencyService {
             return TransferIdempotencyReserveResult.replay(
                     deserializeTransferResponse(idempotency.getResponseBody())
             );
+        }
+
+        // 기존 FAILED 멱등성 키 재요청 -> 실패 예외로 막힘
+        if (idempotency.getStatus() == IdempotencyStatus.FAILED) {
+            throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_FAILED);
         }
 
         throw new BusinessException(TransferErrorCode.IDEMPOTENCY_REQUEST_PROCESSING);

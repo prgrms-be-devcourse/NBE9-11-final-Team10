@@ -276,12 +276,17 @@ class TransferServiceIntegrationTest {
         Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
         Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
         List<Transfer> transfers = transferRepository.findAll();
+        TransferIdempotency idempotency = transferIdempotencyRepository
+                .findByUser_IdAndIdempotencyKey(sender.getId(), "insufficient-balance-key")
+                .orElseThrow();
 
         assertEquals(TransferErrorCode.INSUFFICIENT_BALANCE, exception.getErrorCode());
         assertEquals(10_000L, savedSenderAccount.getBalance());
         assertEquals(10_000L, savedReceiverAccount.getBalance());
         assertEquals(1, transfers.size());
         assertEquals(0, transactionHistoryRepository.count());
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
 
         Transfer failedTransfer = transfers.getFirst();
         assertEquals(TransferStatus.FAILED, failedTransfer.getStatus());
@@ -289,6 +294,15 @@ class TransferServiceIntegrationTest {
         assertEquals(receiverAccount.getId(), failedTransfer.getReceiverAccount().getId());
         assertEquals(50_000L, failedTransfer.getAmount());
         assertEquals("잔액 부족", failedTransfer.getMemo());
+
+        BusinessException retryException = assertThrows(
+                BusinessException.class,
+                () -> transferService.transfer(sender.getId(), "insufficient-balance-key", senderAccount.getId(), "100200300002", 50_000L, "잔액 부족")
+        );
+
+        assertEquals(TransferErrorCode.IDEMPOTENCY_REQUEST_FAILED, retryException.getErrorCode());
+        assertEquals(1, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
     }
 
     @Test
