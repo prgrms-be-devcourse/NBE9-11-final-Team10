@@ -209,6 +209,48 @@ class TransferIdempotencyServiceTest {
         verify(transferIdempotencyRepository, never()).saveAndFlush(any());
     }
 
+    @Test
+    @DisplayName("멱등성 키가 100자를 초과하면 형식 예외를 발생시킨다")
+    void reserve_tooLongKey_throwsInvalid() {
+        String tooLongKey = "a".repeat(101);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> transferIdempotencyService.reserve(
+                        1L,
+                        tooLongKey,
+                        10L,
+                        "100200300002",
+                        50_000L,
+                        "점심값"
+                )
+        );
+
+        assertEquals(TransferErrorCode.IDEMPOTENCY_KEY_INVALID, exception.getErrorCode());
+        verify(transferIdempotencyRepository, never()).findByUser_IdAndIdempotencyKey(any(), any());
+        verify(transferIdempotencyRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("멱등성 키에 허용되지 않은 문자가 있으면 형식 예외를 발생시킨다")
+    void reserve_invalidCharacterKey_throwsInvalid() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> transferIdempotencyService.reserve(
+                        1L,
+                        "invalid key!",
+                        10L,
+                        "100200300002",
+                        50_000L,
+                        "점심값"
+                )
+        );
+
+        assertEquals(TransferErrorCode.IDEMPOTENCY_KEY_INVALID, exception.getErrorCode());
+        verify(transferIdempotencyRepository, never()).findByUser_IdAndIdempotencyKey(any(), any());
+        verify(transferIdempotencyRepository, never()).saveAndFlush(any());
+    }
+
     private TransferIdempotency processing(User user, String idempotencyKey, String requestHash) {
         return TransferIdempotency.processing(user, idempotencyKey, requestHash);
     }
