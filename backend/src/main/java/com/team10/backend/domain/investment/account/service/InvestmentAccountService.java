@@ -1,8 +1,10 @@
 package com.team10.backend.domain.investment.account.service;
 
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCreateReq;
+import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountUpdateReq;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCreateRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountOpenVerificationRes;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountUpdateRes;
 import com.team10.backend.domain.investment.account.entity.InvestmentAccount;
 import com.team10.backend.domain.investment.account.repository.InvestmentAccountRepository;
 import com.team10.backend.domain.investment.account.util.InvestmentAccountNumberGenerator;
@@ -59,9 +61,29 @@ public class InvestmentAccountService {
         return InvestmentAccountCreateRes.from(savedAccount);
     }
 
-    /**
-     * 존재하는 사용자 여부 및 인증 여부를 검증한다
-     */
+    @Transactional
+    public InvestmentAccountUpdateRes updateAccount(
+            Long userId,
+            Long accountId,
+            InvestmentAccountUpdateReq request
+    ) {
+        InvestmentAccount account = getActiveAccountForUpdate(userId, accountId);
+        account.verifyPassword(passwordEncoder, request.pastPassword());
+
+        /** dto 검증과 별개로 서비스 레이어에서 입력값 검증 */
+        if (request.nickname() == null && request.newPassword() == null) {
+            throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_UPDATE_VALUE_REQUIRED);
+        }
+        if (request.nickname() != null) {
+            account.updateNickname(request.nickname());
+        }
+        if (request.newPassword() != null) {
+            account.changePassword(passwordEncoder.encode(request.newPassword()));
+        }
+
+        return InvestmentAccountUpdateRes.from(account);
+    }
+
     private User getVerifiedUser(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
@@ -83,5 +105,16 @@ public class InvestmentAccountService {
         }
 
         throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NUMBER_GENERATION_FAILED);
+    }
+
+    private InvestmentAccount getActiveAccountForUpdate(Long userId, Long accountId) {
+        InvestmentAccount account = investmentAccountRepository.findByIdAndUserIdForUpdate(accountId, userId)
+                .orElseThrow(() -> new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
+
+        if (!account.isActive()) {
+            throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_ACTIVE);
+        }
+
+        return account;
     }
 }

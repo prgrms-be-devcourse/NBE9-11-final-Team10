@@ -4,14 +4,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCreateReq;
+import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountUpdateReq;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCreateRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountOpenVerificationRes;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountUpdateRes;
 import com.team10.backend.domain.investment.account.service.InvestmentAccountService;
 import com.team10.backend.domain.investment.account.type.InvestmentAccountStatus;
 import com.team10.backend.domain.investment.type.CurrencyCode;
@@ -119,6 +122,117 @@ class InvestmentAccountControllerTest {
                 new InvestmentAccountCreateReq("모의투자 계좌", "123456", "verification-key", null);
 
         mockMvc.perform(post("/api/v1/investment/accounts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("투자 계좌 정보 수정 API는 인증 사용자, accountId, 요청 본문을 받아 계좌 상세를 반환한다")
+    void updateAccount() throws Exception {
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", "장기투자 계좌", "654321");
+        InvestmentAccountUpdateRes response = new InvestmentAccountUpdateRes(
+                "장기투자 계좌",
+                LocalDateTime.of(2026, 6, 17, 11, 0)
+        );
+
+        when(investmentAccountService.updateAccount(eq(1L), eq(1L), any(InvestmentAccountUpdateReq.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(patch("/api/v1/investment/accounts/{accountId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nickname").value("장기투자 계좌"))
+                .andExpect(jsonPath("$.updatedAt").value("2026-06-17T11:00:00"));
+
+        verify(investmentAccountService).updateAccount(eq(1L), eq(1L), any(InvestmentAccountUpdateReq.class));
+    }
+
+    @Test
+    @DisplayName("투자 계좌 정보 수정 API는 별칭만 전달해도 200을 반환한다")
+    void updateAccountWithNicknameOnly() throws Exception {
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", "장기투자 계좌", null);
+        InvestmentAccountUpdateRes response = new InvestmentAccountUpdateRes(
+                "장기투자 계좌",
+                LocalDateTime.of(2026, 6, 17, 11, 0)
+        );
+
+        when(investmentAccountService.updateAccount(eq(1L), eq(1L), any(InvestmentAccountUpdateReq.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(patch("/api/v1/investment/accounts/{accountId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nickname").value("장기투자 계좌"));
+    }
+
+    @Test
+    @DisplayName("투자 계좌 정보 수정 API는 새 비밀번호만 전달해도 200을 반환한다")
+    void updateAccountWithPasswordOnly() throws Exception {
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", null, "654321");
+        InvestmentAccountUpdateRes response = new InvestmentAccountUpdateRes(
+                "모의투자 계좌",
+                LocalDateTime.of(2026, 6, 17, 11, 0)
+        );
+
+        when(investmentAccountService.updateAccount(eq(1L), eq(1L), any(InvestmentAccountUpdateReq.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(patch("/api/v1/investment/accounts/{accountId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nickname").value("모의투자 계좌"));
+    }
+
+    @Test
+    @DisplayName("투자 계좌 정보 수정 API는 비밀번호가 숫자 6자리가 아니면 400을 반환한다")
+    void updateAccountWithInvalidPassword() throws Exception {
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("12345a", "장기투자 계좌", null);
+
+        mockMvc.perform(patch("/api/v1/investment/accounts/{accountId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("투자 계좌 정보 수정 API는 별칭이 공백이면 400을 반환한다")
+    void updateAccountWithBlankNickname() throws Exception {
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", "", null);
+
+        mockMvc.perform(patch("/api/v1/investment/accounts/{accountId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("투자 계좌 정보 수정 API는 새 비밀번호가 숫자 6자리가 아니면 400을 반환한다")
+    void updateAccountWithInvalidNewPassword() throws Exception {
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", null, "65432a");
+
+        mockMvc.perform(patch("/api/v1/investment/accounts/{accountId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("투자 계좌 정보 수정 API는 수정할 값이 없으면 400을 반환한다")
+    void updateAccountWithoutUpdateValue() throws Exception {
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", null, null);
+
+        mockMvc.perform(patch("/api/v1/investment/accounts/{accountId}", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());

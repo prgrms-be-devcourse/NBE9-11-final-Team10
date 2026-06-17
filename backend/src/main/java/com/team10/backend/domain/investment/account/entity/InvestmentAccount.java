@@ -91,12 +91,20 @@ public class InvestmentAccount extends BaseEntity {
         return this.status == InvestmentAccountStatus.ACTIVE;
     }
 
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
+    public void changePassword(String accountPasswordHash) {
+        this.accountPasswordHash = accountPasswordHash;
+    }
+
     public void verifyPassword(
             PasswordEncoder encoder,
             String rawPassword
     ) {
         if (!encoder.matches(rawPassword, accountPasswordHash)) {
-            throw new BusinessException((InvestmentErrorCode.INVESTMENT_ACCOUNT_PASSWORD_MISMATCH));
+            throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_PASSWORD_MISMATCH);
         }
     }
 

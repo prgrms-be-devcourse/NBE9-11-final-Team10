@@ -8,8 +8,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountCreateReq;
+import com.team10.backend.domain.investment.account.dto.req.InvestmentAccountUpdateReq;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountCreateRes;
 import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountOpenVerificationRes;
+import com.team10.backend.domain.investment.account.dto.res.InvestmentAccountUpdateRes;
 import com.team10.backend.domain.investment.account.entity.InvestmentAccount;
 import com.team10.backend.domain.investment.account.repository.InvestmentAccountRepository;
 import com.team10.backend.domain.investment.account.type.InvestmentAccountStatus;
@@ -176,6 +178,133 @@ class InvestmentAccountServiceTest {
         verify(verificationKeyService, never()).verifyAndDelete(any(Long.class), any(String.class));
     }
 
+    @Test
+    @DisplayName("투자 계좌 비밀번호가 일치하면 전달된 별칭만 수정한다")
+    void updateAccountWithNicknameOnly() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", "장기투자 계좌", null);
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
+
+        InvestmentAccountUpdateRes response = investmentAccountService.updateAccount(1L, 1L, request);
+
+        assertThat(response.nickname()).isEqualTo("장기투자 계좌");
+        assertThat(response.updatedAt()).isEqualTo(account.getUpdatedAt());
+        assertThat(account.getNickname()).isEqualTo("장기투자 계좌");
+        assertThat(account.getAccountPasswordHash()).isEqualTo("encoded-password");
+        verify(passwordEncoder, never()).encode(any(String.class));
+    }
+
+    @Test
+    @DisplayName("투자 계좌 비밀번호가 일치하지 않으면 정보 수정에 실패한다")
+    void updateAccountWithPasswordMismatch() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("000000", "장기투자 계좌", null);
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("000000", "encoded-password")).thenReturn(false);
+
+        assertThatThrownBy(() -> investmentAccountService.updateAccount(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_PASSWORD_MISMATCH);
+
+        assertThat(account.getNickname()).isEqualTo("모의투자 계좌");
+        assertThat(account.getAccountPasswordHash()).isEqualTo("encoded-password");
+    }
+
+    @Test
+    @DisplayName("ACTIVE 상태가 아닌 투자 계좌는 정보를 수정할 수 없다")
+    void updateAccountWithNotActiveStatus() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        ReflectionTestUtils.setField(account, "status", InvestmentAccountStatus.CLOSED);
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", "장기투자 계좌", null);
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> investmentAccountService.updateAccount(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_ACTIVE);
+
+        verify(passwordEncoder, never()).matches(any(String.class), any(String.class));
+    }
+
+    @Test
+    @DisplayName("투자 계좌 비밀번호가 일치하면 전달된 새 비밀번호만 수정한다")
+    void updateAccountWithPasswordOnly() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", null, "654321");
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
+        when(passwordEncoder.encode("654321")).thenReturn("new-encoded-password");
+
+        InvestmentAccountUpdateRes response = investmentAccountService.updateAccount(1L, 1L, request);
+
+        assertThat(response.nickname()).isEqualTo("모의투자 계좌");
+        assertThat(response.updatedAt()).isEqualTo(account.getUpdatedAt());
+        assertThat(account.getNickname()).isEqualTo("모의투자 계좌");
+        assertThat(account.getAccountPasswordHash()).isEqualTo("new-encoded-password");
+    }
+
+    @Test
+    @DisplayName("투자 계좌 비밀번호가 일치하면 별칭과 새 비밀번호를 함께 수정한다")
+    void updateAccountWithNicknameAndPassword() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", "장기투자 계좌", "654321");
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
+        when(passwordEncoder.encode("654321")).thenReturn("new-encoded-password");
+
+        InvestmentAccountUpdateRes response = investmentAccountService.updateAccount(1L, 1L, request);
+
+        assertThat(response.nickname()).isEqualTo("장기투자 계좌");
+        assertThat(response.updatedAt()).isEqualTo(account.getUpdatedAt());
+        assertThat(account.getNickname()).isEqualTo("장기투자 계좌");
+        assertThat(account.getAccountPasswordHash()).isEqualTo("new-encoded-password");
+    }
+
+    @Test
+    @DisplayName("수정할 값이 없으면 투자 계좌 정보 수정에 실패한다")
+    void updateAccountWithoutUpdateValue() {
+        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", null, null);
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
+
+        assertThatThrownBy(() -> investmentAccountService.updateAccount(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_UPDATE_VALUE_REQUIRED);
+
+        assertThat(account.getAccountPasswordHash()).isEqualTo("encoded-password");
+        verify(passwordEncoder, never()).encode(any(String.class));
+    }
+
+    @Test
+    @DisplayName("내 계좌가 아니거나 존재하지 않는 투자 계좌는 수정할 수 없다")
+    void updateAccountWithNotFoundAccount() {
+        InvestmentAccountUpdateReq request =
+                new InvestmentAccountUpdateReq("123456", null, "654321");
+
+        when(investmentAccountRepository.findByIdAndUserIdForUpdate(999L, 1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> investmentAccountService.updateAccount(1L, 999L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND);
+    }
+
     private User createUser(Long id, boolean identityVerified) {
         User user = User.create(
                 "user" + id + "@example.com",
@@ -187,5 +316,17 @@ class InvestmentAccountServiceTest {
         ReflectionTestUtils.setField(user, "id", id);
         ReflectionTestUtils.setField(user, "identityVerified", identityVerified);
         return user;
+    }
+
+    private InvestmentAccount createInvestmentAccount(Long id, User user, String nickname) {
+        InvestmentAccount account = InvestmentAccount.create(
+                user,
+                "1234567890-12",
+                nickname,
+                "encoded-password",
+                CurrencyCode.KRW
+        );
+        ReflectionTestUtils.setField(account, "id", id);
+        return account;
     }
 }
