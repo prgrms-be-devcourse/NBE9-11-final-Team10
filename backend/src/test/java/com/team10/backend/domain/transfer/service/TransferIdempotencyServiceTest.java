@@ -5,6 +5,7 @@ import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.TransferIdempotency;
 import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.transfer.repository.TransferIdempotencyRepository;
+import com.team10.backend.domain.transfer.type.IdempotencyStatus;
 import com.team10.backend.domain.transfer.type.TransferStatus;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
@@ -251,8 +252,50 @@ class TransferIdempotencyServiceTest {
         verify(transferIdempotencyRepository, never()).saveAndFlush(any());
     }
 
+    @Test
+    @DisplayName("실패 완료 처리 시 멱등성 레코드를 FAILED 상태로 변경한다")
+    void completeFailure_marksIdempotencyAsFailed() {
+        TransferIdempotency idempotency = processing(mock(User.class), "failed-key", "request-hash");
+        when(transferIdempotencyRepository.findById(1L)).thenReturn(Optional.of(idempotency));
+
+        transferIdempotencyService.completeFailure(1L);
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("기존 멱등성 레코드가 FAILED이면 실패 예외를 발생시킨다")
+    void reserve_existingFailed_throwsFailed() {
+        String requestHash = requestHash(10L, "100200300002", 50_000L, "점심값");
+        TransferIdempotency existing = failed(mock(User.class), "failed-key", requestHash);
+        when(transferIdempotencyRepository.findByUser_IdAndIdempotencyKey(1L, "failed-key"))
+                .thenReturn(Optional.of(existing));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> transferIdempotencyService.reserve(
+                        1L,
+                        "failed-key",
+                        10L,
+                        "100200300002",
+                        50_000L,
+                        "점심값"
+                )
+        );
+
+        assertEquals(TransferErrorCode.IDEMPOTENCY_REQUEST_FAILED, exception.getErrorCode());
+        verify(transferIdempotencyRepository, never()).saveAndFlush(any());
+    }
+
     private TransferIdempotency processing(User user, String idempotencyKey, String requestHash) {
         return TransferIdempotency.processing(user, idempotencyKey, requestHash);
+    }
+
+    private TransferIdempotency failed(User user, String idempotencyKey, String requestHash) {
+        TransferIdempotency idempotency = TransferIdempotency.processing(user, idempotencyKey, requestHash);
+        idempotency.fail();
+        return idempotency;
     }
 
     private TransferIdempotency success(

@@ -198,6 +198,7 @@ class TransferServiceTest {
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
         verify(transactionHistoryRepository, never()).save(any());
         verify(transferIdempotencyService, never()).completeSuccess(any(), any(), any());
+        verify(transferIdempotencyService).completeFailure(11L);
     }
 
     @Test
@@ -227,6 +228,7 @@ class TransferServiceTest {
         verify(transferRepository, never()).save(any(Transfer.class));
         verify(transactionHistoryRepository, never()).save(any());
         verify(transferIdempotencyService, never()).completeSuccess(any(), any(), any());
+        verify(transferIdempotencyService).completeFailure(12L);
 
         TransferFailedEvent event = eventCaptor.getValue();
         assertEquals(1L, event.senderAccountId());

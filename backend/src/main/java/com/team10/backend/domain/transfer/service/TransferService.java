@@ -85,75 +85,80 @@ public class TransferService {
 
         TransferIdempotency idempotency = reserveResult.idempotency();
 
-        // amount 1원 이상 확인
-        if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
-
-        // 락 획득
-        LockedTransferAccounts accounts =
-                lockTransferAccounts(senderAccountId, receiverAccountNumber);
-
-        Account senderAccount = accounts.sender();
-        Account receiverAccount = accounts.receiver();
-
-        // 출금 계좌가 로그인 유저의 소유인지 확인
-        validateSenderOwner(senderAccount, userId);
-        // 서로 다른 계좌인지 확인
-        validateDifferentAccounts(senderAccount, receiverAccount);
-        // 두 계좌 모두 ACTIVE인지 확인
-        validateAccountsActive(senderAccount, receiverAccount);
-
-        // 이전 잔액 캡쳐
-        Long senderBalanceBefore = senderAccount.getBalance();
-        Long receiverBalanceBefore = receiverAccount.getBalance();
-
-        // 출금 계좌 잔액 충분한지 확인 -> account.withdraw() 내부에 확인 로직 구현
         try {
-            senderAccount.withdraw(amount);
-        } catch (BusinessException e) {
-            if (e.getErrorCode() == TransferErrorCode.INSUFFICIENT_BALANCE) {
-                publishTransferFailedEvent(senderAccount.getId(), receiverAccount.getId(), amount, memo);
+            // amount 1원 이상 확인
+            if (amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
+
+            // 락 획득
+            LockedTransferAccounts accounts =
+                    lockTransferAccounts(senderAccountId, receiverAccountNumber);
+
+            Account senderAccount = accounts.sender();
+            Account receiverAccount = accounts.receiver();
+
+            // 출금 계좌가 로그인 유저의 소유인지 확인
+            validateSenderOwner(senderAccount, userId);
+            // 서로 다른 계좌인지 확인
+            validateDifferentAccounts(senderAccount, receiverAccount);
+            // 두 계좌 모두 ACTIVE인지 확인
+            validateAccountsActive(senderAccount, receiverAccount);
+
+            // 이전 잔액 캡쳐
+            Long senderBalanceBefore = senderAccount.getBalance();
+            Long receiverBalanceBefore = receiverAccount.getBalance();
+
+            // 출금 계좌 잔액 충분한지 확인 -> account.withdraw() 내부에 확인 로직 구현
+            try {
+                senderAccount.withdraw(amount);
+            } catch (BusinessException e) {
+                if (e.getErrorCode() == TransferErrorCode.INSUFFICIENT_BALANCE) {
+                    publishTransferFailedEvent(senderAccount.getId(), receiverAccount.getId(), amount, memo);
+                }
+                throw e;
             }
+            receiverAccount.deposit(amount); // 수취 계좌 balance 증가
+
+            // Transfer(SUCCESS) 저장
+            Transfer transfer = transferRepository.save(Transfer.success(senderAccount, receiverAccount, amount, memo));
+            LocalDateTime transferredAt = LocalDateTime.now();
+            // 출금 계좌 TransactionHistory(TRANSFER, OUT) 저장
+            TransactionHistory senderHistory = TransactionHistory.createTransferOut(
+                    senderAccount,
+                    transfer,
+                    amount,
+                    senderBalanceBefore,
+                    senderAccount.getBalance(),
+                    receiverAccount.getAccountNumber(),
+                    receiverAccount.getUser().getName(),
+                    memo,
+                    transferredAt
+            );
+
+            // 수취 계좌 TransactionHistory(TRANSFER, IN) 저장
+            TransactionHistory receiverHistory = TransactionHistory.createTransferIn(
+                    receiverAccount,
+                    transfer,
+                    amount,
+                    receiverBalanceBefore,
+                    receiverAccount.getBalance(),
+                    senderAccount.getAccountNumber(),
+                    senderAccount.getUser().getName(),
+                    memo,
+                    transferredAt
+            );
+
+            transactionHistoryRepository.save(senderHistory);
+            transactionHistoryRepository.save(receiverHistory);
+
+            TransferRes response = TransferRes.from(transfer, transferredAt);
+            // TransferIdempotency 객체의 상태를 SUCCESS로 변경 및 JSON 송금 성공 당시의 응답객체 저장
+            transferIdempotencyService.completeSuccess(idempotency.getId(), transfer, response);
+
+            return response;
+        } catch (BusinessException e) { // 비즈니스 예외가 발생했을 때에만(멱등 검증은 통과한 경우) 송금 멱등성 실패상태 기록
+            transferIdempotencyService.completeFailure(idempotency.getId());
             throw e;
         }
-        receiverAccount.deposit(amount); // 수취 계좌 balance 증가
-
-        // Transfer(SUCCESS) 저장
-        Transfer transfer = transferRepository.save(Transfer.success(senderAccount, receiverAccount, amount, memo));
-        LocalDateTime transferredAt = LocalDateTime.now();
-        // 출금 계좌 TransactionHistory(TRANSFER, OUT) 저장
-        TransactionHistory senderHistory = TransactionHistory.createTransferOut(
-                senderAccount,
-                transfer,
-                amount,
-                senderBalanceBefore,
-                senderAccount.getBalance(),
-                receiverAccount.getAccountNumber(),
-                receiverAccount.getUser().getName(),
-                memo,
-                transferredAt
-        );
-
-        // 수취 계좌 TransactionHistory(TRANSFER, IN) 저장
-        TransactionHistory receiverHistory = TransactionHistory.createTransferIn(
-                receiverAccount,
-                transfer,
-                amount,
-                receiverBalanceBefore,
-                receiverAccount.getBalance(),
-                senderAccount.getAccountNumber(),
-                senderAccount.getUser().getName(),
-                memo,
-                transferredAt
-        );
-
-        transactionHistoryRepository.save(senderHistory);
-        transactionHistoryRepository.save(receiverHistory);
-
-        TransferRes response = TransferRes.from(transfer, transferredAt);
-        // TransferIdempotency 객체의 상태를 SUCCESS로 변경 및 JSON 송금 성공 당시의 응답객체 저장
-        transferIdempotencyService.completeSuccess(idempotency.getId(), transfer, response);
-
-        return response;
     }
 
 
