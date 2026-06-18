@@ -7,7 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 
 @Schema(description = "입금 응답")
-public record DepositRes(
+public record TopUpRes(
         @Schema(description = "거래내역 ID", example = "10")
         Long transactionId,
 
@@ -32,8 +32,8 @@ public record DepositRes(
         @Schema(description = "거래 발생 시각", example = "2026-06-17T10:00:00")
         LocalDateTime transactedAt
 ) {
-    public static DepositRes from(TransactionHistory transactionHistory) {
-        return new DepositRes(
+    public static TopUpRes from(TransactionHistory transactionHistory) {
+        return new TopUpRes(
                 transactionHistory.getId(),             // 거래내역ID
                 transactionHistory.getAccount().getId(),// 입금 대상 계좌ID
                 transactionHistory.getType(),           // 거래유형 (입금)

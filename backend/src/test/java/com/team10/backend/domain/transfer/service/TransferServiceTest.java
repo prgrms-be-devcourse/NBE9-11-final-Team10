@@ -7,7 +7,7 @@ import com.team10.backend.domain.transaction.entity.TransactionHistory;
 import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
 import com.team10.backend.domain.transaction.type.TransactionDirection;
 import com.team10.backend.domain.transaction.type.TransactionType;
-import com.team10.backend.domain.transfer.dto.res.DepositRes;
+import com.team10.backend.domain.transfer.dto.res.TopUpRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.Transfer;
 import com.team10.backend.domain.transfer.exception.TransferErrorCode;
@@ -68,7 +68,7 @@ class TransferServiceTest {
         Account account = account(1L, user(), "100200300001", 10_000L);
         Idempotency idempotency = idempotency(9L, user(), IdempotencyOperationType.DEPOSIT, "deposit-key");
         when(idempotencyRequestHasher.generate(1L, 5_000L, "입금 메모")).thenReturn("deposit-request-hash");
-        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", DepositRes.class))
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", TopUpRes.class))
                 .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
         when(transactionHistoryRepository.save(any(TransactionHistory.class)))
@@ -78,7 +78,7 @@ class TransferServiceTest {
                     return history;
                 });
 
-        DepositRes response = transferService.topUp(1L, "deposit-key", 1L, 5_000L, "입금 메모");
+        TopUpRes response = transferService.topUp(1L, "deposit-key", 1L, 5_000L, "입금 메모");
 
         assertEquals(15_000L, account.getBalance());
         assertEquals(100L, response.transactionId());
@@ -109,7 +109,7 @@ class TransferServiceTest {
     void deposit_invalidAmount_throwsInvalidInputValue() {
         Idempotency idempotency = idempotency(10L, user(), IdempotencyOperationType.DEPOSIT, "invalid-deposit-key");
         when(idempotencyRequestHasher.generate(1L, 0L, "입금 메모")).thenReturn("invalid-deposit-request-hash");
-        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "invalid-deposit-key", "invalid-deposit-request-hash", DepositRes.class))
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "invalid-deposit-key", "invalid-deposit-request-hash", TopUpRes.class))
                 .thenReturn(IdempotencyReserveResult.reserved(idempotency));
 
         BusinessException exception = assertThrows(
@@ -128,7 +128,7 @@ class TransferServiceTest {
     void deposit_accountNotFound_throwsAccountNotFound() {
         Idempotency idempotency = idempotency(11L, user(), IdempotencyOperationType.DEPOSIT, "missing-account-key");
         when(idempotencyRequestHasher.generate(1L, 5_000L, "입금 메모")).thenReturn("missing-account-request-hash");
-        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "missing-account-key", "missing-account-request-hash", DepositRes.class))
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "missing-account-key", "missing-account-request-hash", TopUpRes.class))
                 .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.empty());
 

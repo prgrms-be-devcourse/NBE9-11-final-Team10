@@ -7,7 +7,7 @@ import com.team10.backend.domain.transaction.entity.TransactionHistory;
 import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
 import com.team10.backend.domain.transaction.type.TransactionDirection;
 import com.team10.backend.domain.transaction.type.TransactionType;
-import com.team10.backend.domain.transfer.dto.res.DepositRes;
+import com.team10.backend.domain.transfer.dto.res.TopUpRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.domain.transfer.entity.Transfer;
 import com.team10.backend.domain.transfer.exception.TransferErrorCode;
@@ -72,7 +72,7 @@ class TransferServiceIntegrationTest {
         User user = saveUser("sender@example.com", "홍길동");
         Account account = saveAccount(user, "100200300001", 10_000L);
 
-        DepositRes response = transferService.topUp(user.getId(), "deposit-success-key", account.getId(), 5_000L, "입금 메모");
+        TopUpRes response = transferService.topUp(user.getId(), "deposit-success-key", account.getId(), 5_000L, "입금 메모");
         flushAndClear();
 
         Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
@@ -99,14 +99,14 @@ class TransferServiceIntegrationTest {
         User user = saveUser("sender@example.com", "홍길동");
         Account account = saveAccount(user, "100200300001", 10_000L);
 
-        DepositRes firstResponse = transferService.topUp(
+        TopUpRes firstResponse = transferService.topUp(
                 user.getId(),
                 "same-deposit-key",
                 account.getId(),
                 5_000L,
                 "입금 메모"
         );
-        DepositRes retryResponse = transferService.topUp(
+        TopUpRes retryResponse = transferService.topUp(
                 user.getId(),
                 "same-deposit-key",
                 account.getId(),
