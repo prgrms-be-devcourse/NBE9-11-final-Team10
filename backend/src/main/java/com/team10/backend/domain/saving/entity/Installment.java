@@ -45,9 +45,6 @@ public class Installment extends BaseEntity {
     private LocalDate maturityDate; // 만기일
 
     @Column(nullable = false)
-    private Long progressRate; // 목표 대비 진행률
-
-    @Column(nullable = false)
     private boolean autoTransferYn; // 자동이체 여부
 
     @Enumerated(EnumType.STRING)
@@ -70,12 +67,15 @@ public class Installment extends BaseEntity {
         installment.withdrawAccount = withdrawAccount;
         installment.monthlyAmount = monthlyAmount;
         installment.targetAmount = targetAmount;
-        installment.paidAmount = 0L;
-        installment.progressRate = 0L;
+        installment.paidAmount = monthlyAmount; // 가입 시 1회차 납입금
         installment.interestRate = interestRate;
         installment.maturityDate = maturityDate;
         installment.autoTransferYn = autoTransferYn;
         installment.status = InstallmentStatus.ACTIVE;
         return installment;
+    }
+
+    public Long getProgressRate() {
+        return paidAmount * 100 / targetAmount;
     }
 }

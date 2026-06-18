@@ -134,6 +134,9 @@ public class SavingDepositService {
         LocalDate maturityDate = LocalDate.now()
                 .plusMonths(savingProduct.getPeriodMonth());
 
+        // 적금 가입할 때 출금 계좌에서 1회차 월 납입액을 빼는 코드
+        withdrawAccount.withdraw(request.monthlyAmount());
+
         Installment installment = Installment.create(
                 user,
                 savingProduct,

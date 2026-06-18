@@ -307,7 +307,8 @@ class SavingDepositServiceTest {
         assertThat(response.installmentId()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(InstallmentStatus.ACTIVE);
         assertThat(response.maturityDate()).isEqualTo(LocalDate.now().plusMonths(12));
-        assertThat(response.progressRate()).isEqualTo(0L);
+        assertThat(response.progressRate()).isEqualTo(8L);
+        assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
         verify(installmentRepository).save(any(Installment.class));
     }
 
@@ -418,6 +419,23 @@ class SavingDepositServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(SavingErrorCode.INVALID_TARGET_AMOUNT);
+    }
+
+    @Test
+    @DisplayName("출금 계좌 잔액이 부족하면 적금 가입에 실패한다")
+    void createInstallmentWithInsufficientBalance() {
+        InstallmentCreateReq request = new InstallmentCreateReq(2L, 1L, 100000L, 1200000L, true);
+        Account insufficientAccount = createAccount(1L, user, AccountStatus.ACTIVE, 50000L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(savingProductRepository.findByIdAndTypeAndActiveTrue(2L, SavingProductType.INSTALLMENT))
+                .thenReturn(Optional.of(installmentProduct));
+        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(insufficientAccount));
+
+        assertThatThrownBy(() -> savingDepositService.createInstallment(1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(TransferErrorCode.INSUFFICIENT_BALANCE);
     }
 
     private User createUser(Long id) {
