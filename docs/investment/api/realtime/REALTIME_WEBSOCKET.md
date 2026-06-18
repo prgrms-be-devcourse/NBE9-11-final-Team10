@@ -124,6 +124,9 @@ text 종목코드 ^ 영업시간 ^ 시간구분 ^ 매도호가1 ^ 매도호가2 
 
 text KIS WebSocket ↓ 실시간 호가 수신 ↓ Spring WebSocket Manager ↓ 호가 DTO 변환 ↓ SSE 전송 ↓ Frontend
 
+서버 측 멀티 인스턴스 환경에서의 WebSocket/SSE/Redis 연동 설계는
+[실시간 호가 스트리밍 서버 설계](../../streaming/REALTIME_ORDERBOOK_STREAMING_DESIGN.md)를 따른다.
+
 ---
 
 ## 활용 예시
