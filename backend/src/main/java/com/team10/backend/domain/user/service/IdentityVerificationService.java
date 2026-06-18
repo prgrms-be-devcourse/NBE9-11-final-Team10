@@ -32,6 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -46,6 +47,10 @@ import java.util.concurrent.RejectedExecutionException;
 public class IdentityVerificationService {
 
     private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024L; // 10 MB
+    // Content-Type 헤더는 클라이언트가 임의로 지정 가능하므로, 실제 파일 시그니처(매직바이트)로 한 번 더 검증한다.
+    private static final byte[] JPEG_SIGNATURE = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+    private static final byte[] PNG_SIGNATURE =
+            {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
     private static final String OCR_DAILY_KEY_PREFIX = "identity:ocr:daily:";
     private static final int MAX_OCR_DAILY = 5;
     private static final Duration DAILY_TTL = Duration.ofDays(1);
@@ -229,5 +234,32 @@ public class IdentityVerificationService {
                 || (!contentType.equals("image/jpeg") && !contentType.equals("image/png"))) {
             throw new BusinessException(UserErrorCode.OCR_IMAGE_INVALID_TYPE);
         }
+        if (!hasValidImageSignature(imageFile)) {
+            throw new BusinessException(UserErrorCode.OCR_IMAGE_INVALID_TYPE);
+        }
+    }
+
+    /** Content-Type 헤더 조작 우회 방지 — 파일 앞부분의 실제 매직바이트가 JPEG/PNG 시그니처와 일치하는지 확인한다. */
+    private boolean hasValidImageSignature(MultipartFile imageFile) {
+        byte[] header = new byte[8];
+        int read;
+        try (InputStream in = imageFile.getInputStream()) {
+            read = in.read(header);
+        } catch (IOException e) {
+            return false;
+        }
+        if (read >= JPEG_SIGNATURE.length && matchesSignature(header, JPEG_SIGNATURE)) {
+            return true;
+        }
+        return read >= PNG_SIGNATURE.length && matchesSignature(header, PNG_SIGNATURE);
+    }
+
+    private boolean matchesSignature(byte[] header, byte[] signature) {
+        for (int i = 0; i < signature.length; i++) {
+            if (header[i] != signature[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 }

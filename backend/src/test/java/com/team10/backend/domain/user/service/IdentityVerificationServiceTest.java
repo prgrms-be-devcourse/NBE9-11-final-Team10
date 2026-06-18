@@ -430,7 +430,12 @@ class IdentityVerificationServiceTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     private MockMultipartFile jpegFile(int size) {
-        return new MockMultipartFile("image", "test.jpg", "image/jpeg", new byte[size]);
+        byte[] content = new byte[size];
+        // 매직바이트 검증(hasValidImageSignature)을 통과하도록 JPEG 시그니처(FF D8 FF)를 선두에 채운다.
+        content[0] = (byte) 0xFF;
+        content[1] = (byte) 0xD8;
+        content[2] = (byte) 0xFF;
+        return new MockMultipartFile("image", "test.jpg", "image/jpeg", content);
     }
 
     private User createUser(Long id, boolean identityVerified) {

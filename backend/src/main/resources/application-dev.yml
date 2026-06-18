@@ -29,10 +29,8 @@ spring:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
-
-
 logging:
   level:
-    org.hibernate.orm.jdbc.bind: TRACE
-    org.hibernate.orm.jdbc.extract: TRACE
+    # bind/extract TRACE는 SQL 바인드 파라미터(주민등록번호 등 PII 포함 가능)를 평문으로 로그에 남기므로 비활성화.
+    # SQL 문 자체는 show-sql/format_sql로 충분히 확인 가능.
     com.team10.backend.domain.user.ocr: DEBUG
