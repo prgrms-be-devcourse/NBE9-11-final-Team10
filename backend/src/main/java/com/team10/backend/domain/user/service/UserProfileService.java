@@ -27,8 +27,11 @@ public class UserProfileService {
             throw new BusinessException(UserErrorCode.PROFILE_ALREADY_EXISTS);
         }
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        // FK 연결용으로만 쓰이므로 findById(풀 로딩) 대신 존재 확인 + getReferenceById(프록시)로 SELECT 한 번 절약
+        if (!userRepository.existsById(userId)) {
+            throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
+        }
+        User user = userRepository.getReferenceById(userId);
 
         UserProfile profile = UserProfile.create(
                 user,
