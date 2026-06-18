@@ -1,6 +1,7 @@
 package com.team10.backend.domain.user.entity;
 
 import com.team10.backend.domain.user.type.VerificationStatus;
+import com.team10.backend.global.crypto.CryptoStringConverter;
 import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -28,8 +29,13 @@ public class IdentityVerification extends BaseEntity {
     @Column(length = 50)
     private String ocrName;
 
-    /** OCR로 추출한 주민등록번호 (뒷자리 포함 원문 저장, 실운영에서는 암호화 필요) */
-    @Column(length = 20)
+    /**
+     * OCR로 추출한 주민등록번호.
+     * {@link CryptoStringConverter}로 AES-256-GCM 암호화되어 DB에 저장된다 (애플리케이션 코드에서는 평문으로 다룸).
+     * 인증 완료/실패 시 {@link #maskResidentNumber()}로 뒷자리를 마스킹한 뒤 암호화된 채 저장된다.
+     */
+    @Convert(converter = CryptoStringConverter.class)
+    @Column(length = 255)
     private String ocrResidentNumber;
 
     /** OCR로 추출한 발급일자 (yyyy-MM-dd 형식 정규화) */

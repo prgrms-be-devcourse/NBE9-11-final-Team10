@@ -56,3 +56,7 @@ portone:
   api-secret: test-portone-secret
   store-id: test-store-id
   channel-key: test-channel-key
+
+app:
+  encryption:
+    key: IHVNIRQkRQVL467W70YUxpqSszxvhquhFmIuxCkd2Us=
