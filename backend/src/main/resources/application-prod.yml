@@ -18,11 +18,6 @@ spring:
 cookie:
   secure: true
 
-app:
-  encryption:
-    # 운영 키는 코드/레포에 두지 않고 반드시 ENCRYPTION_KEY 환경변수로 주입 (기본값 없음 → 미설정 시 기동 실패)
-    key: ${ENCRYPTION_KEY}
-
 # 운영 환경에서는 로그 출력을 최소화
 logging:
   level:
