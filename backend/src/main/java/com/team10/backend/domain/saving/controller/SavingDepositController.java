@@ -2,11 +2,7 @@ package com.team10.backend.domain.saving.controller;
 
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
-import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
-import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
-import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
-import com.team10.backend.domain.saving.dto.res.InstallmentCreateRes;
-import com.team10.backend.domain.saving.dto.res.InstallmentSummaryRes;
+import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.service.SavingDepositService;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
@@ -81,6 +77,16 @@ public class SavingDepositController {
     ) {
         List<InstallmentSummaryRes> response =
                 savingDepositService.getInstallments(userId, status);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "내 적금 상세 조회", description = "인증 사용자의 적금 상세 정보를 조회합니다.")
+    @GetMapping("/installments/{installmentId}")
+    public ResponseEntity<InstallmentDetailRes> getInstallment(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long installmentId
+    ){
+        InstallmentDetailRes response = savingDepositService.getInstallment(userId, installmentId);
         return ResponseEntity.ok(response);
     }
 }

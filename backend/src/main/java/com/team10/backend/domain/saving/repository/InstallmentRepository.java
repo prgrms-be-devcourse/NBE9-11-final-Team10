@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface InstallmentRepository extends JpaRepository<Installment, Long> {
 
@@ -32,5 +33,17 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
     List<Installment> findAllByUserIdAndStatusWithProduct(
             @Param("userId") Long userId,
             @Param("status") InstallmentStatus status
+    );
+
+    @Query("""
+            select i
+            from Installment i
+            join fetch i.savingProduct
+            where i.id = :installmentId
+            and i.user.id = :userId
+            """)
+    Optional<Installment> findByIdAndUserIdWithProduct(
+            @Param("installmentId") Long installmentId,
+            @Param("userId") Long userId
     );
 }

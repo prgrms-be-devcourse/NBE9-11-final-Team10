@@ -1,29 +1,14 @@
 package com.team10.backend.domain.saving.controller;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
-import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
-import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
-import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
-import com.team10.backend.domain.saving.dto.res.InstallmentCreateRes;
-import com.team10.backend.domain.saving.dto.res.InstallmentSummaryRes;
+import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.service.SavingDepositService;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
 import com.team10.backend.support.security.AuthenticationPrincipalTestConfig;
 import com.team10.backend.support.security.WithMockLongUser;
-import java.time.LocalDate;
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +17,18 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDate;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(SavingDepositController.class)
 @Import(AuthenticationPrincipalTestConfig.class)
@@ -86,7 +83,6 @@ class SavingDepositControllerTest {
                 .andExpect(jsonPath("$[0].productName").value("정기예금"))
                 .andExpect(jsonPath("$[0].bankName").value("국민은행"))
                 .andExpect(jsonPath("$[0].principal").value(1000000L))
-                .andExpect(jsonPath("$[0].maturityDate").value("2027-06-17"))
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"));
 
         verify(savingDepositService).getDeposits(1L, null);
@@ -185,11 +181,8 @@ class SavingDepositControllerTest {
                 .andExpect(jsonPath("$[0].installmentId").value(1L))
                 .andExpect(jsonPath("$[0].productName").value("정기적금"))
                 .andExpect(jsonPath("$[0].bankName").value("국민은행"))
-                .andExpect(jsonPath("$[0].monthlyAmount").value(100000L))
                 .andExpect(jsonPath("$[0].paidAmount").value(100000L))
-                .andExpect(jsonPath("$[0].targetAmount").value(1200000L))
                 .andExpect(jsonPath("$[0].progressRate").value(8L))
-                .andExpect(jsonPath("$[0].maturityDate").value("2027-06-17"))
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"));
 
         verify(savingDepositService).getInstallments(1L, null);
@@ -210,6 +203,28 @@ class SavingDepositControllerTest {
                 .andExpect(jsonPath("$[0].status").value("MATURED"));
 
         verify(savingDepositService).getInstallments(1L, InstallmentStatus.MATURED);
+    }
+
+    @Test
+    @DisplayName("내 적금 상세 조회 API는 인증 사용자의 적금 상세를 반환한다")
+    void getInstallment() throws Exception {
+        InstallmentDetailRes response = createInstallmentDetailRes(1L);
+
+        when(savingDepositService.getInstallment(1L, 1L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/savings/installments/{installmentId}", 1L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.installmentId").value(1L))
+                .andExpect(jsonPath("$.productName").value("정기적금"))
+                .andExpect(jsonPath("$.bankName").value("국민은행"))
+                .andExpect(jsonPath("$.monthlyAmount").value(100000L))
+                .andExpect(jsonPath("$.paidAmount").value(100000L))
+                .andExpect(jsonPath("$.targetAmount").value(1200000L))
+                .andExpect(jsonPath("$.progressRate").value(8L))
+                .andExpect(jsonPath("$.maturityDate").value("2027-06-17"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        verify(savingDepositService).getInstallment(1L, 1L);
     }
 
     @Test
@@ -235,7 +250,6 @@ class SavingDepositControllerTest {
                 "정기예금",
                 "국민은행",
                 1000000L,
-                LocalDate.of(2027, 6, 17),
                 status
         );
     }
@@ -262,11 +276,22 @@ class SavingDepositControllerTest {
                 "정기적금",
                 "국민은행",
                 100000L,
+                8L,
+                status
+        );
+    }
+
+    private InstallmentDetailRes createInstallmentDetailRes(Long installmentId) {
+        return new InstallmentDetailRes(
+                installmentId,
+                "정기적금",
+                "국민은행",
+                100000L,
                 100000L,
                 1200000L,
                 8L,
                 LocalDate.of(2027, 6, 17),
-                status
+                InstallmentStatus.ACTIVE
         );
     }
 

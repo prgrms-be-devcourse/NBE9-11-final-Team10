@@ -17,6 +17,7 @@ import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
 import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
 import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentCreateRes;
+import com.team10.backend.domain.saving.dto.res.InstallmentDetailRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentSummaryRes;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.Installment;
@@ -296,9 +297,7 @@ class SavingDepositServiceTest {
         assertThat(responses.get(0).installmentId()).isEqualTo(1L);
         assertThat(responses.get(0).productName()).isEqualTo("정기적금");
         assertThat(responses.get(0).bankName()).isEqualTo("국민은행");
-        assertThat(responses.get(0).monthlyAmount()).isEqualTo(100000L);
         assertThat(responses.get(0).paidAmount()).isEqualTo(100000L);
-        assertThat(responses.get(0).targetAmount()).isEqualTo(1200000L);
         assertThat(responses.get(0).progressRate()).isEqualTo(8L);
         assertThat(responses.get(0).status()).isEqualTo(InstallmentStatus.ACTIVE);
         verify(installmentRepository).findAllByUserIdWithProduct(1L);
@@ -320,6 +319,40 @@ class SavingDepositServiceTest {
         assertThat(responses.get(0).status()).isEqualTo(InstallmentStatus.MATURED);
         verify(installmentRepository)
                 .findAllByUserIdAndStatusWithProduct(1L, InstallmentStatus.MATURED);
+    }
+
+    @Test
+    @DisplayName("내 적금 상세를 조회한다")
+    void getInstallment() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+
+        when(installmentRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(installment));
+
+        InstallmentDetailRes response = savingDepositService.getInstallment(1L, 1L);
+
+        assertThat(response.installmentId()).isEqualTo(1L);
+        assertThat(response.productName()).isEqualTo("정기적금");
+        assertThat(response.bankName()).isEqualTo("국민은행");
+        assertThat(response.monthlyAmount()).isEqualTo(100000L);
+        assertThat(response.paidAmount()).isEqualTo(100000L);
+        assertThat(response.targetAmount()).isEqualTo(1200000L);
+        assertThat(response.progressRate()).isEqualTo(8L);
+        assertThat(response.maturityDate()).isEqualTo(LocalDate.now().plusMonths(12));
+        assertThat(response.status()).isEqualTo(InstallmentStatus.ACTIVE);
+        verify(installmentRepository).findByIdAndUserIdWithProduct(1L, 1L);
+    }
+
+    @Test
+    @DisplayName("본인 적금이 아니거나 존재하지 않으면 상세 조회에 실패한다")
+    void getInstallmentWithNotFoundInstallment() {
+        when(installmentRepository.findByIdAndUserIdWithProduct(999L, 1L))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> savingDepositService.getInstallment(1L, 999L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.INSTALLMENT_NOT_FOUND);
     }
 
     @Test

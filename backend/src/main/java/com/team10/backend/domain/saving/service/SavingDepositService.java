@@ -5,11 +5,7 @@ import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
-import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
-import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
-import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
-import com.team10.backend.domain.saving.dto.res.InstallmentCreateRes;
-import com.team10.backend.domain.saving.dto.res.InstallmentSummaryRes;
+import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.Installment;
 import com.team10.backend.domain.saving.entity.SavingProduct;
@@ -192,5 +188,14 @@ public class SavingDepositService {
         return installments.stream()
                 .map(InstallmentSummaryRes::from)
                 .toList();
+    }
+
+    public InstallmentDetailRes getInstallment(Long userId, Long installmentId) {
+        Installment installment =
+                installmentRepository.findByIdAndUserIdWithProduct(installmentId, userId)
+                        .orElseThrow(() -> new
+                                BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
+
+        return InstallmentDetailRes.from(installment);
     }
 }
