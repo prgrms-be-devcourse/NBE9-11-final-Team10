@@ -12,6 +12,7 @@ import com.team10.backend.global.idempotency.service.IdempotencyRequestHasher;
 import com.team10.backend.global.idempotency.service.IdempotencyReserveResult;
 import com.team10.backend.global.idempotency.service.IdempotencyService;
 import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -29,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
@@ -80,6 +83,26 @@ class TransferServiceTest {
         TopUpRes result = transferService.topUp(1L, "deposit-key", 1L, 5_000L, "입금 메모");
 
         assertSame(storedResponse, result);
+        verify(transferBusinessService, never()).executeTopUp(any(), any(), any(), any());
+        verify(idempotencyService, never()).completeSuccess(any(), any());
+        verify(idempotencyService, never()).completeFailure(any());
+    }
+
+    @Test
+    @DisplayName("멱등성 유니크 충돌이면 reserve만 1회 재시도한다")
+    void topUp_idempotencyUniqueViolation_retriesReserveOnce() {
+        TopUpRes storedResponse = topUpResponse();
+        DataIntegrityViolationException duplicateKeyException = idempotencyUniqueViolation();
+        when(idempotencyRequestHasher.generate(1L, 5_000L, "입금 메모")).thenReturn("deposit-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", TopUpRes.class))
+                .thenThrow(duplicateKeyException)
+                .thenReturn(IdempotencyReserveResult.replay(storedResponse));
+
+        TopUpRes result = transferService.topUp(1L, "deposit-key", 1L, 5_000L, "입금 메모");
+
+        assertSame(storedResponse, result);
+        verify(idempotencyService, times(2))
+                .reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", TopUpRes.class);
         verify(transferBusinessService, never()).executeTopUp(any(), any(), any(), any());
         verify(idempotencyService, never()).completeSuccess(any(), any());
         verify(idempotencyService, never()).completeFailure(any());
@@ -195,5 +218,11 @@ class TransferServiceTest {
         Idempotency idempotency = Idempotency.processing(mock(User.class), operationType, idempotencyKey, "request-hash");
         ReflectionTestUtils.setField(idempotency, "id", id);
         return idempotency;
+    }
+
+    private DataIntegrityViolationException idempotencyUniqueViolation() {
+        ConstraintViolationException cause = mock(ConstraintViolationException.class);
+        when(cause.getConstraintName()).thenReturn("UK_IDEMPOTENCY_USER_OPERATION_KEY");
+        return new DataIntegrityViolationException("duplicate idempotency key", cause);
     }
 }

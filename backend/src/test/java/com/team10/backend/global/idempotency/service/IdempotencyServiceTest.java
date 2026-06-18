@@ -70,18 +70,16 @@ class IdempotencyServiceTest {
     }
 
     @Test
-    @DisplayName("동시 동일 키 선점 충돌 후 기존 레코드가 PROCESSING이면 처리 중 예외로 변환한다")
-    void reserve_uniqueViolationAndExistingProcessing_throwsProcessing() {
-        Idempotency existing = processing(mock(User.class), IdempotencyOperationType.TRANSFER, "same-key", "request-hash");
+    @DisplayName("동시 동일 키 선점 충돌은 현재 트랜잭션에서 복구하지 않고 예외를 전파한다")
+    void reserve_uniqueViolation_propagatesDataIntegrityViolation() {
         when(idempotencyRepository.findByUser_IdAndOperationTypeAndIdempotencyKey(1L, IdempotencyOperationType.TRANSFER, "same-key"))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(existing));
+                .thenReturn(Optional.empty());
         when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
         when(idempotencyRepository.saveAndFlush(any(Idempotency.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate idempotency key"));
 
-        BusinessException exception = assertThrows(
-                BusinessException.class,
+        assertThrows(
+                DataIntegrityViolationException.class,
                 () -> idempotencyService.reserve(
                         1L,
                         IdempotencyOperationType.TRANSFER,
@@ -91,9 +89,8 @@ class IdempotencyServiceTest {
                 )
         );
 
-        assertEquals(GlobalErrorCode.IDEMPOTENCY_REQUEST_PROCESSING, exception.getErrorCode());
         verify(idempotencyRepository).saveAndFlush(any(Idempotency.class));
-        verify(idempotencyRepository, times(2))
+        verify(idempotencyRepository)
                 .findByUser_IdAndOperationTypeAndIdempotencyKey(1L, IdempotencyOperationType.TRANSFER, "same-key");
     }
 

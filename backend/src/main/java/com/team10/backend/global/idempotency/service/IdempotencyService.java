@@ -11,7 +11,6 @@ import com.team10.backend.global.idempotency.repository.IdempotencyRepository;
 import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import com.team10.backend.global.idempotency.type.IdempotencyStatus;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -80,20 +79,12 @@ public class IdempotencyService {
             String requestHash,
             Class<T> responseType
     ) {
-        try {
-            User user = userRepository.getReferenceById(userId);
-            Idempotency idempotency = idempotencyRepository.saveAndFlush(
-                    Idempotency.processing(user, operationType, idempotencyKey, requestHash)
-            );
+        User user = userRepository.getReferenceById(userId);
+        Idempotency idempotency = idempotencyRepository.saveAndFlush(
+                Idempotency.processing(user, operationType, idempotencyKey, requestHash)
+        );
 
-            return IdempotencyReserveResult.reserved(idempotency);
-        } catch (DataIntegrityViolationException e) {
-            Idempotency existing = idempotencyRepository
-                    .findByUser_IdAndOperationTypeAndIdempotencyKey(userId, operationType, idempotencyKey)
-                    .orElseThrow(() -> e);
-
-            return resolveExisting(existing, requestHash, responseType);
-        }
+        return IdempotencyReserveResult.reserved(idempotency);
     }
 
     private <T> IdempotencyReserveResult<T> resolveExisting(

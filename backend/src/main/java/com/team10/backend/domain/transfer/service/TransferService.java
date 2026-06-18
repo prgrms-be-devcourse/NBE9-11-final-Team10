@@ -9,6 +9,7 @@ import com.team10.backend.global.idempotency.service.IdempotencyReserveResult;
 import com.team10.backend.global.idempotency.service.IdempotencyService;
 import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,8 @@ public class TransferService {
     private final IdempotencyService idempotencyService;
     private final IdempotencyRequestHasher idempotencyRequestHasher;
     private final TransferBusinessService transferBusinessService;
+
+    private static final String IDEMPOTENCY_UNIQUE_CONSTRAINT = "uk_idempotency_user_operation_key";
 
     public TopUpRes topUp(Long userId, String idempotencyKey, Long accountId, Long amount, String memo) {
         IdempotencyReserveResult<TopUpRes> reserveResult = reserveWithSingleRetry(
@@ -94,9 +97,34 @@ public class TransferService {
         try {
             return idempotencyService.reserve(userId, operationType, idempotencyKey, requestHash, responseType);
         } catch (DataIntegrityViolationException e) {
+            if (!isIdempotencyUniqueConstraintViolation(e)) {
+                throw e; // 멱등성 유니크 예외아니면 그냥 예외 던지기
+            }
+            // 정확히 멱등성 유니크 예외인 경우만 1회 재조회
             return idempotencyService.reserve(userId, operationType, idempotencyKey, requestHash, responseType);
         }
 
+    }
+
+    // IDEMPOTENCY_UNIQUE_CONSTRAINT 예외인 경우만 true 반환
+    private boolean isIdempotencyUniqueConstraintViolation(DataIntegrityViolationException exception) {
+        Throwable current = exception;
+
+        while (current != null) {
+            // Hibernate의 DB 제약 위반 예외인지 검증
+            if (current instanceof ConstraintViolationException constraintViolationException) {
+                // Hibernate 예외에서 실제 DB constraint 이름 꺼냄
+                String constraintName = constraintViolationException.getConstraintName();
+
+                // equalsIgnoreCase사용: DB나 Hibernate가 constraint 이름을 대문자로 반환할 수 있기 때문
+                return constraintName != null
+                        && constraintName.equalsIgnoreCase(IDEMPOTENCY_UNIQUE_CONSTRAINT);
+            }
+
+            // 또 다른 Throwable(예외) 객체 = 하위객체 | null
+            current = current.getCause();
+        }
+        return false;
     }
 
 }
