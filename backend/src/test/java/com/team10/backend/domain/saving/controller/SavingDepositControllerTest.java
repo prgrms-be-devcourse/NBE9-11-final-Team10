@@ -16,6 +16,7 @@ import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
 import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
 import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentCreateRes;
+import com.team10.backend.domain.saving.dto.res.InstallmentSummaryRes;
 import com.team10.backend.domain.saving.service.SavingDepositService;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
@@ -154,7 +155,7 @@ class SavingDepositControllerTest {
                 1L,
                 InstallmentStatus.ACTIVE,
                 LocalDate.of(2027, 6, 17),
-                0L
+                8L
         );
 
         when(savingDepositService.createInstallment(eq(1L), any(InstallmentCreateReq.class)))
@@ -167,9 +168,48 @@ class SavingDepositControllerTest {
                 .andExpect(jsonPath("$.installmentId").value(1L))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.maturityDate").value("2027-06-17"))
-                .andExpect(jsonPath("$.progressRate").value(0L));
+                .andExpect(jsonPath("$.progressRate").value(8L));
 
         verify(savingDepositService).createInstallment(eq(1L), any(InstallmentCreateReq.class));
+    }
+
+    @Test
+    @DisplayName("내 적금 목록 조회 API는 인증 사용자의 적금 목록을 반환한다")
+    void getInstallments() throws Exception {
+        InstallmentSummaryRes response = createInstallmentSummaryRes(1L, InstallmentStatus.ACTIVE);
+
+        when(savingDepositService.getInstallments(1L, null)).thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/v1/savings/installments"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].installmentId").value(1L))
+                .andExpect(jsonPath("$[0].productName").value("정기적금"))
+                .andExpect(jsonPath("$[0].bankName").value("국민은행"))
+                .andExpect(jsonPath("$[0].monthlyAmount").value(100000L))
+                .andExpect(jsonPath("$[0].paidAmount").value(100000L))
+                .andExpect(jsonPath("$[0].targetAmount").value(1200000L))
+                .andExpect(jsonPath("$[0].progressRate").value(8L))
+                .andExpect(jsonPath("$[0].maturityDate").value("2027-06-17"))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"));
+
+        verify(savingDepositService).getInstallments(1L, null);
+    }
+
+    @Test
+    @DisplayName("내 적금 목록 조회 API는 상태값으로 필터링할 수 있다")
+    void getInstallmentsWithStatus() throws Exception {
+        InstallmentSummaryRes response = createInstallmentSummaryRes(1L, InstallmentStatus.MATURED);
+
+        when(savingDepositService.getInstallments(1L, InstallmentStatus.MATURED))
+                .thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/v1/savings/installments")
+                        .param("status", "MATURED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].installmentId").value(1L))
+                .andExpect(jsonPath("$[0].status").value("MATURED"));
+
+        verify(savingDepositService).getInstallments(1L, InstallmentStatus.MATURED);
     }
 
     @Test
@@ -210,6 +250,23 @@ class SavingDepositControllerTest {
                 35000L,
                 LocalDate.of(2027, 6, 17),
                 DepositStatus.ACTIVE
+        );
+    }
+
+    private InstallmentSummaryRes createInstallmentSummaryRes(
+            Long installmentId,
+            InstallmentStatus status
+    ) {
+        return new InstallmentSummaryRes(
+                installmentId,
+                "정기적금",
+                "국민은행",
+                100000L,
+                100000L,
+                1200000L,
+                8L,
+                LocalDate.of(2027, 6, 17),
+                status
         );
     }
 
