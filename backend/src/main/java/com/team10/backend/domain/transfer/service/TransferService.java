@@ -1,7 +1,5 @@
 package com.team10.backend.domain.transfer.service;
 
-import com.team10.backend.domain.account.repository.AccountRepository;
-import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
 import com.team10.backend.domain.transfer.dto.res.TopUpRes;
 import com.team10.backend.domain.transfer.dto.res.TransferRes;
 import com.team10.backend.global.exception.BusinessException;
@@ -11,6 +9,7 @@ import com.team10.backend.global.idempotency.service.IdempotencyReserveResult;
 import com.team10.backend.global.idempotency.service.IdempotencyService;
 import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,7 +21,7 @@ public class TransferService {
     private final TransferBusinessService transferBusinessService;
 
     public TopUpRes topUp(Long userId, String idempotencyKey, Long accountId, Long amount, String memo) {
-        IdempotencyReserveResult<TopUpRes> reserveResult = idempotencyService.reserve(
+        IdempotencyReserveResult<TopUpRes> reserveResult = reserveWithSingleRetry(
                 userId,
                 IdempotencyOperationType.DEPOSIT,
                 idempotencyKey,
@@ -52,7 +51,7 @@ public class TransferService {
     // 오케스트레이터 패턴 -> @Transactional 제거
     public TransferRes transfer(Long userId, String idempotencyKey, Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
         // 송금 시작 전에 멱등성 검증/선점
-        IdempotencyReserveResult<TransferRes> reserveResult = idempotencyService.reserve(
+        IdempotencyReserveResult<TransferRes> reserveResult = reserveWithSingleRetry(
                 userId,
                 IdempotencyOperationType.TRANSFER,
                 idempotencyKey,
@@ -80,6 +79,22 @@ public class TransferService {
         } catch (BusinessException e) { // 비즈니스 예외가 발생했을 때에만(멱등 검증은 통과한 경우) 송금 멱등성 실패상태 기록
             idempotencyService.completeFailure(idempotencyId);
             throw e;
+        }
+
+    }
+
+    // 멱등성 키에 대한 UK 예외를 받아서 reserve() 호출 실패 시 reserve()만 1회 재시도
+    private <T> IdempotencyReserveResult<T> reserveWithSingleRetry(
+            Long userId,
+            IdempotencyOperationType operationType,
+            String idempotencyKey,
+            String requestHash,
+            Class<T> responseType
+    ) {
+        try {
+            return idempotencyService.reserve(userId, operationType, idempotencyKey, requestHash, responseType);
+        } catch (DataIntegrityViolationException e) {
+            return idempotencyService.reserve(userId, operationType, idempotencyKey, requestHash, responseType);
         }
 
     }
