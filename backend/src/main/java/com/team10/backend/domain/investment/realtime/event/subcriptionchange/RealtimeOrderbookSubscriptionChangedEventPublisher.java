@@ -1,8 +1,8 @@
-package com.team10.backend.domain.investment.realtime.event;
+package com.team10.backend.domain.investment.realtime.event.subcriptionchange;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants;
+import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;

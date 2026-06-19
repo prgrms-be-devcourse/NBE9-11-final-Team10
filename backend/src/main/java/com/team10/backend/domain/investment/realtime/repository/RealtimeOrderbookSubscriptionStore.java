@@ -1,14 +1,14 @@
 package com.team10.backend.domain.investment.realtime.repository;
 
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.LEASE_KEY_PREFIX;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.STOCK_STREAMS_KEY_PREFIX;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.STREAMS_KEY_SUFFIX;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.STREAM_KEY_PREFIX;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.STREAM_LEASE_TTL;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.STREAM_OWNER_KEY_SUFFIX;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.STREAM_STOCK_KEY_SUFFIX;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.STREAM_USER_KEY_SUFFIX;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.USER_STREAMS_KEY_PREFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.LEASE_KEY_PREFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STOCK_STREAMS_KEY_PREFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STREAMS_KEY_SUFFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STREAM_KEY_PREFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STREAM_LEASE_TTL;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STREAM_OWNER_KEY_SUFFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STREAM_STOCK_KEY_SUFFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STREAM_USER_KEY_SUFFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.USER_STREAMS_KEY_PREFIX;
 
 import java.util.HashSet;
 import java.util.List;

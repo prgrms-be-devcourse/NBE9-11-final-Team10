@@ -1,4 +1,4 @@
-package com.team10.backend.domain.investment.realtime;
+package com.team10.backend.domain.investment.realtime.config;
 
 import java.time.Duration;
 
@@ -20,7 +20,7 @@ public final class RealtimeOrderbookRedisConstants {
     public static final String STREAMS_KEY_SUFFIX = ":streams";
 
     public static final String SUBSCRIPTION_CHANGED_CHANNEL = KEY_PREFIX + "subscription-changed";
-    public static final String QUOTE_CHANNEL = KEY_PREFIX + "quote";
+    public static final String ORDERBOOK_UPDATED_CHANNEL = KEY_PREFIX + "orderbook-updated";
 
     private RealtimeOrderbookRedisConstants() {
     }

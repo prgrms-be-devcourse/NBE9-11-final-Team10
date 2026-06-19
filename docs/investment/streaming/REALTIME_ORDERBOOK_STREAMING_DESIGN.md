@@ -257,7 +257,7 @@ TTL이 만료되면 해당 streamId의 구독은 정리 대상이 된다.
 
 ```text
 kis:orderbook:subscription-changed
-kis:orderbook:quote
+kis:orderbook:orderbook-updated
 ```
 
 #### subscription-changed
@@ -291,9 +291,9 @@ kis:orderbook:quote
 스트림 종료 이벤트를 받은 인스턴스는 자기 로컬에 해당 `streamId`가 있으면 emitter를 완료하고 로컬 인덱스를 정리한다. DELETE 요청이 SSE 연결을 보유한 인스턴스와 다른 인스턴스로 라우팅될 수
 있기 때문이다.
 
-#### quote
+#### orderbook-updated
 
-KIS에서 수신한 실시간 호가 DTO를 모든 인스턴스에 전파하는 이벤트다.
+KIS에서 수신한 실시간 호가 스냅샷 갱신 데이터를 모든 인스턴스에 전파하는 이벤트다.
 
 ```json
 {
@@ -323,7 +323,7 @@ leader 역할:
 - Redis 구독 상태와 KIS 실제 구독 상태 reconcile
 - 신규 종목에 대해 `tr_type=1` 구독 메시지 전송
 - 구독 stream이 0개인 종목에 대해 `tr_type=2` 구독 해지 메시지 전송
-- KIS 수신 데이터를 파싱해 Redis quote 채널로 발행
+- KIS 수신 데이터를 파싱해 Redis orderbook-updated 채널로 발행
 
 leader가 죽으면 lock TTL이 만료되고, 다른 인스턴스가 leader를 획득한다.
 
@@ -406,9 +406,9 @@ Redis lease TTL로도 정리한다.
 
 ```text
 1. leader 인스턴스가 KIS WebSocket으로 실시간 호가 payload를 수신한다.
-2. leader는 payload를 RealtimeOrderbookQuote DTO로 변환한다.
-3. leader는 Redis quote 채널로 DTO를 발행한다.
-4. 모든 인스턴스는 quote 채널을 구독하고 있다.
+2. leader는 payload를 RealtimeOrderbookSnapshot DTO로 변환한다.
+3. leader는 Redis orderbook-updated 채널로 DTO를 발행한다.
+4. 모든 인스턴스는 orderbook-updated 채널을 구독하고 있다.
 5. 각 인스턴스는 자기 로컬 Registry에서 해당 stockCode를 구독 중인 streamId 목록을 조회한다.
 6. 해당 streamId의 SseEmitter들에게 orderbook 이벤트를 전송한다.
 ```
@@ -570,7 +570,7 @@ KIS 실시간 호가 수신 시 전송한다.
 
 ### 1단계: 호가 DTO와 KIS payload 파서
 
-- `RealtimeOrderbookQuote`
+- `RealtimeOrderbookSnapshot`
 - `RealtimeOrderbookLevel`
 - `KisOrderbookMessageParser`
 
@@ -605,8 +605,8 @@ KIS 실시간 호가 수신 시 전송한다.
 ### 5단계: Redis Pub/Sub
 
 - subscription-changed 이벤트 발행/수신
-- quote 이벤트 발행/수신
-- quote 수신 시 로컬 SSE emitter에게 전송
+- orderbook-updated 이벤트 발행/수신
+- orderbook-updated 수신 시 로컬 SSE emitter에게 전송
 - ENDED 이벤트 수신 시 해당 streamId의 로컬 emitter 종료
 
 ### 6단계: KIS WebSocket leader

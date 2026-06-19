@@ -8,9 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
-import com.team10.backend.domain.investment.realtime.event.RealtimeOrderbookSubscriptionChangedEvent;
-import com.team10.backend.domain.investment.realtime.event.RealtimeOrderbookSubscriptionChangedEventPublisher;
-import com.team10.backend.domain.investment.realtime.event.RealtimeOrderbookSubscriptionEventType;
+import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEvent;
+import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEventPublisher;
+import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionEventType;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscription;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;
 import com.team10.backend.domain.investment.stock.entity.Stock;

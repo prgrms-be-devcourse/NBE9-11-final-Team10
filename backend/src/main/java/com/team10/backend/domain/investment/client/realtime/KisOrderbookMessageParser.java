@@ -1,7 +1,7 @@
 package com.team10.backend.domain.investment.client.realtime;
 
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookLevel;
-import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookQuote;
+import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -31,7 +31,7 @@ public class KisOrderbookMessageParser {
     private static final int TOTAL_ASK_QUANTITY_INDEX = 43;
     private static final int TOTAL_BID_QUANTITY_INDEX = 44;
 
-    public Optional<RealtimeOrderbookQuote> parse(String message) {
+    public Optional<RealtimeOrderbookSnapshot> parse(String message) {
         if (!StringUtils.hasText(message)) {
             return Optional.empty();
         }
@@ -51,7 +51,7 @@ public class KisOrderbookMessageParser {
             return Optional.empty();
         }
 
-        return Optional.of(new RealtimeOrderbookQuote(
+        return Optional.of(new RealtimeOrderbookSnapshot(
                 fields[STOCK_CODE_INDEX],
                 fields[BUSINESS_TIME_INDEX],
                 fields[TIME_TYPE_INDEX],

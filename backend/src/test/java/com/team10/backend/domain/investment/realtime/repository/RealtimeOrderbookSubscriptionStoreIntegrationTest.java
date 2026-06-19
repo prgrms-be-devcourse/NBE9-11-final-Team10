@@ -1,9 +1,9 @@
 package com.team10.backend.domain.investment.realtime.repository;
 
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.ALL_KEYS_PATTERN;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.STOCK_STREAMS_KEY_PREFIX;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.STREAMS_KEY_SUFFIX;
-import static com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants.USER_STREAMS_KEY_PREFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.ALL_KEYS_PATTERN;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STOCK_STREAMS_KEY_PREFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STREAMS_KEY_SUFFIX;
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.USER_STREAMS_KEY_PREFIX;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Set;

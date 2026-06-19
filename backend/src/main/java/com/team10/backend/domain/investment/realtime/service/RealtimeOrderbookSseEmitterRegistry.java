@@ -1,5 +1,6 @@
 package com.team10.backend.domain.investment.realtime.service;
 
+import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
@@ -138,14 +139,14 @@ public class RealtimeOrderbookSseEmitterRegistry {
     }
 
     /**
-     * 특정 종목을 구독 중인 현재 인스턴스의 SSE stream들에게 이벤트를 전송한다.
+     * 특정 종목을 구독 중인 현재 인스턴스의 SSE stream들에게 최신 호가 데이터를 전송한다.
      *
-     * <p>KIS WebSocket을 직접 수신하는 leader 인스턴스만 사용하는 메서드가 아니다. Redis quote Pub/Sub을 수신한
+     * <p>KIS WebSocket을 직접 수신하는 leader 인스턴스만 사용하는 메서드가 아니다. Redis orderbook-updated Pub/Sub을 수신한
      * 모든 인스턴스가 자기 로컬 emitter에게 전송하기 위해 이 메서드를 호출한다.
      *
      * @return 전송에 성공한 로컬 stream 수
      */
-    public int sendToStockCode(String stockCode, String eventName, Object data) {
+    public int sendOrderbookUpdateToSubscribers(String stockCode, String eventName, RealtimeOrderbookSnapshot data) {
         if (!StringUtils.hasText(eventName)) {
             throw new IllegalArgumentException("eventName must not be blank");
         }

@@ -1,9 +1,10 @@
 package com.team10.backend.domain.investment.realtime.service;
 
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
+import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookSseConstants;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookStreamCreatedRes;
-import com.team10.backend.domain.investment.realtime.event.RealtimeOrderbookSubscriptionChangedEvent;
-import com.team10.backend.domain.investment.realtime.event.RealtimeOrderbookSubscriptionChangedEventPublisher;
+import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEvent;
+import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEventPublisher;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscription;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;
 import com.team10.backend.domain.investment.stock.entity.Stock;
@@ -17,8 +18,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Service
 @RequiredArgsConstructor
 public class RealtimeOrderbookStreamService {
-
-    private static final String STREAM_CREATED_EVENT_NAME = "stream-created";
 
     private final StockRepository stockRepository;
     private final RealtimeOrderbookSseEmitterRegistry emitterRegistry;
@@ -75,7 +74,7 @@ public class RealtimeOrderbookStreamService {
     private void sendStreamCreatedEvent(RealtimeOrderbookSseConnection connection) {
         try {
             connection.emitter().send(SseEmitter.event()
-                    .name(STREAM_CREATED_EVENT_NAME)
+                    .name(RealtimeOrderbookSseConstants.STREAM_CREATED_EVENT_NAME)
                     .data(new RealtimeOrderbookStreamCreatedRes(
                             connection.streamId(),
                             connection.stockCode()

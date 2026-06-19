@@ -2,7 +2,7 @@ package com.team10.backend.domain.investment.client.realtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookQuote;
+import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,54 +32,54 @@ class KisOrderbookMessageParserTest {
     @Test
     @DisplayName("실제 수신된 KIS 프레임 실시간 호가 메시지를 파싱한다")
     void parseFramedOrderbookMessage() {
-        Optional<RealtimeOrderbookQuote> actual = parser.parse(REAL_ORDERBOOK_MESSAGE);
+        Optional<RealtimeOrderbookSnapshot> actual = parser.parse(REAL_ORDERBOOK_MESSAGE);
 
         assertThat(actual).isPresent();
-        RealtimeOrderbookQuote quote = actual.get();
-        assertThat(quote.stockCode()).isEqualTo("005930");
-        assertThat(quote.businessTime()).isEqualTo("145856");
-        assertThat(quote.timeType()).isEqualTo("0");
-        assertThat(quote.totalAskQuantity()).isEqualTo(796206L);
-        assertThat(quote.totalBidQuantity()).isEqualTo(227494L);
+        RealtimeOrderbookSnapshot snapshot = actual.get();
+        assertThat(snapshot.stockCode()).isEqualTo("005930");
+        assertThat(snapshot.businessTime()).isEqualTo("145856");
+        assertThat(snapshot.timeType()).isEqualTo("0");
+        assertThat(snapshot.totalAskQuantity()).isEqualTo(796206L);
+        assertThat(snapshot.totalBidQuantity()).isEqualTo(227494L);
 
-        assertThat(quote.asks()).hasSize(10);
-        assertThat(quote.asks().getFirst().level()).isEqualTo(1);
-        assertThat(quote.asks().getFirst().price()).isEqualTo(358500L);
-        assertThat(quote.asks().getFirst().quantity()).isEqualTo(53949L);
-        assertThat(quote.asks().getLast().level()).isEqualTo(10);
-        assertThat(quote.asks().getLast().price()).isEqualTo(363000L);
-        assertThat(quote.asks().getLast().quantity()).isEqualTo(44313L);
+        assertThat(snapshot.asks()).hasSize(10);
+        assertThat(snapshot.asks().getFirst().level()).isEqualTo(1);
+        assertThat(snapshot.asks().getFirst().price()).isEqualTo(358500L);
+        assertThat(snapshot.asks().getFirst().quantity()).isEqualTo(53949L);
+        assertThat(snapshot.asks().getLast().level()).isEqualTo(10);
+        assertThat(snapshot.asks().getLast().price()).isEqualTo(363000L);
+        assertThat(snapshot.asks().getLast().quantity()).isEqualTo(44313L);
 
-        assertThat(quote.bids()).hasSize(10);
-        assertThat(quote.bids().getFirst().level()).isEqualTo(1);
-        assertThat(quote.bids().getFirst().price()).isEqualTo(358000L);
-        assertThat(quote.bids().getFirst().quantity()).isEqualTo(40154L);
-        assertThat(quote.bids().getLast().level()).isEqualTo(10);
-        assertThat(quote.bids().getLast().price()).isEqualTo(353500L);
-        assertThat(quote.bids().getLast().quantity()).isEqualTo(10406L);
+        assertThat(snapshot.bids()).hasSize(10);
+        assertThat(snapshot.bids().getFirst().level()).isEqualTo(1);
+        assertThat(snapshot.bids().getFirst().price()).isEqualTo(358000L);
+        assertThat(snapshot.bids().getFirst().quantity()).isEqualTo(40154L);
+        assertThat(snapshot.bids().getLast().level()).isEqualTo(10);
+        assertThat(snapshot.bids().getLast().price()).isEqualTo(353500L);
+        assertThat(snapshot.bids().getLast().quantity()).isEqualTo(10406L);
     }
 
     @Test
     @DisplayName("실제 수신된 후속 호가 메시지도 동일한 필드 위치로 파싱한다")
     void parseLaterRealOrderbookMessage() {
-        Optional<RealtimeOrderbookQuote> actual = parser.parse(REAL_ORDERBOOK_MESSAGE_LATER);
+        Optional<RealtimeOrderbookSnapshot> actual = parser.parse(REAL_ORDERBOOK_MESSAGE_LATER);
 
         assertThat(actual).isPresent();
-        RealtimeOrderbookQuote quote = actual.get();
-        assertThat(quote.stockCode()).isEqualTo("005930");
-        assertThat(quote.businessTime()).isEqualTo("145907");
-        assertThat(quote.totalAskQuantity()).isEqualTo(796679L);
-        assertThat(quote.totalBidQuantity()).isEqualTo(230508L);
-        assertThat(quote.asks().getFirst().price()).isEqualTo(358500L);
-        assertThat(quote.asks().getFirst().quantity()).isEqualTo(48592L);
-        assertThat(quote.bids().getFirst().price()).isEqualTo(358000L);
-        assertThat(quote.bids().getFirst().quantity()).isEqualTo(43438L);
+        RealtimeOrderbookSnapshot snapshot = actual.get();
+        assertThat(snapshot.stockCode()).isEqualTo("005930");
+        assertThat(snapshot.businessTime()).isEqualTo("145907");
+        assertThat(snapshot.totalAskQuantity()).isEqualTo(796679L);
+        assertThat(snapshot.totalBidQuantity()).isEqualTo(230508L);
+        assertThat(snapshot.asks().getFirst().price()).isEqualTo(358500L);
+        assertThat(snapshot.asks().getFirst().quantity()).isEqualTo(48592L);
+        assertThat(snapshot.bids().getFirst().price()).isEqualTo(358000L);
+        assertThat(snapshot.bids().getFirst().quantity()).isEqualTo(43438L);
     }
 
     @Test
     @DisplayName("실제 수신 메시지에서 프레임을 제거한 payload만 전달되어도 파싱한다")
     void parsePayloadOnlyMessage() {
-        Optional<RealtimeOrderbookQuote> actual = parser.parse(payloadOnly(REAL_ORDERBOOK_MESSAGE));
+        Optional<RealtimeOrderbookSnapshot> actual = parser.parse(payloadOnly(REAL_ORDERBOOK_MESSAGE));
 
         assertThat(actual).isPresent();
         assertThat(actual.get().stockCode()).isEqualTo("005930");
@@ -91,7 +91,7 @@ class KisOrderbookMessageParserTest {
     @Test
     @DisplayName("실제 수신된 JSON 구독 성공 ACK 메시지는 파싱 대상에서 제외한다")
     void ignoreJsonAckMessage() {
-        Optional<RealtimeOrderbookQuote> actual = parser.parse(REAL_ACK_MESSAGE);
+        Optional<RealtimeOrderbookSnapshot> actual = parser.parse(REAL_ACK_MESSAGE);
 
         assertThat(actual).isEmpty();
     }
@@ -99,7 +99,7 @@ class KisOrderbookMessageParserTest {
     @Test
     @DisplayName("JSON PINGPONG 메시지는 파싱 대상에서 제외한다")
     void ignoreJsonPingPongMessage() {
-        Optional<RealtimeOrderbookQuote> actual = parser.parse("{\"header\":{\"tr_id\":\"PINGPONG\"}}");
+        Optional<RealtimeOrderbookSnapshot> actual = parser.parse("{\"header\":{\"tr_id\":\"PINGPONG\"}}");
 
         assertThat(actual).isEmpty();
     }
@@ -109,7 +109,7 @@ class KisOrderbookMessageParserTest {
     void ignoreOtherTrIdMessage() {
         String message = REAL_ORDERBOOK_MESSAGE.replace("0|H0STASP0|001|", "0|H0STCNT0|001|");
 
-        Optional<RealtimeOrderbookQuote> actual = parser.parse(message);
+        Optional<RealtimeOrderbookSnapshot> actual = parser.parse(message);
 
         assertThat(actual).isEmpty();
     }
@@ -119,7 +119,7 @@ class KisOrderbookMessageParserTest {
     void ignoreInsufficientFieldsMessage() {
         String message = "005930^093730^0^71900";
 
-        Optional<RealtimeOrderbookQuote> actual = parser.parse(message);
+        Optional<RealtimeOrderbookSnapshot> actual = parser.parse(message);
 
         assertThat(actual).isEmpty();
     }

@@ -1,7 +1,7 @@
 package com.team10.backend.domain.investment.realtime.config;
 
-import com.team10.backend.domain.investment.realtime.RealtimeOrderbookRedisConstants;
-import com.team10.backend.domain.investment.realtime.event.RealtimeOrderbookSubscriptionChangedEventListener;
+import com.team10.backend.domain.investment.realtime.event.orderbookupdate.RealtimeOrderbookUpdatedEventListener;
+import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEventListener;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -22,6 +22,7 @@ public class RealtimeOrderbookRedisPubSubConfig {
 
     private final RedisConnectionFactory redisConnectionFactory;
     private final RealtimeOrderbookSubscriptionChangedEventListener subscriptionChangedEventListener;
+    private final RealtimeOrderbookUpdatedEventListener orderbookUpdatedEventListener;
 
     @Bean
     public RedisMessageListenerContainer realtimeOrderbookRedisMessageListenerContainer() {
@@ -30,6 +31,10 @@ public class RealtimeOrderbookRedisPubSubConfig {
         container.addMessageListener(
                 subscriptionChangedEventListener,
                 ChannelTopic.of(RealtimeOrderbookRedisConstants.SUBSCRIPTION_CHANGED_CHANNEL)
+        );
+        container.addMessageListener(
+                orderbookUpdatedEventListener,
+                ChannelTopic.of(RealtimeOrderbookRedisConstants.ORDERBOOK_UPDATED_CHANNEL)
         );
         return container;
     }

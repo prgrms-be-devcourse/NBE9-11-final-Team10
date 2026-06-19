@@ -3,9 +3,12 @@ package com.team10.backend.domain.investment.realtime.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
+import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookSseConstants;
+import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookLevel;
+import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -87,12 +90,16 @@ class RealtimeOrderbookSseEmitterRegistryTest {
 
     @Test
     @DisplayName("특정 종목의 stream들에게만 SSE 이벤트를 전송한다")
-    void sendToStockCode() {
+    void sendOrderbookUpdateToSubscribers() {
         registry.register(1L, "005930", null);
         registry.register(2L, "005930", null);
         registry.register(3L, "000660", null);
 
-        int sentCount = registry.sendToStockCode("005930", "orderbook", Map.of("stockCode", "005930"));
+        int sentCount = registry.sendOrderbookUpdateToSubscribers(
+                "005930",
+                RealtimeOrderbookSseConstants.ORDERBOOK_UPDATED_EVENT_NAME,
+                snapshot("005930")
+        );
 
         assertThat(sentCount).isEqualTo(2);
         assertThat(registry.streamCount()).isEqualTo(3);
@@ -107,7 +114,19 @@ class RealtimeOrderbookSseEmitterRegistryTest {
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> registry.register(1L, " ", null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> registry.sendToStockCode("005930", " ", Map.of()))
+        assertThatThrownBy(() -> registry.sendOrderbookUpdateToSubscribers("005930", " ", snapshot("005930")))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private RealtimeOrderbookSnapshot snapshot(String stockCode) {
+        return new RealtimeOrderbookSnapshot(
+                stockCode,
+                "145856",
+                "0",
+                List.of(new RealtimeOrderbookLevel(1, 358500L, 53949L)),
+                List.of(new RealtimeOrderbookLevel(1, 358000L, 40154L)),
+                796206L,
+                227494L
+        );
     }
 }

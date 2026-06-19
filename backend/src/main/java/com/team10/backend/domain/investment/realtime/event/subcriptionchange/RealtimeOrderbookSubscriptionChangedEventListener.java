@@ -1,4 +1,4 @@
-package com.team10.backend.domain.investment.realtime.event;
+package com.team10.backend.domain.investment.realtime.event.subcriptionchange;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseEmitterRegistry;
@@ -18,9 +18,6 @@ public class RealtimeOrderbookSubscriptionChangedEventListener implements Messag
     private final ObjectMapper objectMapper;
     private final RealtimeOrderbookSseEmitterRegistry emitterRegistry;
 
-    /**
-     * Redis Pub/Sub 메시지 수신 진입점. json 역직렬화 및 이벤트 종류에 맞는 로직 수행
-     */
     @Override
     public void onMessage(Message message, byte[] pattern) {
         try {
