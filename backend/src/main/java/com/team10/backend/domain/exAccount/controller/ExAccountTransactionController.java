@@ -19,6 +19,7 @@ import java.util.List;
 public class ExAccountTransactionController {
     private final ExAccountTransactionService exAccountTransactionService;
 
+    //외부 거래내역 조회
     @GetMapping("/transactions")
     public ResponseEntity<List<ExAccountTransactionRes>> getTransactions(@AuthenticationPrincipal Long userId) {
         return ResponseEntity.ok(exAccountTransactionService.getTransactions(userId));

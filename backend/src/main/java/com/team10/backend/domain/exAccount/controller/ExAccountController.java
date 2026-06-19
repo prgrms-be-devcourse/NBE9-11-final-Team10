@@ -19,6 +19,7 @@ import java.util.List;
 public class ExAccountController {
     private final ExAccountService exAccountService;
 
+    //외부 계좌 조회
     @GetMapping("/accounts")
     public ResponseEntity<List<ExAccountRes>> getAccounts(@AuthenticationPrincipal Long userId) {
         return ResponseEntity.ok(exAccountService.getAccounts(userId));
