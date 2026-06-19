@@ -25,16 +25,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TransferServiceTest {
@@ -54,10 +48,10 @@ class TransferServiceTest {
     @Test
     @DisplayName("입금 요청을 선점한 뒤 비즈니스 입금을 실행하고 성공 상태를 기록한다")
     void topUp_reservedRequest_executesBusinessAndCompletesSuccess() {
-        Idempotency idempotency = idempotency(9L, IdempotencyOperationType.DEPOSIT, "deposit-key");
+        Idempotency idempotency = idempotency(9L, IdempotencyOperationType.TOPUP, "deposit-key");
         TopUpRes response = topUpResponse();
-        when(idempotencyRequestHasher.generate(1L, 5_000L, "입금 메모")).thenReturn("deposit-request-hash");
-        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", TopUpRes.class))
+        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TOPUP, 1L, 5_000L, "입금 메모")).thenReturn("deposit-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.TOPUP, "deposit-key", "deposit-request-hash", TopUpRes.class))
                 .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(transferBusinessService.executeTopUp(1L, 1L, 5_000L, "입금 메모"))
                 .thenReturn(response);
@@ -66,7 +60,7 @@ class TransferServiceTest {
 
         assertSame(response, result);
         InOrder inOrder = inOrder(idempotencyService, transferBusinessService);
-        inOrder.verify(idempotencyService).reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", TopUpRes.class);
+        inOrder.verify(idempotencyService).reserve(1L, IdempotencyOperationType.TOPUP, "deposit-key", "deposit-request-hash", TopUpRes.class);
         inOrder.verify(transferBusinessService).executeTopUp(1L, 1L, 5_000L, "입금 메모");
         inOrder.verify(idempotencyService).completeSuccess(9L, response);
         verify(idempotencyService, never()).completeFailure(any());
@@ -76,8 +70,8 @@ class TransferServiceTest {
     @DisplayName("입금 재요청이면 비즈니스 로직을 실행하지 않고 저장된 응답을 반환한다")
     void topUp_replay_returnsStoredResponseWithoutBusinessExecution() {
         TopUpRes storedResponse = topUpResponse();
-        when(idempotencyRequestHasher.generate(1L, 5_000L, "입금 메모")).thenReturn("deposit-request-hash");
-        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", TopUpRes.class))
+        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TOPUP, 1L, 5_000L, "입금 메모")).thenReturn("deposit-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.TOPUP, "deposit-key", "deposit-request-hash", TopUpRes.class))
                 .thenReturn(IdempotencyReserveResult.replay(storedResponse));
 
         TopUpRes result = transferService.topUp(1L, "deposit-key", 1L, 5_000L, "입금 메모");
@@ -89,12 +83,12 @@ class TransferServiceTest {
     }
 
     @Test
-    @DisplayName("멱등성 유니크 충돌이면 reserve만 1회 재시도한다")
-    void topUp_idempotencyUniqueViolation_retriesReserveOnce() {
+    @DisplayName("멱등성 유니크 충돌이면 기존 레코드를 조회해 저장된 응답을 반환한다")
+    void topUp_idempotencyUniqueViolation_resolvesExistingRecord() {
         TopUpRes storedResponse = topUpResponse();
         DataIntegrityViolationException duplicateKeyException = idempotencyUniqueViolation();
-        when(idempotencyRequestHasher.generate(1L, 5_000L, "입금 메모")).thenReturn("deposit-request-hash");
-        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", TopUpRes.class))
+        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TOPUP, 1L, 5_000L, "입금 메모")).thenReturn("deposit-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.TOPUP, "deposit-key", "deposit-request-hash", TopUpRes.class))
                 .thenThrow(duplicateKeyException)
                 .thenReturn(IdempotencyReserveResult.replay(storedResponse));
 
@@ -102,7 +96,7 @@ class TransferServiceTest {
 
         assertSame(storedResponse, result);
         verify(idempotencyService, times(2))
-                .reserve(1L, IdempotencyOperationType.DEPOSIT, "deposit-key", "deposit-request-hash", TopUpRes.class);
+                .reserve(1L, IdempotencyOperationType.TOPUP, "deposit-key", "deposit-request-hash", TopUpRes.class);
         verify(transferBusinessService, never()).executeTopUp(any(), any(), any(), any());
         verify(idempotencyService, never()).completeSuccess(any(), any());
         verify(idempotencyService, never()).completeFailure(any());
@@ -111,10 +105,10 @@ class TransferServiceTest {
     @Test
     @DisplayName("입금 비즈니스 예외가 발생하면 실패 상태를 기록하고 예외를 전파한다")
     void topUp_businessException_completesFailureAndRethrows() {
-        Idempotency idempotency = idempotency(10L, IdempotencyOperationType.DEPOSIT, "invalid-deposit-key");
+        Idempotency idempotency = idempotency(10L, IdempotencyOperationType.TOPUP, "invalid-deposit-key");
         BusinessException businessException = new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
-        when(idempotencyRequestHasher.generate(1L, 0L, "입금 메모")).thenReturn("invalid-deposit-request-hash");
-        when(idempotencyService.reserve(1L, IdempotencyOperationType.DEPOSIT, "invalid-deposit-key", "invalid-deposit-request-hash", TopUpRes.class))
+        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TOPUP, 1L, 0L, "입금 메모")).thenReturn("invalid-deposit-request-hash");
+        when(idempotencyService.reserve(1L, IdempotencyOperationType.TOPUP, "invalid-deposit-key", "invalid-deposit-request-hash", TopUpRes.class))
                 .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(transferBusinessService.executeTopUp(1L, 1L, 0L, "입금 메모"))
                 .thenThrow(businessException);
@@ -134,7 +128,7 @@ class TransferServiceTest {
     void transfer_reservedRequest_executesBusinessAndCompletesSuccess() {
         Idempotency idempotency = idempotency(12L, IdempotencyOperationType.TRANSFER, "transfer-key");
         TransferRes response = transferResponse();
-        when(idempotencyRequestHasher.generate(1L, "100200300002", 50_000L, "점심값")).thenReturn("transfer-request-hash");
+        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TRANSFER, 1L, "100200300002", 50_000L, "점심값")).thenReturn("transfer-request-hash");
         when(idempotencyService.reserve(1L, IdempotencyOperationType.TRANSFER, "transfer-key", "transfer-request-hash", TransferRes.class))
                 .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(transferBusinessService.executeTransfer(1L, 1L, "100200300002", 50_000L, "점심값"))
@@ -154,7 +148,7 @@ class TransferServiceTest {
     @DisplayName("송금 재요청이면 비즈니스 로직을 실행하지 않고 저장된 응답을 반환한다")
     void transfer_replay_returnsStoredResponseWithoutBusinessExecution() {
         TransferRes storedResponse = transferResponse();
-        when(idempotencyRequestHasher.generate(1L, "100200300002", 50_000L, "점심값")).thenReturn("transfer-request-hash");
+        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TRANSFER, 1L, "100200300002", 50_000L, "점심값")).thenReturn("transfer-request-hash");
         when(idempotencyService.reserve(1L, IdempotencyOperationType.TRANSFER, "transfer-key", "transfer-request-hash", TransferRes.class))
                 .thenReturn(IdempotencyReserveResult.replay(storedResponse));
 
@@ -171,7 +165,7 @@ class TransferServiceTest {
     void transfer_businessException_completesFailureAndRethrows() {
         Idempotency idempotency = idempotency(14L, IdempotencyOperationType.TRANSFER, "insufficient-key");
         BusinessException businessException = new BusinessException(TransferErrorCode.INSUFFICIENT_BALANCE);
-        when(idempotencyRequestHasher.generate(1L, "100200300002", 50_000L, "잔액 부족")).thenReturn("insufficient-request-hash");
+        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TRANSFER, 1L, "100200300002", 50_000L, "잔액 부족")).thenReturn("insufficient-request-hash");
         when(idempotencyService.reserve(1L, IdempotencyOperationType.TRANSFER, "insufficient-key", "insufficient-request-hash", TransferRes.class))
                 .thenReturn(IdempotencyReserveResult.reserved(idempotency));
         when(transferBusinessService.executeTransfer(1L, 1L, "100200300002", 50_000L, "잔액 부족"))
@@ -222,7 +216,7 @@ class TransferServiceTest {
 
     private DataIntegrityViolationException idempotencyUniqueViolation() {
         ConstraintViolationException cause = mock(ConstraintViolationException.class);
-        when(cause.getConstraintName()).thenReturn("UK_IDEMPOTENCY_USER_OPERATION_KEY");
+        when(cause.getConstraintName()).thenReturn("UK_USER_IDEMPOTENCY_KEY");
         return new DataIntegrityViolationException("duplicate idempotency key", cause);
     }
 }

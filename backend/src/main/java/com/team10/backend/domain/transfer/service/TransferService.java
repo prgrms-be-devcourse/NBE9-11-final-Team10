@@ -21,14 +21,14 @@ public class TransferService {
     private final IdempotencyRequestHasher idempotencyRequestHasher;
     private final TransferBusinessService transferBusinessService;
 
-    private static final String IDEMPOTENCY_UNIQUE_CONSTRAINT = "uk_idempotency_user_operation_key";
+    private static final String IDEMPOTENCY_UNIQUE_CONSTRAINT = "uk_user_idempotency_key";
 
     public TopUpRes topUp(Long userId, String idempotencyKey, Long accountId, Long amount, String memo) {
-        IdempotencyReserveResult<TopUpRes> reserveResult = reserveWithSingleRetry(
+        IdempotencyReserveResult<TopUpRes> reserveResult = reserveOrResolveDuplicate(
                 userId,
-                IdempotencyOperationType.DEPOSIT,
+                IdempotencyOperationType.TOPUP,
                 idempotencyKey,
-                idempotencyRequestHasher.generate(accountId, amount, memo),
+                idempotencyRequestHasher.generate(IdempotencyOperationType.TOPUP, accountId, amount, memo),
                 TopUpRes.class
         );
 
@@ -54,11 +54,11 @@ public class TransferService {
     // 오케스트레이터 패턴 -> @Transactional 제거
     public TransferRes transfer(Long userId, String idempotencyKey, Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
         // 송금 시작 전에 멱등성 검증/선점
-        IdempotencyReserveResult<TransferRes> reserveResult = reserveWithSingleRetry(
+        IdempotencyReserveResult<TransferRes> reserveResult = reserveOrResolveDuplicate(
                 userId,
                 IdempotencyOperationType.TRANSFER,
                 idempotencyKey,
-                idempotencyRequestHasher.generate(senderAccountId, receiverAccountNumber, amount, memo),
+                idempotencyRequestHasher.generate(IdempotencyOperationType.TRANSFER, senderAccountId, receiverAccountNumber, amount, memo),
                 TransferRes.class);
 
         // 만약 이전에 들어왔던 요청이면 저장된 응답객체 반환하고 종료
@@ -86,8 +86,9 @@ public class TransferService {
 
     }
 
-    // 멱등성 키에 대한 UK 예외를 받아서 reserve() 호출 실패 시 reserve()만 1회 재시도
-    private <T> IdempotencyReserveResult<T> reserveWithSingleRetry(
+    // 같은 키를 가진 동시 요청이 먼저 멱등성 레코드를 생성한 경우,
+    // DB UK 충돌을 기존 레코드 조회로 변환해 SUCCESS/PROCESSING/CONFLICT 정책을 적용한다.
+    private <T> IdempotencyReserveResult<T> reserveOrResolveDuplicate(
             Long userId,
             IdempotencyOperationType operationType,
             String idempotencyKey,

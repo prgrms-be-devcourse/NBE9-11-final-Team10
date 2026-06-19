@@ -17,8 +17,8 @@ import java.time.LocalDateTime;
         name = "idempotency_keys",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_idempotency_user_operation_key",
-                        columnNames = {"user_id", "operation_type", "idempotency_key"}
+                        name = "uk_user_idempotency_key",
+                        columnNames = {"user_id", "idempotency_key"}
                 )
         }
 )

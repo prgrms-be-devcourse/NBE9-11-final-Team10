@@ -50,7 +50,7 @@ class IdempotencyServiceTest {
     void reserve_newKey_savesProcessingRecord() {
         User user = mock(User.class);
         Idempotency idempotency = processing(user, IdempotencyOperationType.TRANSFER, "new-key", "request-hash");
-        when(idempotencyRepository.findByUser_IdAndOperationTypeAndIdempotencyKey(1L, IdempotencyOperationType.TRANSFER, "new-key"))
+        when(idempotencyRepository.findByUser_IdAndIdempotencyKey(1L, "new-key"))
                 .thenReturn(Optional.empty());
         when(userRepository.getReferenceById(1L)).thenReturn(user);
         when(idempotencyRepository.saveAndFlush(any(Idempotency.class))).thenReturn(idempotency);
@@ -72,7 +72,7 @@ class IdempotencyServiceTest {
     @Test
     @DisplayName("동시 동일 키 선점 충돌은 현재 트랜잭션에서 복구하지 않고 예외를 전파한다")
     void reserve_uniqueViolation_propagatesDataIntegrityViolation() {
-        when(idempotencyRepository.findByUser_IdAndOperationTypeAndIdempotencyKey(1L, IdempotencyOperationType.TRANSFER, "same-key"))
+        when(idempotencyRepository.findByUser_IdAndIdempotencyKey(1L, "same-key"))
                 .thenReturn(Optional.empty());
         when(userRepository.getReferenceById(1L)).thenReturn(mock(User.class));
         when(idempotencyRepository.saveAndFlush(any(Idempotency.class)))
@@ -91,7 +91,7 @@ class IdempotencyServiceTest {
 
         verify(idempotencyRepository).saveAndFlush(any(Idempotency.class));
         verify(idempotencyRepository)
-                .findByUser_IdAndOperationTypeAndIdempotencyKey(1L, IdempotencyOperationType.TRANSFER, "same-key");
+                .findByUser_IdAndIdempotencyKey(1L, "same-key");
     }
 
     @Test
@@ -109,7 +109,7 @@ class IdempotencyServiceTest {
                 LocalDateTime.of(2026, 6, 17, 10, 10)
         );
         Idempotency existing = success(mock(User.class), IdempotencyOperationType.TRANSFER, "same-key", "request-hash", storedResponse);
-        when(idempotencyRepository.findByUser_IdAndOperationTypeAndIdempotencyKey(1L, IdempotencyOperationType.TRANSFER, "same-key"))
+        when(idempotencyRepository.findByUser_IdAndIdempotencyKey(1L, "same-key"))
                 .thenReturn(Optional.of(existing));
 
         IdempotencyReserveResult<TransferRes> result = idempotencyService.reserve(
@@ -129,7 +129,7 @@ class IdempotencyServiceTest {
     @DisplayName("같은 키의 기존 레코드와 요청 해시가 다르면 충돌 예외를 발생시킨다")
     void reserve_existingDifferentRequest_throwsConflict() {
         Idempotency existing = processing(mock(User.class), IdempotencyOperationType.TRANSFER, "same-key", "existing-hash");
-        when(idempotencyRepository.findByUser_IdAndOperationTypeAndIdempotencyKey(1L, IdempotencyOperationType.TRANSFER, "same-key"))
+        when(idempotencyRepository.findByUser_IdAndIdempotencyKey(1L, "same-key"))
                 .thenReturn(Optional.of(existing));
 
         BusinessException exception = assertThrows(
@@ -162,7 +162,7 @@ class IdempotencyServiceTest {
         );
 
         assertEquals(GlobalErrorCode.IDEMPOTENCY_KEY_REQUIRED, exception.getErrorCode());
-        verify(idempotencyRepository, never()).findByUser_IdAndOperationTypeAndIdempotencyKey(any(), any(), any());
+        verify(idempotencyRepository, never()).findByUser_IdAndIdempotencyKey(any(), any());
         verify(idempotencyRepository, never()).saveAndFlush(any());
     }
 
@@ -181,7 +181,7 @@ class IdempotencyServiceTest {
         );
 
         assertEquals(GlobalErrorCode.IDEMPOTENCY_KEY_INVALID, exception.getErrorCode());
-        verify(idempotencyRepository, never()).findByUser_IdAndOperationTypeAndIdempotencyKey(any(), any(), any());
+        verify(idempotencyRepository, never()).findByUser_IdAndIdempotencyKey(any(), any());
         verify(idempotencyRepository, never()).saveAndFlush(any());
     }
 
@@ -201,7 +201,7 @@ class IdempotencyServiceTest {
     @DisplayName("오래된 PROCESSING 레코드를 EXPIRED 상태로 변경하고 만료 건수를 반환한다")
     void expireStaleProcessing_expiresProcessingRecordsAndReturnsCount() {
         Idempotency first = processing(mock(User.class), IdempotencyOperationType.TRANSFER, "first-key", "request-hash-1");
-        Idempotency second = processing(mock(User.class), IdempotencyOperationType.DEPOSIT, "second-key", "request-hash-2");
+        Idempotency second = processing(mock(User.class), IdempotencyOperationType.TOPUP, "second-key", "request-hash-2");
         when(idempotencyRepository.findStaleProcessing(any()))
                 .thenReturn(List.of(first, second));
 
