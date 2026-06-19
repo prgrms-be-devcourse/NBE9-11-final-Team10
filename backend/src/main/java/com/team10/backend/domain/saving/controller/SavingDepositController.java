@@ -2,6 +2,7 @@ package com.team10.backend.domain.saving.controller;
 
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
+import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
 import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.service.SavingDepositService;
 import com.team10.backend.domain.saving.type.DepositStatus;
@@ -101,6 +102,19 @@ public class SavingDepositController {
         InterestPreviewRes response =
                 savingDepositService.getInterestPreview(userId, savingId,
                         savingType);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "출금 제한 설정", description = "예금 또는 적금의 출금 제한여부와 사유를 설정합니다.")
+    @PostMapping("/{savingId}/withdrawal-lock")
+    public ResponseEntity<WithdrawalLockRes> updateWithdrawalLock(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long savingId,
+            @Valid @RequestBody WithdrawalLockReq request
+    ) {
+        WithdrawalLockRes response =
+                savingDepositService.updateWithdrawalLock(userId, savingId, request);
 
         return ResponseEntity.ok(response);
     }

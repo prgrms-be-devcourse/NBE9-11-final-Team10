@@ -3,6 +3,7 @@ package com.team10.backend.domain.saving.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
+import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
 import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.service.SavingDepositService;
 import com.team10.backend.domain.saving.type.DepositStatus;
@@ -20,6 +21,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -255,6 +257,50 @@ class SavingDepositControllerTest {
 
         verify(savingDepositService)
                 .getInterestPreview(1L, 1L, SavingProductType.INSTALLMENT);
+    }
+
+    @Test
+    @DisplayName("출금 제한 설정 API는 인증 사용자의 출금 제한 상태를 변경한다")
+    void updateWithdrawalLock() throws Exception {
+        WithdrawalLockReq request = new WithdrawalLockReq(
+                SavingProductType.INSTALLMENT,
+                true,
+                "목표 저축을 위해 제한"
+        );
+        WithdrawalLockRes response = new WithdrawalLockRes(
+                1L,
+                SavingProductType.INSTALLMENT,
+                true,
+                "목표 저축을 위해 제한",
+                LocalDateTime.of(2026, 6, 19, 10, 30)
+        );
+
+        when(savingDepositService.updateWithdrawalLock(eq(1L), eq(1L), any(WithdrawalLockReq.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/savings/{savingId}/withdrawal-lock", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.savingId").value(1L))
+                .andExpect(jsonPath("$.savingType").value("INSTALLMENT"))
+                .andExpect(jsonPath("$.lockYn").value(true))
+                .andExpect(jsonPath("$.reason").value("목표 저축을 위해 제한"))
+                .andExpect(jsonPath("$.updatedAt").value("2026-06-19T10:30:00"));
+
+        verify(savingDepositService)
+                .updateWithdrawalLock(eq(1L), eq(1L), any(WithdrawalLockReq.class));
+    }
+
+    @Test
+    @DisplayName("출금 제한 설정 API는 필수값이 없으면 400을 반환한다")
+    void updateWithdrawalLockWithoutRequiredValue() throws Exception {
+        WithdrawalLockReq request = new WithdrawalLockReq(null, true, "목표 저축");
+
+        mockMvc.perform(post("/api/v1/savings/{savingId}/withdrawal-lock", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
