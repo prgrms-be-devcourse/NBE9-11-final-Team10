@@ -34,26 +34,13 @@ public class RefreshTokenService {
 
     private static final String KEY_PREFIX = "refresh:";
 
-    /**
-     * 값이 일치할 때만 원자적으로 삭제하는 Lua 스크립트.
-     * 불일치 시 키를 삭제하지 않으므로 잘못된 RT 제출이 올바른 RT를 무효화하지 않는다.
-     * 반환값: 1 = 일치 후 삭제, 0 = 불일치 또는 키 없음
-     */
-    private static final RedisScript<Long> GET_AND_DELETE_IF_MATCH = RedisScript.of(
-            "local stored = redis.call('GET', KEYS[1])\n" +
-            "if stored == ARGV[1] then\n" +
-            "  redis.call('DEL', KEYS[1])\n" +
-            "  return 1\n" +
-            "else\n" +
-            "  return 0\n" +
-            "end",
-            Long.class
-    );
-
     @Value("${jwt.refresh-token-expiration-seconds}")
     private long refreshTokenExpirationSeconds;
 
     private final StringRedisTemplate redisTemplate;
+    // RedisScriptConfig에서 정의 — 값 일치 시에만 원자적으로 삭제(1=일치 후 삭제, 0=불일치/키 없음).
+    // 불일치 시 키를 삭제하지 않으므로 잘못된 RT 제출이 올바른 RT를 무효화하지 않는다.
+    private final RedisScript<Long> getAndDeleteIfMatchScript;
 
     /**
      * 새 Refresh Token을 발급하고 Redis에 저장한다 (TTL 7일).
@@ -87,7 +74,7 @@ public class RefreshTokenService {
     public boolean validateAndConsume(Long userId, String token) {
         if (token == null) return false;
         Long result = redisTemplate.execute(
-                GET_AND_DELETE_IF_MATCH,
+                getAndDeleteIfMatchScript,
                 List.of(KEY_PREFIX + userId),
                 token
         );

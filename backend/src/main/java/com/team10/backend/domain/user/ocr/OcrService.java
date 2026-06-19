@@ -12,6 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 /**
  * 신분증 OCR 비동기 처리 서비스 (1단계 → 2단계 즉시 체이닝).
  * 외부 API 대기 중 DB 커넥션 점유를 피하기 위해 DB 저장은 {@link OcrPersistenceService}에 위임한다.
@@ -27,21 +31,31 @@ public class OcrService {
     private final VerificationSessionRecorder verificationSessionRecorder;
 
     @Async("ocrExecutor")
-    public void processAsync(byte[] imageBytes, Long verificationId) {
+    public void processAsync(Path imagePath, Long verificationId) {
         log.info("[OCR] 1단계 시작 — verificationId={}, thread={}", verificationId, Thread.currentThread().getName());
 
-        IdentityVerification verification = ocrPersistenceService.loadVerification(verificationId);
-        if (verification == null) return;
-
         try {
-            IdCardOcrResult result = codefOcrClient.extractIdCard(imageBytes);
-            ocrPersistenceService.saveOcrSuccess(verificationId, result);
-            log.info("[OCR] 1단계 완료 — verificationId={}, name={}", verificationId, result.name());
-            chainGovernmentVerification(verificationId, result);
+            IdentityVerification verification = ocrPersistenceService.loadVerification(verificationId);
+            if (verification == null) return;
 
-        } catch (Exception e) {
-            ocrPersistenceService.saveFailure(verificationId, "이미지 처리 중 오류가 발생했습니다: " + e.getMessage());
-            log.error("[OCR] 처리 오류 — verificationId={}", verificationId, e);
+            try {
+                byte[] imageBytes = Files.readAllBytes(imagePath);
+                IdCardOcrResult result = codefOcrClient.extractIdCard(imageBytes);
+                ocrPersistenceService.saveOcrSuccess(verificationId, result);
+                log.info("[OCR] 1단계 완료 — verificationId={}, name={}", verificationId, result.name());
+                chainGovernmentVerification(verificationId, result);
+
+            } catch (Exception e) {
+                ocrPersistenceService.saveFailure(verificationId, "이미지 처리 중 오류가 발생했습니다: " + e.getMessage());
+                log.error("[OCR] 처리 오류 — verificationId={}", verificationId, e);
+            }
+        } finally {
+            // 앱이 직접 만든 임시파일이므로 처리 성공/실패와 무관하게 항상 정리한다.
+            try {
+                Files.deleteIfExists(imagePath);
+            } catch (IOException e) {
+                log.warn("[OCR] 임시파일 삭제 실패 — path={}", imagePath, e);
+            }
         }
     }
 

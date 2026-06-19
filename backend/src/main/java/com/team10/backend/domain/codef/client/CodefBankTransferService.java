@@ -1,5 +1,6 @@
 package com.team10.backend.domain.codef.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.verification.BankTransferService;
@@ -10,16 +11,14 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-// EasyCodef SDK는 URL 인코딩 + Content-Type 누락으로 CF-00003 오류 발생 (CodefOcrClient와 동일한 이슈)
-// → Spring RestClient로 application/json 방식 직접 호출
-
-/** CODEF API 기반 1원 계좌인증 송금 서비스. {@code @Primary}로 Mock 대신 자동 주입된다. */
+/** CODEF API 기반 1원 계좌인증 송금 서비스. */
 @Slf4j
 @Service
 @Primary
@@ -35,20 +34,33 @@ public class CodefBankTransferService implements BankTransferService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final CodefAuthClient codefAuthClient;
-    // 1원 송금은 CODEF가 실제 은행 응답을 기다리는 동기 호출이라 전역 5초 timeout보다 긴
-    // 전용 RestClient(CodefBankRestClientConfig, read timeout 30s)를 사용한다.
     private final RestClient codefBankTransferRestClient;
 
     @Override
     public void sendOneWon(String organization, String accountNumber, String verificationCode) {
+        Map<?, ?> responseMap = requestTransfer(organization, accountNumber, verificationCode);
+        Map<?, ?> result = (responseMap != null) ? (Map<?, ?>) responseMap.get("result") : null;
+        String code = (result != null) ? (String) result.get("code") : null;
+
+        if (!"CF-00000".equals(code)) {
+            log.error("[CODEF] 1원 송금 실패 — org={}, account={}, code={}, message={}",
+                    organization, accountNumber, code, result != null ? result.get("message") : null);
+            throw new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED);
+        }
+
+        log.info("[CODEF] 1원 송금 완료 — org={}, account={}, code={}", organization, accountNumber, verificationCode);
+    }
+
+    /** 1원 송금 인증 API 호출 + 응답 디코딩. 실패 시 전부 ONE_WON_TRANSFER_FAILED로 변환한다. */
+    private Map<?, ?> requestTransfer(String organization, String accountNumber, String verificationCode) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("organization", organization);
+        body.put("account", accountNumber);
+        body.put("inPrintType", IN_PRINT_TYPE_CUSTOM);
+        body.put("inPrintContent", verificationCode);
+
         try {
             String token = codefAuthClient.getAccessToken();
-
-            Map<String, Object> body = new HashMap<>();
-            body.put("organization", organization);
-            body.put("account", accountNumber);
-            body.put("inPrintType", IN_PRINT_TYPE_CUSTOM);
-            body.put("inPrintContent", verificationCode);
 
             String response = codefBankTransferRestClient.post()
                     .uri(TRANSFER_AUTH_URL)
@@ -59,30 +71,9 @@ public class CodefBankTransferService implements BankTransferService {
                     .body(String.class);
 
             String decoded = URLDecoder.decode(response != null ? response : "", StandardCharsets.UTF_8);
-            log.debug("[CODEF] 1원 이체 응답 — {}", decoded);
+            return OBJECT_MAPPER.readValue(decoded, Map.class);
 
-            Map<?, ?> responseMap = OBJECT_MAPPER.readValue(decoded, Map.class);
-            if (responseMap == null) {
-                throw new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED);
-            }
-            Map<?, ?> result = (Map<?, ?>) responseMap.get("result");
-            if (result == null) {
-                throw new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED);
-            }
-            String code = (String) result.get("code");
-
-            if (!"CF-00000".equals(code)) {
-                String message = (String) result.get("message");
-                log.error("[CODEF] 1원 송금 실패 — org={}, account={}, code={}, message={}",
-                        organization, accountNumber, code, message);
-                throw new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED);
-            }
-
-            log.info("[CODEF] 1원 송금 완료 — org={}, account={}, code={}", organization, accountNumber, verificationCode);
-
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
+        } catch (CodefAuthException | RestClientException | IllegalArgumentException | JsonProcessingException e) {
             log.error("[CODEF] 1원 송금 중 오류 — org={}, account={}", organization, accountNumber, e);
             throw new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED);
         }
