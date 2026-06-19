@@ -4,12 +4,12 @@ import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
 import com.team10.backend.domain.exAccount.entity.ExAccount;
-import com.team10.backend.domain.exAccount.exception.ExAccountErrorCode;
 import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.exception.GlobalErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -28,7 +28,6 @@ public class ExAccountSyncService {
         validateItems(requests);
 
         return requests.stream()
-                .peek(this::validateItem)
                 .map(request -> ExAccountCandidateRes.from(request, isAlreadyLinked(userId, request)))
                 .toList();
     }
@@ -45,8 +44,10 @@ public class ExAccountSyncService {
 
     private void validateItems(List<ExAccountLinkReq> requests) {
         if (requests == null || requests.isEmpty()) {
-            throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_SYNC_ITEMS_REQUIRED);
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
         }
+
+        requests.forEach(this::validateItem);
     }
 
 
@@ -56,7 +57,7 @@ public class ExAccountSyncService {
                 || !hasText(request.accountNumber())
                 || !hasText(request.accountName())
                 || request.assetType() == null) {
-            throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_SYNC_REQUIRED_FIELD_MISSING);
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
         }
     }
 
