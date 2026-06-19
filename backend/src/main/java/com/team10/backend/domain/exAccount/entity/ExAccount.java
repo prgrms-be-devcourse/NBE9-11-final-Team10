@@ -93,5 +93,15 @@ public class ExAccount extends BaseEntity {
         this.lastTransactionAt = lastTransactionAt;
         this.status = ExAccountStatus.ACTIVE;
     }
-}
 
+    public String getAccountNoMasked() {
+        if (accountNumber == null || accountNumber.length() <= 4) {
+            return accountNumber;
+        }
+
+        int prefixLength = Math.min(6, accountNumber.length() - 4);
+        String prefix = accountNumber.substring(0, prefixLength);
+        String suffix = accountNumber.substring(accountNumber.length() - 4);
+        return prefix + "*".repeat(accountNumber.length() - prefixLength - 4) + suffix;
+    }
+}

@@ -1,6 +1,9 @@
 package com.team10.backend.domain.exAccount.service;
 
 import com.team10.backend.domain.exAccount.Type.ExAccountType;
+import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
+import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
+import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
 import com.team10.backend.domain.exAccount.entity.ExAccount;
 import com.team10.backend.domain.exAccount.exception.ExAccountErrorCode;
 import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
@@ -24,28 +27,30 @@ public class ExAccountSyncService {
     private final ExAccountRepository exAccountRepository;
     private final UserRepository userRepository;
 
-    public ExAccountSyncResult syncAccount(Long userId, List<ExAccountSyncItem> items) {
+    public List<ExAccountCandidateRes> getLinkCandidates(Long userId, List<ExAccountLinkReq> requests) {
+        List<ExAccountSyncItem> items = requests == null
+                ? null
+                : requests.stream()
+                .map(ExAccountLinkReq::toSyncItem)
+                .toList();
 
-        validateItems(items); //외부에서 계좌 목록 넘겼는지 확인
+        validateItems(items);
+
+        return items.stream()
+                .peek(this::validateItem)
+                .map(item -> ExAccountCandidateRes.from(item, isAlreadyLinked(userId, item)))
+                .toList();
+    }
+
+    public ExAccountRes linkAccount(Long userId, ExAccountLinkReq request) {
+        ExAccountSyncItem item = request == null ? null : request.toSyncItem();
+        validateItem(item);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
-        int createdCount = 0;
-        int updatedCount = 0;
-
-        for (ExAccountSyncItem item : items) {
-            validateItem(item);
-
-            if (upsertAccount(user, item)) {
-                createdCount++;
-                continue;
-            }
-
-            updatedCount++;
-        }
-
-        return new ExAccountSyncResult(items.size(), createdCount, updatedCount);
+        ExAccount account = upsertAccount(user, item);
+        return ExAccountRes.from(account);
     }
 
     private void validateItems(List<ExAccountSyncItem> items) {
@@ -65,8 +70,17 @@ public class ExAccountSyncService {
         }
     }
 
-    private boolean upsertAccount(User user, ExAccountSyncItem item) {
-        // 4. 같은 사용자/기관/계좌번호 기준으로 기존 외부 계좌를 찾는다.
+    private boolean isAlreadyLinked(Long userId, ExAccountSyncItem item) {
+        return exAccountRepository
+                .findByUserIdAndOrganizationAndAccountNumber(
+                        userId,
+                        item.organization(),
+                        item.accountNumber()
+                )
+                .isPresent();
+    }
+
+    private ExAccount upsertAccount(User user, ExAccountSyncItem item) {
         ExAccount exAccount = exAccountRepository
                 .findByUserIdAndOrganizationAndAccountNumber(
                         user.getId(),
@@ -75,13 +89,10 @@ public class ExAccountSyncService {
                 )
                 .orElse(null);
 
-        // 계좌가 없으면 신규 외부 계좌로 저장
         if (exAccount == null) {
-            exAccountRepository.save(item.toEntity(user));
-            return true;
+            return exAccountRepository.save(item.toEntity(user));
         }
 
-        // 스냅샷만 갱신
         exAccount.updateSnapshot(
                 item.accountName(),
                 item.accountAlias(),
@@ -90,7 +101,7 @@ public class ExAccountSyncService {
                 item.maturityAt(),
                 item.lastTransactionAt()
         );
-        return false;
+        return exAccount;
     }
 
 
@@ -126,11 +137,4 @@ public class ExAccountSyncService {
         }
     }
 
-
-    public record ExAccountSyncResult(
-            int requestedCount, //요청 갯수
-            int createdCount, //신규 저장 갯수
-            int updatedCount //업데이트 저장 갯수
-    ) {
-    }
 }
