@@ -5,6 +5,7 @@ import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
+import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
 import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.Installment;
@@ -244,6 +245,43 @@ public class SavingDepositService {
         }
 
         // 이상한 타입이면 예외
+        throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
+    }
+
+    @Transactional
+    public WithdrawalLockRes updateWithdrawalLock(
+            Long userId,
+            Long savingId,
+            WithdrawalLockReq request
+    ) {
+        if (!request.lockYn() && (request.reason() == null ||
+                request.reason().isBlank())) {
+            throw new
+                    BusinessException(SavingErrorCode.WITHDRAWAL_UNLOCK_REASON_REQUIRED);
+        }
+
+        if (request.savingType() == SavingProductType.DEPOSIT) {
+            Deposit deposit = depositRepository.findByIdAndUserIdWithProduct(savingId,
+                            userId)
+                    .orElseThrow(() -> new
+                            BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
+
+            deposit.updateWithdrawalLock(request.lockYn(), request.reason());
+
+            return WithdrawalLockRes.fromDeposit(deposit);
+        }
+
+        if (request.savingType() == SavingProductType.INSTALLMENT) {
+            Installment installment =
+                    installmentRepository.findByIdAndUserIdWithProduct(savingId, userId)
+                            .orElseThrow(() -> new
+                                    BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
+
+            installment.updateWithdrawalLock(request.lockYn(), request.reason());
+
+            return WithdrawalLockRes.fromInstallment(installment);
+        }
+
         throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
     }
 }

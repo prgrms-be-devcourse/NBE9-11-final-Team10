@@ -51,6 +51,12 @@ public class Installment extends BaseEntity {
     @Column(nullable = false, length = 20)
     private InstallmentStatus status; // 적금 상태
 
+    @Column(nullable = false)
+    private boolean withdrawalLocked; // 출금 제한 여부
+
+    @Column(length = 255)
+    private String withdrawalLockReason; // 출금 제한 사유
+
     public static Installment create(
             User user,
             SavingProduct savingProduct,
@@ -72,10 +78,17 @@ public class Installment extends BaseEntity {
         installment.maturityDate = maturityDate;
         installment.autoTransferYn = autoTransferYn;
         installment.status = InstallmentStatus.ACTIVE;
+        installment.withdrawalLocked = false;
+        installment.withdrawalLockReason = null;
         return installment;
     }
 
     public Long getProgressRate() {
         return paidAmount * 100 / targetAmount;
+    }
+
+    public void updateWithdrawalLock(boolean lockYn, String reason) {
+        this.withdrawalLocked = lockYn;
+        this.withdrawalLockReason = reason;
     }
 }
