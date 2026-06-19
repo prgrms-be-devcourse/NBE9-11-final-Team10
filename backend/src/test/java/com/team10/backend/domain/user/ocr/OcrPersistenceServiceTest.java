@@ -5,6 +5,7 @@ import com.team10.backend.domain.user.entity.IdentityVerification;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.IdentityVerificationRepository;
 import com.team10.backend.domain.user.type.VerificationStatus;
+import com.team10.backend.global.crypto.HmacHasher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Optional;
 
@@ -20,10 +23,14 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class OcrPersistenceServiceTest {
 
     @Mock
     IdentityVerificationRepository identityVerificationRepository;
+
+    @Mock
+    HmacHasher hmacHasher;
 
     @InjectMocks
     OcrPersistenceService ocrPersistenceService;
@@ -63,15 +70,17 @@ class OcrPersistenceServiceTest {
     class SaveOcrSuccess {
 
         @Test
-        @DisplayName("존재하는 세션 → OCR 결과 기록 및 상태 전환")
+        @DisplayName("존재하는 세션 → 마스킹된 주민번호와 해시가 기록되고 상태 전환된다")
         void found_completesOcr() {
             IdentityVerification verification = newVerification();
             when(identityVerificationRepository.findById(1L)).thenReturn(Optional.of(verification));
+            when(hmacHasher.hash("901201-1234567")).thenReturn("hashed-value");
 
             ocrPersistenceService.saveOcrSuccess(1L, new IdCardOcrResult("홍길동", "901201-1234567", "2023-01-15"));
 
             assertThat(verification.getOcrName()).isEqualTo("홍길동");
-            assertThat(verification.getOcrResidentNumber()).isEqualTo("901201-1234567");
+            assertThat(verification.getOcrResidentNumber()).isEqualTo("901201-*******");
+            assertThat(verification.getOcrResidentNumberHash()).isEqualTo("hashed-value");
             assertThat(verification.getOcrIssueDate()).isEqualTo("2023-01-15");
             assertThat(verification.getStatus()).isEqualTo(VerificationStatus.OCR_COMPLETED);
         }

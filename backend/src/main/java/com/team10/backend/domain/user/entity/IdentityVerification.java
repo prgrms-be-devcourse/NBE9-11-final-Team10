@@ -1,7 +1,7 @@
 package com.team10.backend.domain.user.entity;
 
 import com.team10.backend.domain.user.type.VerificationStatus;
-import com.team10.backend.global.crypto.CryptoStringConverter;
+import com.team10.backend.global.crypto.HmacHasher;
 import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -30,13 +30,19 @@ public class IdentityVerification extends BaseEntity {
     private String ocrName;
 
     /**
-     * OCR로 추출한 주민등록번호.
-     * {@link CryptoStringConverter}로 AES-256-GCM 암호화되어 DB에 저장된다 (애플리케이션 코드에서는 평문으로 다룸).
-     * 인증 완료/실패 시 {@link #maskResidentNumber()}로 뒷자리를 마스킹한 뒤 암호화된 채 저장된다.
+     * OCR로 추출한 주민등록번호의 마스킹 표시용 값 (앞 6자리 + "-*******").
+     * 뒷자리(민감한 일련번호) 평문은 애플리케이션 어디에서도 저장 후 다시 읽지 않으므로
+     * {@link #completeOcr} 시점에 즉시 마스킹해 저장한다 — 가역 암호화가 필요 없다.
      */
-    @Convert(converter = CryptoStringConverter.class)
-    @Column(length = 255)
+    @Column(length = 20)
     private String ocrResidentNumber;
+
+    /**
+     * 주민등록번호 전체 원문에 대한 {@link HmacHasher} 단방향 해시 (Base64).
+     * 복호화는 불가능하며, 추후 중복 인증 탐지 등 동등 비교가 필요할 때만 사용한다.
+     */
+    @Column(length = 64)
+    private String ocrResidentNumberHash;
 
     /** OCR로 추출한 발급일자 (yyyy-MM-dd 형식 정규화) */
     @Column(length = 20)
@@ -63,27 +69,32 @@ public class IdentityVerification extends BaseEntity {
                 .build();
     }
 
-    /** OCR 파싱 성공 시 결과를 기록하고 다음 단계로 전환 */
-    public void completeOcr(String name, String residentNumber, String issueDate) {
+    /**
+     * OCR 파싱 성공 시 결과를 기록하고 다음 단계로 전환.
+     * 주민번호 평문은 어떤 필드에도 저장하지 않고, 마스킹된 표시값과 단방향 해시만 남긴다.
+     *
+     * @param residentNumberHash {@link HmacHasher#hash}로 계산한 주민번호 전체 원문의 해시
+     */
+    public void completeOcr(String name, String residentNumber, String issueDate, String residentNumberHash) {
         this.ocrName = name;
-        this.ocrResidentNumber = residentNumber;
+        this.ocrResidentNumber = mask(residentNumber);
+        this.ocrResidentNumberHash = residentNumberHash;
         this.ocrIssueDate = issueDate;
         this.status = VerificationStatus.OCR_COMPLETED;
     }
 
-    /** 행안부 진위 확인 성공 — 뒷자리 마스킹 후 3단계(1원 송금)로 전환 */
-    public void completeGovernmentVerification() {
-        maskResidentNumber();
-        this.status = VerificationStatus.GOVERNMENT_VERIFIED;
+    /** 앞 6자리만 남기고 나머지는 가린다 (하이픈 없는 값/null은 그대로 둔다) */
+    private static String mask(String residentNumber) {
+        if (residentNumber == null || !residentNumber.contains("-")) {
+            return residentNumber;
+        }
+        String front = residentNumber.split("-")[0];
+        return front + "-*******";
     }
 
-    /** 뒷자리 마스킹: 앞 6자리만 남기고 나머지는 가린다 (이미 마스킹된 경우 재처리 안 함) */
-    private void maskResidentNumber() {
-        if (this.ocrResidentNumber != null && this.ocrResidentNumber.contains("-")
-                && !this.ocrResidentNumber.endsWith("-*******")) {
-            String front = this.ocrResidentNumber.split("-")[0];
-            this.ocrResidentNumber = front + "-*******";
-        }
+    /** 행안부 진위 확인 성공 — 3단계(1원 송금)로 전환 */
+    public void completeGovernmentVerification() {
+        this.status = VerificationStatus.GOVERNMENT_VERIFIED;
     }
 
     /** 1원 송금 요청 완료 — 코드 입력 대기 상태로 전환 */
@@ -96,9 +107,8 @@ public class IdentityVerification extends BaseEntity {
         this.status = VerificationStatus.COMPLETED;
     }
 
-    /** 인증 실패 처리 — 주민번호가 평문으로 남아있으면 함께 마스킹 */
+    /** 인증 실패 처리 */
     public void fail(String reason) {
-        maskResidentNumber();
         this.failureReason = reason;
         this.status = VerificationStatus.FAILED;
     }

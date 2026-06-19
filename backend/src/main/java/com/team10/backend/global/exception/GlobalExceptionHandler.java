@@ -3,6 +3,8 @@ package com.team10.backend.global.exception;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -23,6 +25,13 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // 검증 실패 로그에 원문 값을 그대로 남기면 비밀번호/OTP 등이 평문으로 로그에 적힐 수 있다.
+    // 이 클래스는 domain 비의존을 유지해야 하므로(특정 DTO를 import하지 않음) 필드명에
+    // 아래 키워드가 포함되면 값을 마스킹하는 일반화된 방식으로 처리한다.
+    private static final Set<String> SENSITIVE_FIELD_KEYWORDS = Set.of(
+            "password", "secret", "token", "otp", "pin", "credential"
+    );
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusiness(BusinessException e) {
         log.error("BusinessException: {}", e.getMessage());
@@ -42,7 +51,7 @@ public class GlobalExceptionHandler {
         e.getBindingResult().getFieldErrors().forEach(error ->
                 log.warn("[VALIDATION] field='{}', rejectedValue='{}', message='{}'",
                         error.getField(),
-                        error.getRejectedValue(),
+                        maskIfSensitive(error.getField(), error.getRejectedValue()),
                         error.getDefaultMessage()));
         List<ValidationError> errors = e.getBindingResult().getFieldErrors().stream()
                 .map(err -> new ValidationError(err.getField(), err.getDefaultMessage()))
@@ -60,11 +69,13 @@ public class GlobalExceptionHandler {
         log.warn("[VALIDATION] RequestParam/PathVariable 검증 실패 - violationCount={}",
                 e.getConstraintViolations().size());
 
-        e.getConstraintViolations().forEach(v ->
-                log.warn("[VALIDATION] field='{}', invalidValue='{}', message='{}'",
-                        extractField(v.getPropertyPath()),
-                        v.getInvalidValue(),
-                        v.getMessage()));
+        e.getConstraintViolations().forEach(v -> {
+            String field = extractField(v.getPropertyPath());
+            log.warn("[VALIDATION] field='{}', invalidValue='{}', message='{}'",
+                    field,
+                    maskIfSensitive(field, v.getInvalidValue()),
+                    v.getMessage());
+        });
         List<ValidationError> errors = e.getConstraintViolations().stream()
                 .map(v -> new ValidationError(extractField(v.getPropertyPath()), v.getMessage()))
                 .toList();
@@ -105,6 +116,16 @@ public class GlobalExceptionHandler {
             field = node.getName();
         }
         return field;
+    }
+
+    // 필드명에 민감 키워드가 포함되어 있으면 로그에 값 대신 마스킹 문자열을 남긴다.
+    private static Object maskIfSensitive(String fieldName, Object value) {
+        if (fieldName == null) {
+            return value;
+        }
+        String lower = fieldName.toLowerCase(Locale.ROOT);
+        boolean sensitive = SENSITIVE_FIELD_KEYWORDS.stream().anyMatch(lower::contains);
+        return sensitive ? "[REDACTED]" : value;
     }
 
 }

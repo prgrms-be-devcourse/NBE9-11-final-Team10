@@ -3,6 +3,7 @@ package com.team10.backend.domain.user.repository;
 import com.team10.backend.domain.user.entity.IdentityVerification;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.config.QuerydslConfig;
+import com.team10.backend.global.crypto.HmacHasher;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,16 +17,16 @@ import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * IdentityVerification.ocrResidentNumber에 적용된 CryptoStringConverter가
- * 실제 Hibernate 영속화 경로에서 동작하는지 확인하는 통합 테스트.
+ * IdentityVerification.ocrResidentNumber가 가역 암호화 없이
+ * "마스킹된 표시값 + 단방향 해시(HmacHasher)"로만 저장되는지 확인하는 통합 테스트.
  *
- * <p>단위 테스트(CryptoStringConverterTest)는 컨버터 로직 자체만 검증하므로,
- * 여기서는 "엔티티를 저장하면 DB 컬럼에는 ciphertext가 들어가고,
- * 리포지토리로 다시 읽으면 평문으로 복호화되는지"를 EntityManager native query로 직접 확인한다.
+ * <p>주민번호 평문은 어떤 컬럼에도 남아서는 안 되고, 해시는 항상 결정론적(deterministic)이어야 한다
+ * — 즉, 같은 평문은 항상 같은 해시를 가져야 하며(동등 비교/중복 검사에 활용 가능), 그 해시로부터
+ * 원문을 복원할 수는 없다.
  */
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(QuerydslConfig.class)
+@Import({QuerydslConfig.class, HmacHasher.class})
 class IdentityVerificationEncryptionTest {
 
     @Autowired
@@ -36,6 +37,9 @@ class IdentityVerificationEncryptionTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private HmacHasher hmacHasher;
 
     private User persistUser(String email) {
         return userRepository.save(
@@ -49,63 +53,75 @@ class IdentityVerificationEncryptionTest {
                 .getSingleResult();
     }
 
+    private String rawResidentNumberHash(Long verificationId) {
+        return (String) entityManager
+                .createNativeQuery("SELECT ocr_resident_number_hash FROM identity_verifications WHERE id = :id")
+                .setParameter("id", verificationId)
+                .getSingleResult();
+    }
+
     @Test
-    @DisplayName("DB에는 암호화되어 저장되고, 리포지토리로 조회하면 평문으로 복호화된다")
-    void ocrResidentNumber_isEncryptedAtRest_andDecryptedOnRead() {
-        User user = persistUser("encrypt-test@example.com");
+    @DisplayName("DB에는 마스킹된 값만 저장되고, 주민번호 평문은 어디에도 남지 않는다")
+    void ocrResidentNumber_isMaskedAtRest_neverStoresPlainText() {
+        User user = persistUser("hash-test@example.com");
 
         IdentityVerification verification = IdentityVerification.startOcr(user);
-        verification.completeOcr("홍길동", "901201-1234567", "2023-01-15");
+        verification.completeOcr("홍길동", "901201-1234567", "2023-01-15", hmacHasher.hash("901201-1234567"));
         Long id = identityVerificationRepository.save(verification).getId();
 
         entityManager.flush();
         entityManager.clear();
 
         String rawValue = rawResidentNumber(id);
-        assertThat(rawValue).isNotEqualTo("901201-1234567");
-        assertThat(rawValue).doesNotContain("901201");
+        assertThat(rawValue).isEqualTo("901201-*******");
+        assertThat(rawValue).doesNotContain("1234567");
 
         IdentityVerification reloaded = identityVerificationRepository.findById(id).orElseThrow();
-        assertThat(reloaded.getOcrResidentNumber()).isEqualTo("901201-1234567");
+        assertThat(reloaded.getOcrResidentNumber()).isEqualTo("901201-*******");
     }
 
     @Test
-    @DisplayName("같은 평문을 두 번 저장해도 raw 컬럼 값은 서로 다르다 (랜덤 IV)")
-    void samePlainText_producesDifferentRawValues() {
-        User user1 = persistUser("encrypt-test-1@example.com");
-        User user2 = persistUser("encrypt-test-2@example.com");
+    @DisplayName("해시는 복호화 불가능한 형태로 저장되고, 동일 평문은 항상 동일한 해시를 가진다 (동등 비교 가능)")
+    void residentNumberHash_isDeterministic_andNotReversible() {
+        User user1 = persistUser("hash-test-1@example.com");
+        User user2 = persistUser("hash-test-2@example.com");
+        String expectedHash = hmacHasher.hash("901201-1234567");
 
         IdentityVerification v1 = IdentityVerification.startOcr(user1);
-        v1.completeOcr("홍길동", "901201-1234567", "2023-01-15");
+        v1.completeOcr("홍길동", "901201-1234567", "2023-01-15", expectedHash);
         Long id1 = identityVerificationRepository.save(v1).getId();
 
         IdentityVerification v2 = IdentityVerification.startOcr(user2);
-        v2.completeOcr("홍길동", "901201-1234567", "2023-01-15");
+        v2.completeOcr("홍길동", "901201-1234567", "2023-01-15", expectedHash);
         Long id2 = identityVerificationRepository.save(v2).getId();
 
         entityManager.flush();
         entityManager.clear();
 
-        assertThat(rawResidentNumber(id1)).isNotEqualTo(rawResidentNumber(id2));
+        String hash1 = rawResidentNumberHash(id1);
+        String hash2 = rawResidentNumberHash(id2);
+
+        assertThat(hash1).isEqualTo(expectedHash);
+        assertThat(hash1).isEqualTo(hash2);
+        assertThat(hash1).doesNotContain("1234567").doesNotContain("901201");
     }
 
     @Test
-    @DisplayName("마스킹 후 저장된 값도 암호화되어 저장되고 복호화 시 마스킹된 형태로 돌아온다")
-    void maskedResidentNumber_isAlsoEncrypted() {
-        User user = persistUser("encrypt-test-masked@example.com");
+    @DisplayName("행안부 인증 처리 후에도 마스킹된 값과 해시가 그대로 유지된다")
+    void maskedValueAndHash_surviveStatusTransitions() {
+        User user = persistUser("hash-test-masked@example.com");
+        String hash = hmacHasher.hash("901201-1234567");
 
         IdentityVerification verification = IdentityVerification.startOcr(user);
-        verification.completeOcr("홍길동", "901201-1234567", "2023-01-15");
+        verification.completeOcr("홍길동", "901201-1234567", "2023-01-15", hash);
         verification.completeGovernmentVerification();
         Long id = identityVerificationRepository.save(verification).getId();
 
         entityManager.flush();
         entityManager.clear();
 
-        String rawValue = rawResidentNumber(id);
-        assertThat(rawValue).doesNotContain("901201-*******");
-
         IdentityVerification reloaded = identityVerificationRepository.findById(id).orElseThrow();
         assertThat(reloaded.getOcrResidentNumber()).isEqualTo("901201-*******");
+        assertThat(reloaded.getOcrResidentNumberHash()).isEqualTo(hash);
     }
 }

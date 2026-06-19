@@ -42,11 +42,13 @@ public class OcrService {
                 byte[] imageBytes = Files.readAllBytes(imagePath);
                 IdCardOcrResult result = codefOcrClient.extractIdCard(imageBytes);
                 ocrPersistenceService.saveOcrSuccess(verificationId, result);
-                log.info("[OCR] 1단계 완료 — verificationId={}, name={}", verificationId, result.name());
+                log.info("[OCR] 1단계 완료 — verificationId={}", verificationId); // 이름(PII)은 로그에 남기지 않음
                 chainGovernmentVerification(verificationId, result);
 
             } catch (Exception e) {
-                ocrPersistenceService.saveFailure(verificationId, "이미지 처리 중 오류가 발생했습니다: " + e.getMessage());
+                // DB failureReason에는 고정 메시지만 저장 — 예외 메시지(e.getMessage())는 내부 정보를
+                // 노출할 수 있어 평문 저장하지 않는다. 상세 원인은 아래 log.error의 스택트레이스로만 남긴다.
+                ocrPersistenceService.saveFailure(verificationId, "이미지 처리 중 오류가 발생했습니다.");
                 log.error("[OCR] 처리 오류 — verificationId={}", verificationId, e);
             }
         } finally {

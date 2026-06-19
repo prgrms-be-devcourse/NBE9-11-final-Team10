@@ -43,12 +43,15 @@ public class CodefBankTransferService implements BankTransferService {
         String code = (result != null) ? (String) result.get("code") : null;
 
         if (!"CF-00000".equals(code)) {
+            // 계좌번호는 마스킹, 인증코드(verificationCode)는 시연 목적상 의도적으로 평문 노출
             log.error("[CODEF] 1원 송금 실패 — org={}, account={}, code={}, message={}",
-                    organization, accountNumber, code, result != null ? result.get("message") : null);
+                    organization, maskAccountNumber(accountNumber), code, result != null ? result.get("message") : null);
             throw new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED);
         }
 
-        log.info("[CODEF] 1원 송금 완료 — org={}, account={}, code={}", organization, accountNumber, verificationCode);
+        // 주의: 여기서 찍는 건 CODEF 응답 code("CF-00000")가 아니라 송금 시 입금자명으로 쓴 verificationCode(OTP)다.
+        log.info("[CODEF] 1원 송금 완료 — org={}, account={}, verificationCode={}",
+                organization, maskAccountNumber(accountNumber), verificationCode);
     }
 
     /** 1원 송금 인증 API 호출 + 응답 디코딩. 실패 시 전부 ONE_WON_TRANSFER_FAILED로 변환한다. */
@@ -74,8 +77,22 @@ public class CodefBankTransferService implements BankTransferService {
             return OBJECT_MAPPER.readValue(decoded, Map.class);
 
         } catch (CodefAuthException | RestClientException | IllegalArgumentException | JsonProcessingException e) {
-            log.error("[CODEF] 1원 송금 중 오류 — org={}, account={}", organization, accountNumber, e);
+            log.error("[CODEF] 1원 송금 중 오류 — org={}, account={}", organization, maskAccountNumber(accountNumber), e);
             throw new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED);
         }
+    }
+
+    /**
+     * 로그용 계좌번호 마스킹 (앞 최대 6자리 + 뒤 4자리만 노출, 나머지는 '*').
+     * {@code ExAccountCandidateRes.maskAccountNumber}와 동일한 표시 방식 — 기존 마스킹 컨벤션을 따른다.
+     */
+    private static String maskAccountNumber(String accountNumber) {
+        if (accountNumber == null || accountNumber.length() <= 4) {
+            return accountNumber;
+        }
+        int prefixLength = Math.min(6, accountNumber.length() - 4);
+        String prefix = accountNumber.substring(0, prefixLength);
+        String suffix = accountNumber.substring(accountNumber.length() - 4);
+        return prefix + "*".repeat(accountNumber.length() - prefixLength - 4) + suffix;
     }
 }

@@ -7,22 +7,37 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class CodefAuthClientTest {
 
     @Mock CodefOAuthExchange codefOAuthExchange;
+    @Mock StringRedisTemplate redisTemplate;
+    @Mock ValueOperations<String, String> valueOperations;
 
     CodefAuthClient codefAuthClient;
 
     @BeforeEach
     void setUp() {
-        codefAuthClient = new CodefAuthClient("test-client-id", "test-client-secret", codefOAuthExchange);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        // 기본값: 분산 락은 항상 즉시 획득되고, Redis 공유 캐시는 비어있다고 가정.
+        // (각 테스트가 필요한 부분만 덮어써서 의도를 드러낸다)
+        lenient().when(valueOperations.setIfAbsent(eq("codef:oauth:token:lock"), eq("1"), any(Duration.class)))
+                .thenReturn(true);
+        lenient().when(valueOperations.get("codef:oauth:token")).thenReturn(null);
+
+        codefAuthClient = new CodefAuthClient("test-client-id", "test-client-secret", codefOAuthExchange, redisTemplate);
     }
 
     @Nested
@@ -30,7 +45,7 @@ class CodefAuthClientTest {
     class GetAccessToken {
 
         @Test
-        @DisplayName("최초 호출 — OAuth API를 호출해 토큰을 발급받고 캐싱한다")
+        @DisplayName("최초 호출 — OAuth API를 호출해 토큰을 발급받고 로컬+Redis에 캐싱한다")
         void firstCall_fetchesAndCachesToken() {
             when(codefOAuthExchange.issueToken(anyString(), anyString()))
                     .thenReturn(new CodefOAuthExchange.CodefTokenResponse("abc123", 3600L));
@@ -39,25 +54,71 @@ class CodefAuthClientTest {
 
             assertThat(token).isEqualTo("abc123");
             verify(codefOAuthExchange, times(1)).issueToken(anyString(), anyString());
+            // 만료 5분 버퍼를 뺀 나머지(3600-300=3300초)만큼 Redis에 공유 캐싱
+            verify(valueOperations).set(eq("codef:oauth:token"), eq("abc123"), eq(Duration.ofSeconds(3300)));
         }
 
         @Test
-        @DisplayName("캐시 유효기간 내 재호출 — API를 다시 호출하지 않고 캐시된 토큰을 반환한다")
+        @DisplayName("캐시 유효기간 내 재호출 — 로컬 캐시(L1)를 그대로 반환하고 API/Redis 모두 다시 안 탄다")
         void secondCall_withinValidity_usesCachedToken() {
             when(codefOAuthExchange.issueToken(anyString(), anyString()))
                     .thenReturn(new CodefOAuthExchange.CodefTokenResponse("abc123", 3600L));
 
             String first = codefAuthClient.getAccessToken();
+            clearInvocations(valueOperations);
             String second = codefAuthClient.getAccessToken();
 
             assertThat(first).isEqualTo(second);
-            verify(codefOAuthExchange, times(1)).issueToken(anyString(), anyString()); // 두 번째 호출은 캐시 재사용 — API 미호출
+            verify(codefOAuthExchange, times(1)).issueToken(anyString(), anyString()); // 두 번째 호출은 L1 캐시 재사용
+            verifyNoInteractions(valueOperations); // L1이 유효하면 Redis는 아예 건드리지 않음
         }
 
         @Test
-        @DisplayName("만료 5분 이내로 남은 캐시는 만료로 간주하고 재발급한다")
+        @DisplayName("Redis 공유 캐시(L2)에 다른 인스턴스가 올려둔 토큰이 있으면 그걸 재사용한다")
+        void sharedCacheHit_doesNotCallOAuthApi() {
+            when(valueOperations.get("codef:oauth:token")).thenReturn("shared-token");
+            when(redisTemplate.getExpire("codef:oauth:token")).thenReturn(1000L);
+
+            String token = codefAuthClient.getAccessToken();
+
+            assertThat(token).isEqualTo("shared-token");
+            verify(codefOAuthExchange, never()).issueToken(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("다른 인스턴스가 분산 락을 잡고 있으면 대기하다가 Redis에 올라온 토큰을 재사용한다")
+        void lockContention_waitsAndReusesTokenFromOtherInstance() {
+            when(valueOperations.setIfAbsent(eq("codef:oauth:token:lock"), eq("1"), any(Duration.class)))
+                    .thenReturn(false); // 락 획득 실패 — 다른 인스턴스가 발급 중
+            when(valueOperations.get("codef:oauth:token"))
+                    .thenReturn(null, "other-instance-token"); // 첫 확인은 미스, 대기 후 재확인 시 히트
+            when(redisTemplate.getExpire("codef:oauth:token")).thenReturn(1000L);
+
+            String token = codefAuthClient.getAccessToken();
+
+            assertThat(token).isEqualTo("other-instance-token");
+            verify(codefOAuthExchange, never()).issueToken(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("락 경쟁 후 대기 시간을 초과하면 가용성을 위해 직접 발급한다")
+        void lockContention_timesOutAndFetchesDirectly() {
+            when(valueOperations.setIfAbsent(eq("codef:oauth:token:lock"), eq("1"), any(Duration.class)))
+                    .thenReturn(false); // 끝까지 락을 못 잡음
+            when(valueOperations.get("codef:oauth:token")).thenReturn(null); // 끝까지 Redis에도 안 올라옴
+            when(codefOAuthExchange.issueToken(anyString(), anyString()))
+                    .thenReturn(new CodefOAuthExchange.CodefTokenResponse("direct-fetch", 3600L));
+
+            String token = codefAuthClient.getAccessToken();
+
+            assertThat(token).isEqualTo("direct-fetch");
+            verify(codefOAuthExchange, times(1)).issueToken(anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("만료 5분 이내로 남은 토큰은 Redis에 공유하지 않고, 다음 호출에서 재발급한다")
         void nearExpiry_refetchesToken() {
-            // expires_in=60s → 만료 임박(<5분 버퍼)으로 즉시 무효 처리되어야 함
+            // expires_in=60s → 버퍼(5분)보다 짧아 즉시 만료로 간주되어야 함
             when(codefOAuthExchange.issueToken(anyString(), anyString()))
                     .thenReturn(new CodefOAuthExchange.CodefTokenResponse("short-lived", 60L));
             String first = codefAuthClient.getAccessToken();
@@ -69,6 +130,7 @@ class CodefAuthClientTest {
             assertThat(first).isEqualTo("short-lived");
             assertThat(second).isEqualTo("refreshed");
             verify(codefOAuthExchange, times(2)).issueToken(anyString(), anyString());
+            verify(valueOperations, never()).set(eq("codef:oauth:token"), eq("short-lived"), any(Duration.class));
         }
 
         @Test

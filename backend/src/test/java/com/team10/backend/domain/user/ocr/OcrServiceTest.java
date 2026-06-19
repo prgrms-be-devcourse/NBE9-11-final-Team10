@@ -1,5 +1,9 @@
 package com.team10.backend.domain.user.ocr;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.team10.backend.domain.codef.ocr.CodefOcrClient;
 import com.team10.backend.domain.codef.ocr.IdCardOcrResult;
 import com.team10.backend.domain.user.entity.IdentityVerification;
@@ -18,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -131,7 +136,7 @@ class OcrServiceTest {
         }
 
         @Test
-        @DisplayName("OCR 추출 실패 → saveFailure(이미지 처리 중 오류)")
+        @DisplayName("OCR 추출 실패 → saveFailure(이미지 처리 중 오류) — 예외 메시지는 DB에 남지 않는다")
         void ocrExtractionFails_savesFailure() {
             when(ocrPersistenceService.loadVerification(10L)).thenReturn(mock(IdentityVerification.class));
             when(codefOcrClient.extractIdCard(any()))
@@ -139,7 +144,8 @@ class OcrServiceTest {
 
             ocrService.processAsync(imagePath, 10L);
 
-            verify(ocrPersistenceService).saveFailure(eq(10L), contains("이미지 처리 중 오류"));
+            // 고정 메시지만 저장되어야 함 — 예외 메시지(e.getMessage())가 그대로 DB에 평문 저장되면 안 된다
+            verify(ocrPersistenceService).saveFailure(eq(10L), eq("이미지 처리 중 오류가 발생했습니다."));
             verifyNoInteractions(mockGovernmentVerifyService);
         }
 
@@ -155,6 +161,65 @@ class OcrServiceTest {
             ocrService.processAsync(imagePath, 10L);
 
             assertThat(Files.exists(imagePath)).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("로그 마스킹")
+    class LoggingMasking {
+
+        private Path imagePath;
+        private ListAppender<ILoggingEvent> appender;
+
+        @BeforeEach
+        void setUp() throws Exception {
+            imagePath = Files.createTempFile("ocr-test-", ".tmp");
+            Files.write(imagePath, new byte[]{1});
+
+            appender = new ListAppender<>();
+            appender.start();
+            Logger logger = (Logger) LoggerFactory.getLogger(OcrService.class);
+            logger.setLevel(Level.DEBUG);
+            logger.addAppender(appender);
+        }
+
+        @AfterEach
+        void tearDown() throws Exception {
+            ((Logger) LoggerFactory.getLogger(OcrService.class)).detachAppender(appender);
+            Files.deleteIfExists(imagePath);
+        }
+
+        private String logMessages() {
+            StringBuilder sb = new StringBuilder();
+            appender.list.forEach(event -> sb.append(event.getFormattedMessage()).append('\n'));
+            return sb.toString();
+        }
+
+        @Test
+        @DisplayName("OCR 1단계 완료 로그 — 이름(PII)은 로그에 남지 않는다")
+        void ocrSuccess_doesNotLogName() {
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(mock(IdentityVerification.class));
+            IdCardOcrResult result = new IdCardOcrResult("홍길동", "901201-1234567", "2023-01-15");
+            when(codefOcrClient.extractIdCard(any())).thenReturn(result);
+            when(mockGovernmentVerifyService.verify(any(), any(), any()))
+                    .thenReturn(GovernmentVerifyResult.VERIFIED);
+
+            ocrService.processAsync(imagePath, 10L);
+
+            assertThat(logMessages()).doesNotContain("홍길동");
+        }
+
+        @Test
+        @DisplayName("OCR 처리 오류 로그 — 예외 메시지는 DB(failureReason)에는 남지 않고 로그(error)에만 남는다")
+        void ocrExtractionFails_exceptionMessageOnlyInLogNotInDb() {
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(mock(IdentityVerification.class));
+            when(codefOcrClient.extractIdCard(any()))
+                    .thenThrow(new BusinessException(UserErrorCode.OCR_FAILED));
+
+            ocrService.processAsync(imagePath, 10L);
+
+            verify(ocrPersistenceService).saveFailure(eq(10L), eq("이미지 처리 중 오류가 발생했습니다."));
+            assertThat(logMessages()).contains("[OCR] 처리 오류");
         }
     }
 }
