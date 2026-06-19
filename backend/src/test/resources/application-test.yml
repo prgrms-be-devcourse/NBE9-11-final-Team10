@@ -43,6 +43,8 @@ investment:
   realtime:
     redis-pub-sub:
       enabled: false
+    stream-lease-renewal:
+      enabled: false
 
 
 kis:

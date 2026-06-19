@@ -6,12 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookSseConstants;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookLevel;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class RealtimeOrderbookSseEmitterRegistryTest {
 
@@ -108,6 +110,40 @@ class RealtimeOrderbookSseEmitterRegistryTest {
     }
 
     @Test
+    @DisplayName("모든 로컬 SSE stream에 heartbeat comment를 전송한다")
+    void sendHeartbeatToAll() {
+        registry.register(1L, "005930", null);
+        registry.register(2L, "000660", null);
+
+        int sentCount = registry.sendHeartbeatToAll();
+
+        assertThat(sentCount).isEqualTo(2);
+        assertThat(registry.streamCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("heartbeat 전송에 실패한 SSE stream은 정리하고 종료 콜백을 실행한다")
+    void cleanupWhenHeartbeatFails() {
+        AtomicInteger terminatedCount = new AtomicInteger();
+        AtomicReference<String> terminatedStreamId = new AtomicReference<>();
+        RealtimeOrderbookSseEmitterRegistry failingRegistry =
+                new RealtimeOrderbookSseEmitterRegistry(FailingSseEmitter::new);
+        RealtimeOrderbookSseConnection connection =
+                failingRegistry.register(1L, "005930", streamId -> {
+                    terminatedCount.incrementAndGet();
+                    terminatedStreamId.set(streamId);
+                });
+
+        int sentCount = failingRegistry.sendHeartbeatToAll();
+
+        assertThat(sentCount).isZero();
+        assertThat(failingRegistry.find(connection.streamId())).isEmpty();
+        assertThat(failingRegistry.streamCount()).isZero();
+        assertThat(terminatedCount).hasValue(1);
+        assertThat(terminatedStreamId).hasValue(connection.streamId());
+    }
+
+    @Test
     @DisplayName("필수 값이 없으면 스트림 등록과 전송에 실패한다")
     void validateRequiredValues() {
         assertThatThrownBy(() -> registry.register(null, "005930", null))
@@ -128,5 +164,13 @@ class RealtimeOrderbookSseEmitterRegistryTest {
                 796206L,
                 227494L
         );
+    }
+
+    private static class FailingSseEmitter extends SseEmitter {
+
+        @Override
+        public void send(SseEventBuilder builder) throws IOException {
+            throw new IOException("disconnected");
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.team10.backend.domain.investment.realtime.service;
 
+import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookSseConstants;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
 import java.io.IOException;
 import java.util.Collections;
@@ -12,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -41,6 +43,16 @@ public class RealtimeOrderbookSseEmitterRegistry {
      */
     private final Map<String, Set<String>> streamIdsByStockCode = new ConcurrentHashMap<>();
 
+    private final Supplier<SseEmitter> emitterFactory;
+
+    public RealtimeOrderbookSseEmitterRegistry() {
+        this(() -> new SseEmitter(DEFAULT_TIMEOUT_MILLIS));
+    }
+
+    RealtimeOrderbookSseEmitterRegistry(Supplier<SseEmitter> emitterFactory) {
+        this.emitterFactory = emitterFactory;
+    }
+
     /**
      * 한 탭의 SSE 연결을 등록한다.
      *
@@ -60,7 +72,7 @@ public class RealtimeOrderbookSseEmitterRegistry {
         }
 
         String streamId = UUID.randomUUID().toString();
-        SseEmitter emitter = new SseEmitter(DEFAULT_TIMEOUT_MILLIS);
+        SseEmitter emitter = emitterFactory.get();
         StreamRegistration registration = new StreamRegistration(
                 streamId,
                 userId,
@@ -111,6 +123,14 @@ public class RealtimeOrderbookSseEmitterRegistry {
         }
 
         return Set.copyOf(streamIds);
+    }
+
+    /**
+     * 현재 인스턴스에 연결된 전체 streamId 목록을 반환한다.
+     * <p>Redis lease 갱신처럼 종목과 무관하게 모든 로컬 SSE stream을 순회해야 하는 작업에서 사용한다.
+     */
+    public Set<String> findAllStreamIds() {
+        return Set.copyOf(registrations.keySet());
     }
 
     public int streamCount() {
@@ -169,6 +189,40 @@ public class RealtimeOrderbookSseEmitterRegistry {
                 log.warn("Failed to send realtime orderbook SSE. streamId={}, stockCode={}",
                         streamId,
                         stockCode,
+                        e);
+                cleanup(registration);
+                registration.emitter().completeWithError(e);
+            }
+        }
+
+        return sentCount;
+    }
+
+    /**
+     * 현재 인스턴스에 연결된 모든 SSE stream에 heartbeat comment를 전송한다.
+     *
+     * <p>SSE는 서버에서 클라이언트로만 흐르는 단방향 통신이므로 클라이언트 ACK를 직접 받을 수 없다.
+     * 대신 주기적으로 작은 write를 시도해서 이미 끊어진 TCP 연결을 빠르게 감지한다.
+     *
+     * @return heartbeat 전송에 성공한 로컬 stream 수
+     */
+    public int sendHeartbeatToAll() {
+        int sentCount = 0;
+
+        for (String streamId : findAllStreamIds()) {
+            StreamRegistration registration = registrations.get(streamId);
+            if (registration == null) {
+                continue;
+            }
+
+            try {
+                registration.emitter().send(SseEmitter.event()
+                        .comment(RealtimeOrderbookSseConstants.HEARTBEAT_COMMENT));
+                sentCount++;
+            } catch (IOException | IllegalStateException e) {
+                log.warn("Failed to send realtime orderbook SSE heartbeat. streamId={}, stockCode={}",
+                        streamId,
+                        registration.stockCode(),
                         e);
                 cleanup(registration);
                 registration.emitter().completeWithError(e);
