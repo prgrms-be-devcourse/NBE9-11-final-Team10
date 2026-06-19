@@ -1,78 +1,119 @@
-import { Clock, Building2 } from 'lucide-react'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { CalendarDays, ExternalLink, MapPin } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-
-// Placeholder cards for future policy data
-const policyPlaceholders = [
-  { title: '청년 도약 계좌', description: '월 최대 70만원 납입, 정부 기여금 지원', tag: '금융' },
-  { title: '청년 일자리 도약 장려금', description: '중소기업 취업 청년 지원금 지급', tag: '취업' },
-  { title: '청년 주거 급여', description: '임차료 지원 및 주거 안정 지원', tag: '주거' },
-  { title: '청년 내일 저축계좌', description: '근로·사업 소득 청년 자산 형성 지원', tag: '저축' },
-]
+import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { getYouthPolicies } from '@/lib/api/youth-policies'
+import type { YouthPolicy } from '@/lib/types'
 
 export default function YouthPoliciesPage() {
+  const [policies, setPolicies] = useState<YouthPolicy[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    getYouthPolicies()
+      .then(setPolicies)
+      .catch(() => setError('청년정책 정보를 불러오지 못했습니다.'))
+      .finally(() => setLoading(false))
+  }, [])
+
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">청년 정책</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            청년을 위한 다양한 정부 지원 정책을 확인하세요.
-          </p>
-        </div>
-        <Badge variant="secondary" className="flex items-center gap-1">
-          <Clock className="size-3" />
-          준비 중
-        </Badge>
+      <div>
+        <h1 className="text-xl font-bold text-foreground">청년 정책</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          청년을 위한 정부 지원 정책을 확인하세요.
+        </p>
       </div>
 
-      {/* Coming soon notice */}
-      <Card className="border-border bg-muted/50">
-        <CardContent className="py-8 text-center">
-          <Building2 className="size-10 text-muted-foreground mx-auto mb-3" />
-          <p className="text-base font-semibold text-foreground mb-1">서비스 준비 중입니다</p>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            청년 정책 정보 서비스는 현재 개발 중입니다.
-            <br />
-            곧 다양한 정부 지원 정책 정보를 제공할 예정입니다.
-          </p>
-        </CardContent>
-      </Card>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-      {/* Preview placeholder cards */}
-      <div>
-        <p className="text-xs font-medium text-muted-foreground mb-3">곧 제공 예정 정책 미리보기</p>
+      {loading ? (
         <div className="flex flex-col gap-3">
-          {policyPlaceholders.map((policy) => (
-            <PolicyPlaceholderCard key={policy.title} {...policy} />
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-36 w-full rounded-lg" />
           ))}
         </div>
-      </div>
+      ) : policies.length === 0 ? (
+        <Card className="border-border">
+          <CardContent className="py-12 text-center">
+            <p className="text-sm text-muted-foreground">조회된 정책 정보가 없습니다.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {policies.map((policy) => (
+            <PolicyCard key={policy.id} policy={policy} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-function PolicyPlaceholderCard({
-  title,
-  description,
-  tag,
-}: {
-  title: string
-  description: string
-  tag: string
-}) {
+function PolicyCard({ policy }: { policy: YouthPolicy }) {
+  const ageLabel =
+    policy.minAge || policy.maxAge
+      ? `${policy.minAge ?? 0}세 ~ ${policy.maxAge ?? '제한 없음'}`
+      : '연령 제한 없음'
+
   return (
-    <Card className="border-border opacity-60">
+    <Card className="border-border">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold text-foreground">{title}</CardTitle>
-          <Badge variant="outline" className="text-xs">
-            {tag}
-          </Badge>
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="text-sm font-semibold text-foreground leading-relaxed">
+            {policy.title}
+          </CardTitle>
+          {policy.category && (
+            <Badge variant="outline" className="text-xs shrink-0">
+              {policy.category}
+            </Badge>
+          )}
         </div>
       </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">{description}</p>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+          {policy.subCategory && <Badge variant="secondary">{policy.subCategory}</Badge>}
+          <span>{ageLabel}</span>
+          {policy.regionCode && (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="size-3" />
+              {policy.regionCode}
+            </span>
+          )}
+          {policy.applyPeriod && (
+            <span className="inline-flex items-center gap-1">
+              <CalendarDays className="size-3" />
+              {policy.applyPeriod}
+            </span>
+          )}
+        </div>
+
+        {policy.description && (
+          <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+            {policy.description}
+          </p>
+        )}
+
+        {policy.applyUrl && (
+          <a
+            href={policy.applyUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary"
+          >
+            신청 페이지
+            <ExternalLink className="size-3.5" />
+          </a>
+        )}
       </CardContent>
     </Card>
   )

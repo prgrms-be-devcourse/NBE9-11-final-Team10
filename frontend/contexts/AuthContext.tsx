@@ -2,14 +2,16 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { User } from '@/lib/types'
-import { clearTokens, hasToken, setTokens } from '@/lib/token'
+import { clearAccessToken, hasToken, setAccessToken } from '@/lib/token'
+import { getMe } from '@/lib/api/users'
+import { logout as apiLogout } from '@/lib/api/auth'
 
 interface AuthContextValue {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  login: (user: User, accessToken: string, refreshToken: string) => void
-  logout: () => void
+  login: (user: User, accessToken: string) => void
+  logout: () => Promise<void>
   updateUser: (user: User) => void
 }
 
@@ -20,7 +22,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Restore user from localStorage on mount
+    let mounted = true
+
+    async function restore() {
+      if (!hasToken()) {
+        if (mounted) setIsLoading(false)
+        return
+      }
+
+      try {
+        const me = await getMe()
+        if (!mounted) return
+        setUser(me)
+        localStorage.setItem('yb_user', JSON.stringify(me))
+      } catch {
+        clearAccessToken()
+        localStorage.removeItem('yb_user')
+      } finally {
+        if (mounted) setIsLoading(false)
+      }
+    }
+
     const stored = localStorage.getItem('yb_user')
     if (stored && hasToken()) {
       try {
@@ -29,7 +51,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         /* ignore */
       }
     }
-    setIsLoading(false)
+    restore()
+
+    return () => {
+      mounted = false
+    }
   }, [])
 
   useEffect(() => {
@@ -43,16 +69,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = useCallback(
-    (u: User, accessToken: string, refreshToken: string) => {
-      setTokens(accessToken, refreshToken)
+    (u: User, accessToken: string) => {
+      setAccessToken(accessToken)
       setUser(u)
       localStorage.setItem('yb_user', JSON.stringify(u))
     },
     [],
   )
 
-  const logout = useCallback(() => {
-    clearTokens()
+  const logout = useCallback(async () => {
+    try {
+      if (hasToken()) await apiLogout()
+    } catch {
+      /* Local session cleanup must still run. */
+    }
+    clearAccessToken()
     setUser(null)
     localStorage.removeItem('yb_user')
   }, [])

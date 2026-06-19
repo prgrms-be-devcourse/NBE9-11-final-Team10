@@ -6,6 +6,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   BadgeCheck,
+  BarChart3,
   CreditCard,
   PiggyBank,
   Plus,
@@ -21,7 +22,6 @@ import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/contexts/AuthContext'
 import { getAccounts } from '@/lib/api/accounts'
 import { getTransactions } from '@/lib/api/transactions'
-import { mockAccounts, mockTransactions } from '@/lib/mock-data'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 import type { Account, Transaction } from '@/lib/types'
 
@@ -30,21 +30,20 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [recentTxns, setRecentTxns] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!user) return
     async function load() {
       try {
-        const accs = await getAccounts(user!.id)
+        const accs = await getAccounts()
         setAccounts(accs)
         if (accs.length > 0) {
-          const page = await getTransactions(accs[0].id, user!.id, { page: 0, sortDirection: 'DESC' })
+          const page = await getTransactions(accs[0].id, { page: 0, sortDirection: 'DESC' })
           setRecentTxns(page.content.slice(0, 4))
         }
       } catch {
-        // Fallback to mock data for demo
-        setAccounts(mockAccounts)
-        setRecentTxns(mockTransactions.slice(0, 4))
+        setError('대시보드 정보를 불러오지 못했습니다.')
       } finally {
         setLoading(false)
       }
@@ -61,6 +60,7 @@ export default function DashboardPage() {
     { href: '/transfer?mode=deposit', label: '입금', icon: ArrowDownLeft },
     { href: '/transactions', label: '거래내역', icon: CreditCard },
     { href: '/savings', label: '예적금', icon: PiggyBank },
+    { href: '/investment-accounts', label: '투자계좌', icon: BarChart3 },
   ]
 
   return (
@@ -72,6 +72,13 @@ export default function DashboardPage() {
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">오늘도 스마트한 금융생활을 시작해 보세요.</p>
       </div>
+
+      {/* Total Balance + Identity Status */}
+      {error && (
+        <Card className="border-destructive/30">
+          <CardContent className="py-3 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
 
       {/* Total Balance + Identity Status */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -17,6 +17,14 @@ import type { VerificationStatus } from '@/lib/types'
 
 const steps = ['신분증 업로드', '검토 대기', '1원 인증']
 
+const bankOrganizations = [
+  { code: '004', name: '국민은행' },
+  { code: '011', name: '농협은행' },
+  { code: '020', name: '우리은행' },
+  { code: '081', name: '하나은행' },
+  { code: '088', name: '신한은행' },
+]
+
 const statusLabel: Record<VerificationStatus, string> = {
   OCR_PENDING: 'OCR 대기',
   OCR_COMPLETED: 'OCR 완료',
@@ -34,6 +42,7 @@ export default function IdentityPage() {
   const [error, setError] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [accountNumber, setAccountNumber] = useState('')
+  const [organization, setOrganization] = useState('088')
   const [verifyCode, setVerifyCode] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -55,10 +64,7 @@ export default function IdentityPage() {
       if (err instanceof ApiRequestError) {
         setError(err.message)
       } else {
-        // Demo fallback
-        setStatus('OCR_COMPLETED')
-        setCurrentStep(1)
-        toast.success('신분증이 업로드되었습니다. (데모)')
+        setError('신분증 업로드 중 오류가 발생했습니다.')
       }
     } finally {
       setLoading(false)
@@ -70,10 +76,14 @@ export default function IdentityPage() {
       setError('계좌번호를 입력해 주세요.')
       return
     }
+    if (!/^\d{3}$/.test(organization)) {
+      setError('은행 기관코드를 선택해 주세요.')
+      return
+    }
     setError('')
     setLoading(true)
     try {
-      const res = await requestOneWon(accountNumber)
+      const res = await requestOneWon(accountNumber.replace(/\D/g, ''), organization)
       setStatus(res.status)
       setCurrentStep(2)
       toast.info('1원이 송금되었습니다. 입금된 4자리 코드를 확인하세요.')
@@ -81,9 +91,7 @@ export default function IdentityPage() {
       if (err instanceof ApiRequestError) {
         setError(err.message)
       } else {
-        setStatus('ONE_WON_PENDING')
-        setCurrentStep(2)
-        toast.info('1원이 송금되었습니다. (데모)')
+        setError('1원 송금 요청 중 오류가 발생했습니다.')
       }
     } finally {
       setLoading(false)
@@ -108,10 +116,7 @@ export default function IdentityPage() {
       if (err instanceof ApiRequestError) {
         setError(err.message)
       } else {
-        // Demo success
-        setStatus('COMPLETED')
-        updateUser({ ...user!, identityVerified: true })
-        toast.success('본인인증이 완료되었습니다! (데모)')
+        setError('인증 코드 검증 중 오류가 발생했습니다.')
       }
     } finally {
       setLoading(false)
@@ -220,12 +225,12 @@ export default function IdentityPage() {
               ) : (
                 <p className="text-sm text-muted-foreground">클릭하여 이미지 선택</p>
               )}
-              <p className="text-xs text-muted-foreground mt-1">JPG, PNG, PDF 지원</p>
+              <p className="text-xs text-muted-foreground mt-1">JPG, PNG 지원</p>
             </div>
             <input
               ref={fileRef}
               type="file"
-              accept="image/*,.pdf"
+              accept="image/png,image/jpeg"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0]
@@ -266,12 +271,28 @@ export default function IdentityPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
+              <Label htmlFor="organization">은행</Label>
+              <select
+                id="organization"
+                value={organization}
+                onChange={(event) => setOrganization(event.target.value)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+              >
+                {bankOrganizations.map((bank) => (
+                  <option key={bank.code} value={bank.code}>
+                    {bank.name} ({bank.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="accountNumber">본인 계좌번호</Label>
               <Input
                 id="accountNumber"
                 placeholder="000-0000-000000"
                 value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
+                onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9-]/g, ''))}
               />
             </div>
 

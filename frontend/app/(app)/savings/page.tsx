@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getDepositProducts, getInstallmentProducts } from '@/lib/api/savings'
-import { mockDepositProducts, mockInstallmentProducts } from '@/lib/mock-data'
 import { formatCurrency } from '@/lib/format'
 import type { SavingsProduct } from '@/lib/types'
 
@@ -15,7 +14,7 @@ export default function SavingsPage() {
   const [deposits, setDeposits] = useState<SavingsProduct[]>([])
   const [installments, setInstallments] = useState<SavingsProduct[]>([])
   const [loading, setLoading] = useState(true)
-  const [isMock, setIsMock] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -24,9 +23,7 @@ export default function SavingsPage() {
         setDeposits(d)
         setInstallments(i)
       } catch {
-        setDeposits(mockDepositProducts)
-        setInstallments(mockInstallmentProducts)
-        setIsMock(true)
+        setError('예적금 상품 정보를 불러오지 못했습니다.')
       } finally {
         setLoading(false)
       }
@@ -43,8 +40,14 @@ export default function SavingsPage() {
             내 목표에 맞는 상품을 찾아보세요.
           </p>
         </div>
-        {isMock && <Badge variant="secondary" className="text-xs">데모</Badge>}
+        {error && <Badge variant="destructive" className="text-xs">오류</Badge>}
       </div>
+
+      {error && (
+        <Card className="border-destructive/30">
+          <CardContent className="py-3 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="deposit">
         <TabsList className="w-full">
@@ -133,7 +136,12 @@ function ProductCard({ product: p }: { product: SavingsProduct }) {
 
         <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-border">
           <InfoChip icon={Calendar} label="기간" value={`${p.periodMonth}개월`} />
-          <InfoChip icon={Wallet} label="최소금액" value={formatCurrency(p.minAmount)} compact />
+          <InfoChip
+            icon={Wallet}
+            label="최소금액"
+            value={p.minAmount > 0 ? formatCurrency(p.minAmount) : '상세 확인'}
+            compact
+          />
           <InfoChip
             icon={Percent}
             label="유형"

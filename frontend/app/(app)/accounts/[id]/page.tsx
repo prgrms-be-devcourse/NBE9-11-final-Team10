@@ -31,7 +31,6 @@ import {
 } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { closeAccount, getAccount, updateAccountNickname } from '@/lib/api/accounts'
-import { mockAccounts } from '@/lib/mock-data'
 import { formatCurrency, formatDate } from '@/lib/format'
 import type { Account } from '@/lib/types'
 import { ApiRequestError } from '@/lib/api'
@@ -57,15 +56,11 @@ export default function AccountDetailPage() {
     if (!user) return
     async function load() {
       try {
-        const acc = await getAccount(id, user!.id)
+        const acc = await getAccount(id)
         setAccount(acc)
         setEditNickname(acc.nickname)
       } catch {
-        const mock = mockAccounts.find((a) => String(a.id) === id)
-        if (mock) {
-          setAccount(mock)
-          setEditNickname(mock.nickname)
-        }
+        setAccount(null)
       } finally {
         setLoading(false)
       }
@@ -81,7 +76,7 @@ export default function AccountDetailPage() {
     }
     setEditLoading(true)
     try {
-      const updated = await updateAccountNickname(account.id, user.id, editNickname.trim())
+      const updated = await updateAccountNickname(account.id, editNickname.trim())
       setAccount(updated)
       setEditOpen(false)
       toast.success('별칭이 변경되었습니다.')
@@ -96,7 +91,7 @@ export default function AccountDetailPage() {
     if (!user || !account) return
     setCloseLoading(true)
     try {
-      await closeAccount(account.id, user.id)
+      await closeAccount(account.id)
       toast.success('계좌가 해지되었습니다.')
       router.push('/accounts')
     } catch (err) {
@@ -164,7 +159,7 @@ export default function AccountDetailPage() {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">개설일</span>
                 <span className="text-sm font-medium text-foreground">
-                  {formatDate(account.createdAt)}
+                  {account.createdAt ? formatDate(account.createdAt) : '-'}
                 </span>
               </div>
             </CardContent>

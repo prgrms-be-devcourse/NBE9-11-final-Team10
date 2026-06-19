@@ -20,7 +20,6 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { getAccounts } from '@/lib/api/accounts'
 import { deposit, transfer } from '@/lib/api/transfers'
-import { mockAccounts } from '@/lib/mock-data'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 import { ApiRequestError } from '@/lib/api'
 import type { Account, TransferResult } from '@/lib/types'
@@ -34,9 +33,9 @@ export default function TransferPage() {
 
   useEffect(() => {
     if (!user) return
-    getAccounts(user.id)
+    getAccounts()
       .then(setAccounts)
-      .catch(() => setAccounts(mockAccounts))
+      .catch(() => toast.error('계좌 정보를 불러오지 못했습니다.'))
   }, [user])
 
   if (result) {
@@ -63,7 +62,7 @@ export default function TransferPage() {
         </TabsList>
 
         <TabsContent value="transfer">
-          <TransferForm accounts={accounts} userId={user?.id} onSuccess={setResult} />
+          <TransferForm accounts={accounts} onSuccess={setResult} />
         </TabsContent>
 
         <TabsContent value="deposit">
@@ -76,11 +75,9 @@ export default function TransferPage() {
 
 function TransferForm({
   accounts,
-  userId,
   onSuccess,
 }: {
   accounts: Account[]
-  userId?: string | number
   onSuccess: (r: TransferResult) => void
 }) {
   const [senderAccountId, setSenderAccountId] = useState('')
@@ -282,15 +279,7 @@ function DepositForm({
       })
     } catch (err) {
       if (err instanceof ApiRequestError) setServerError(err.message)
-      else {
-        toast.success('입금이 완료되었습니다. (데모)')
-        onSuccess({
-          success: true,
-          amount: Number(amount),
-          memo: memo || undefined,
-          createdAt: new Date().toISOString(),
-        })
-      }
+      else setServerError('입금 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }

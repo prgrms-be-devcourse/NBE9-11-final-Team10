@@ -31,7 +31,7 @@ export default function NewAccountPage() {
 
     setLoading(true)
     try {
-      const acc = await createAccount(user.id, {
+      const acc = await createAccount({
         nickname: nickname.trim(),
         accountType: 'DEPOSIT',
       })

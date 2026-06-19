@@ -4,11 +4,11 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, UserPlus } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useAuth } from '@/contexts/AuthContext'
 import { signup as apiSignup } from '@/lib/api/auth'
 import { ApiRequestError } from '@/lib/api'
 
@@ -19,11 +19,17 @@ interface FormState {
   name: string
   phoneNumber: string
   birthDate: string
+  identityVerificationId: string
+  agreedServiceTerms: boolean
+  agreedPersonalInfo: boolean
+  agreedFinancialInfo: boolean
+  agreedMarketing: boolean
 }
+
+type FormErrors = Partial<Record<keyof FormState, string>>
 
 export default function SignupPage() {
   const router = useRouter()
-  const { login } = useAuth()
 
   const [form, setForm] = useState<FormState>({
     email: '',
@@ -32,15 +38,20 @@ export default function SignupPage() {
     name: '',
     phoneNumber: '',
     birthDate: '',
+    identityVerificationId: '',
+    agreedServiceTerms: false,
+    agreedPersonalInfo: false,
+    agreedFinancialInfo: false,
+    agreedMarketing: false,
   })
-  const [errors, setErrors] = useState<Partial<FormState>>({})
+  const [errors, setErrors] = useState<FormErrors>({})
   const [serverError, setServerError] = useState('')
   const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({})
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  function validate(): Partial<FormState> {
-    const e: Partial<FormState> = {}
+  function validate(): FormErrors {
+    const e: FormErrors = {}
     if (!form.name.trim()) e.name = '이름을 입력해 주세요.'
     if (!form.email) e.email = '이메일을 입력해 주세요.'
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = '올바른 이메일 형식이 아닙니다.'
@@ -51,6 +62,12 @@ export default function SignupPage() {
     else if (!/^01[0-9]{8,9}$/.test(form.phoneNumber))
       e.phoneNumber = '올바른 형식으로 입력해 주세요. (예: 01012345678)'
     if (!form.birthDate) e.birthDate = '생년월일을 입력해 주세요.'
+    if (!form.identityVerificationId.trim()) {
+      e.identityVerificationId = '본인인증 ID를 입력해 주세요.'
+    }
+    if (!form.agreedServiceTerms) e.agreedServiceTerms = '서비스 이용약관에 동의해 주세요.'
+    if (!form.agreedPersonalInfo) e.agreedPersonalInfo = '개인정보 수집·이용에 동의해 주세요.'
+    if (!form.agreedFinancialInfo) e.agreedFinancialInfo = '금융정보 수집·이용에 동의해 주세요.'
     return e
   }
 
@@ -65,14 +82,19 @@ export default function SignupPage() {
     setLoading(true)
     try {
       const res = await apiSignup({
+        identityVerificationId: form.identityVerificationId.trim(),
         email: form.email,
         password: form.password,
         name: form.name,
         phoneNumber: form.phoneNumber,
         birthDate: form.birthDate,
+        agreedServiceTerms: form.agreedServiceTerms,
+        agreedPersonalInfo: form.agreedPersonalInfo,
+        agreedFinancialInfo: form.agreedFinancialInfo,
+        agreedMarketing: form.agreedMarketing,
       })
-      login(res.user, res.accessToken, res.refreshToken)
-      router.push('/dashboard')
+      toast.success(`${res.name}님, 회원가입이 완료되었습니다. 로그인해 주세요.`)
+      router.push('/login')
     } catch (err) {
       if (err instanceof ApiRequestError) {
         if (err.details && err.details.length > 0) {
@@ -220,6 +242,50 @@ export default function SignupPage() {
               )}
             </div>
 
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="identityVerificationId">본인인증 ID</Label>
+              <Input
+                id="identityVerificationId"
+                placeholder="PortOne 본인인증 ID"
+                value={form.identityVerificationId}
+                onChange={(e) => setForm((p) => ({ ...p, identityVerificationId: e.target.value }))}
+                aria-invalid={!!fieldError('identityVerificationId')}
+              />
+              {fieldError('identityVerificationId') && (
+                <p className="text-xs text-destructive">{fieldError('identityVerificationId')}</p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+              <CheckboxField
+                id="agreedServiceTerms"
+                checked={form.agreedServiceTerms}
+                onChange={(checked) => setForm((p) => ({ ...p, agreedServiceTerms: checked }))}
+                label="서비스 이용약관에 동의합니다. (필수)"
+                error={fieldError('agreedServiceTerms')}
+              />
+              <CheckboxField
+                id="agreedPersonalInfo"
+                checked={form.agreedPersonalInfo}
+                onChange={(checked) => setForm((p) => ({ ...p, agreedPersonalInfo: checked }))}
+                label="개인정보 수집·이용에 동의합니다. (필수)"
+                error={fieldError('agreedPersonalInfo')}
+              />
+              <CheckboxField
+                id="agreedFinancialInfo"
+                checked={form.agreedFinancialInfo}
+                onChange={(checked) => setForm((p) => ({ ...p, agreedFinancialInfo: checked }))}
+                label="금융정보 수집·이용에 동의합니다. (필수)"
+                error={fieldError('agreedFinancialInfo')}
+              />
+              <CheckboxField
+                id="agreedMarketing"
+                checked={form.agreedMarketing}
+                onChange={(checked) => setForm((p) => ({ ...p, agreedMarketing: checked }))}
+                label="마케팅 정보 수신에 동의합니다. (선택)"
+              />
+            </div>
+
             <Button type="submit" className="w-full mt-2" disabled={loading}>
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -243,6 +309,36 @@ export default function SignupPage() {
           </Link>
         </p>
       </div>
+    </div>
+  )
+}
+
+function CheckboxField({
+  id,
+  checked,
+  onChange,
+  label,
+  error,
+}: {
+  id: keyof FormState
+  checked: boolean
+  onChange: (checked: boolean) => void
+  label: string
+  error?: string
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="flex items-start gap-2 text-sm text-foreground">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="mt-1 size-4 rounded border-border"
+        />
+        <span>{label}</span>
+      </label>
+      {error && <p className="pl-6 text-xs text-destructive">{error}</p>}
     </div>
   )
 }

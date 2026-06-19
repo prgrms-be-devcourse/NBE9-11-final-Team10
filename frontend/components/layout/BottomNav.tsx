@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Building2,
+  BarChart3,
   ClipboardList,
   CreditCard,
   LayoutDashboard,
@@ -18,6 +19,7 @@ const navItems = [
   { href: '/transfer', label: '송금', icon: Send },
   { href: '/transactions', label: '거래', icon: ClipboardList },
   { href: '/savings', label: '예적금', icon: PiggyBank },
+  { href: '/investment-accounts', label: '투자', icon: BarChart3 },
 ]
 
 export function BottomNav() {

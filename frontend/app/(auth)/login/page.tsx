@@ -8,19 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/contexts/AuthContext'
 import { login as apiLogin } from '@/lib/api/auth'
 import { ApiRequestError } from '@/lib/api'
-
-const DEMO_USER = {
-  id: 1,
-  email: 'demo@chungyeon.bank',
-  name: '청년 고객',
-  phoneNumber: '010-1234-5678',
-  birthDate: '1998-03-20',
-  identityVerified: false,
-}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -50,22 +40,17 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const res = await apiLogin(form.email, form.password)
-      login(res.user, res.accessToken, res.refreshToken)
+      login(res.user, res.accessToken)
       router.push('/dashboard')
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setServerError(err.message)
       } else {
-        setServerError('서버에 연결할 수 없습니다. 데모 로그인을 이용해 주세요.')
+        setServerError('서버에 연결할 수 없습니다.')
       }
     } finally {
       setLoading(false)
     }
-  }
-
-  function handleDemoLogin() {
-    login(DEMO_USER, 'demo-access-token', 'demo-refresh-token')
-    router.push('/dashboard')
   }
 
   return (
@@ -154,20 +139,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="flex items-center gap-3 my-4">
-            <Separator className="flex-1" />
-            <span className="text-xs text-muted-foreground">또는</span>
-            <Separator className="flex-1" />
-          </div>
-
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleDemoLogin}
-            type="button"
-          >
-            데모로 체험하기
-          </Button>
         </div>
 
         <p className="text-center text-sm text-muted-foreground mt-4">

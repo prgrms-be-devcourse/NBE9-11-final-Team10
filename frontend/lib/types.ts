@@ -2,17 +2,17 @@
 // Auth
 // ──────────────────────────────────────────────
 export interface User {
-  id: number | string
+  id: number
   email: string
   name: string
   phoneNumber?: string
   birthDate?: string
   identityVerified?: boolean
+  createdAt?: string
 }
 
 export interface AuthResponse {
   accessToken: string
-  refreshToken: string
   user: User
 }
 
@@ -23,13 +23,13 @@ export type AccountStatus = 'ACTIVE' | 'SUSPENDED' | 'CLOSED'
 export type AccountType = 'DEPOSIT'
 
 export interface Account {
-  id: number | string
+  id: number
   accountNumber: string
   nickname: string
-  accountType: AccountType
+  accountType?: AccountType
   balance: number
   status: AccountStatus
-  createdAt: string
+  createdAt?: string
   updatedAt?: string
 }
 
@@ -39,10 +39,11 @@ export interface Account {
 export type TransactionDirection = 'IN' | 'OUT'
 
 export interface Transaction {
-  id: number | string
-  accountId: number | string
+  id: number
+  accountId: number
   amount: number
   direction: TransactionDirection
+  type?: string
   counterpartyName?: string
   memo?: string
   balanceAfter?: number
@@ -86,11 +87,19 @@ export interface TransferRequest {
 
 export interface TransferResult {
   success: boolean
-  transactionId?: number | string
+  transactionId?: number
+  transferId?: number
+  status?: string
+  accountId?: number
+  senderAccountId?: number
   amount: number
   memo?: string
+  senderAccountNumber?: string
   receiverAccountNumber?: string
+  balanceBefore?: number
   createdAt?: string
+  balanceAfter?: number
+  senderBalanceAfter?: number
 }
 
 // ──────────────────────────────────────────────
@@ -116,7 +125,7 @@ export interface VerificationResponse {
 export type SavingsType = 'DEPOSIT' | 'INSTALLMENT'
 
 export interface SavingsProduct {
-  id: number | string
+  id: number
   name: string
   bankName: string
   bankCode?: string
@@ -127,6 +136,57 @@ export interface SavingsProduct {
   maxAmount?: number
   monthlyLimit?: number
   terms?: string
+}
+
+// ──────────────────────────────────────────────
+// Youth Policy
+// ──────────────────────────────────────────────
+export interface YouthPolicy {
+  id: number
+  policyId: string
+  title: string
+  description?: string
+  category?: string
+  subCategory?: string
+  minAge?: number
+  maxAge?: number
+  regionCode?: string
+  jobCode?: string
+  applyPeriod?: string
+  applyUrl?: string
+  applyMethod?: string
+}
+
+// ──────────────────────────────────────────────
+// Investment Account
+// ──────────────────────────────────────────────
+export type InvestmentAccountStatus = 'ACTIVE' | 'CLOSED'
+export type CurrencyCode = 'KRW'
+
+export interface InvestmentAccount {
+  id: number
+  accountNumber: string
+  nickname: string | null
+  cashBalance: number
+  currencyCode: CurrencyCode
+  status: InvestmentAccountStatus
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface InvestmentAccountOpenVerification {
+  verificationKey: string
+  expiresInSeconds: number
+}
+
+export interface InvestmentAccountUpdateResult {
+  nickname: string | null
+  updatedAt: string
+}
+
+export interface InvestmentAccountCloseResult {
+  status: InvestmentAccountStatus
+  updatedAt: string
 }
 
 // ──────────────────────────────────────────────

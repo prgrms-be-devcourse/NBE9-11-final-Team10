@@ -10,10 +10,13 @@ export async function uploadIdCardOcr(file: File): Promise<VerificationResponse>
   )
 }
 
-export async function requestOneWon(accountNumber: string): Promise<VerificationResponse> {
+export async function requestOneWon(
+  accountNumber: string,
+  organization: string,
+): Promise<VerificationResponse> {
   return apiFetch<VerificationResponse>(
     '/api/v1/users/me/identity-verification/one-won',
-    { method: 'POST', body: JSON.stringify({ accountNumber }) },
+    { method: 'POST', body: JSON.stringify({ accountNumber, organization }) },
   )
 }
 

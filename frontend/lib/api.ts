@@ -1,4 +1,4 @@
-import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './token'
+import { clearAccessToken, getAccessToken, setAccessToken } from './token'
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080'
@@ -19,18 +19,19 @@ let isRefreshing = false
 let refreshPromise: Promise<string | null> | null = null
 
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken()
-  if (!refreshToken) return null
+  const accessToken = getAccessToken()
+  if (!accessToken) return null
 
   try {
     const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
+      credentials: 'include',
+      body: JSON.stringify({ accessToken }),
     })
     if (!res.ok) return null
     const data = await res.json()
-    setTokens(data.accessToken, data.refreshToken ?? refreshToken)
+    setAccessToken(data.accessToken)
     return data.accessToken
   } catch {
     return null
@@ -54,6 +55,7 @@ export async function apiFetch<T>(
 
   let res = await fetch(url, {
     ...fetchOptions,
+    credentials: 'include',
     headers: { ...headers, ...(fetchOptions.headers as Record<string, string>) },
   })
 
@@ -72,10 +74,11 @@ export async function apiFetch<T>(
       headers['Authorization'] = `Bearer ${newToken}`
       res = await fetch(url, {
         ...fetchOptions,
+        credentials: 'include',
         headers: { ...headers, ...(fetchOptions.headers as Record<string, string>) },
       })
     } else {
-      clearTokens()
+      clearAccessToken()
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('auth:logout'))
       }

@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
   { href: '/transfer', label: '송금', icon: Send },
   { href: '/transactions', label: '거래내역', icon: ClipboardList },
   { href: '/savings', label: '예적금', icon: PiggyBank },
+  { href: '/investment-accounts', label: '투자계좌', icon: BarChart3 },
   { href: '/youth-policies', label: '청년정책', icon: Building2 },
 ]
 

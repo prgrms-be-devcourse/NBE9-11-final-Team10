@@ -26,51 +26,53 @@ import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/contexts/AuthContext'
 import { getAccounts } from '@/lib/api/accounts'
 import { getTransactions } from '@/lib/api/transactions'
-import { mockAccounts, mockTransactionPage } from '@/lib/mock-data'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 import type { Account, PageResponse, Transaction, TransactionFilter } from '@/lib/types'
+
+const emptyTransactionPage: PageResponse<Transaction> = {
+  content: [],
+  totalPages: 0,
+  totalElements: 0,
+  number: 0,
+  size: 0,
+}
 
 export default function TransactionsPage() {
   const { user } = useAuth()
   const [accounts, setAccounts] = useState<Account[]>([])
   const [selectedAccountId, setSelectedAccountId] = useState<string>('')
-  const [page, setPage] = useState<PageResponse<Transaction>>(mockTransactionPage)
+  const [page, setPage] = useState<PageResponse<Transaction>>(emptyTransactionPage)
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(0)
   const [showFilter, setShowFilter] = useState(false)
   const [filter, setFilter] = useState<TransactionFilter>({})
-  const [isMock, setIsMock] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!user) return
-    getAccounts(user.id)
+    getAccounts()
       .then((accs) => {
         setAccounts(accs)
         if (accs.length > 0) setSelectedAccountId(String(accs[0].id))
       })
       .catch(() => {
-        setAccounts(mockAccounts)
-        setSelectedAccountId(String(mockAccounts[0].id))
-        setIsMock(true)
+        setError('계좌 정보를 불러오지 못했습니다.')
+        setLoading(false)
       })
   }, [user])
 
   useEffect(() => {
     if (!user || !selectedAccountId) return
-    if (isMock) {
-      setPage(mockTransactionPage)
-      setLoading(false)
-      return
-    }
     setLoading(true)
-    getTransactions(selectedAccountId, user.id, { ...filter, page: currentPage })
+    setError('')
+    getTransactions(selectedAccountId, { ...filter, page: currentPage })
       .then(setPage)
       .catch(() => {
-        setPage(mockTransactionPage)
-        setIsMock(true)
+        setPage(emptyTransactionPage)
+        setError('거래내역을 불러오지 못했습니다.')
       })
       .finally(() => setLoading(false))
-  }, [user, selectedAccountId, filter, currentPage, isMock])
+  }, [user, selectedAccountId, filter, currentPage])
 
   function handleFilterChange(key: keyof TransactionFilter, value: string) {
     setFilter((prev) => ({
@@ -202,10 +204,14 @@ export default function TransactionsPage() {
       {/* Summary Badge */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span>총 {page.totalElements}건</span>
-        {isMock && (
-          <Badge variant="secondary" className="text-xs">데모</Badge>
-        )}
+        {error && <Badge variant="destructive" className="text-xs">오류</Badge>}
       </div>
+
+      {error && (
+        <Card className="border-destructive/30">
+          <CardContent className="py-3 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
 
       {/* Transaction list */}
       <Card className="border-border">
