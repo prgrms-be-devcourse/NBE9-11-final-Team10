@@ -7,6 +7,7 @@ import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.service.SavingDepositService;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
+import com.team10.backend.domain.saving.type.SavingProductType;
 import com.team10.backend.support.security.AuthenticationPrincipalTestConfig;
 import com.team10.backend.support.security.WithMockLongUser;
 import org.junit.jupiter.api.DisplayName;
@@ -225,6 +226,35 @@ class SavingDepositControllerTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
 
         verify(savingDepositService).getInstallment(1L, 1L);
+    }
+
+    @Test
+    @DisplayName("예상 이자 조회 API는 예금 또는 적금의 예상 이자를 반환한다")
+    void getInterestPreview() throws Exception {
+        InterestPreviewRes response = new InterestPreviewRes(
+                1L,
+                SavingProductType.INSTALLMENT,
+                1200000L,
+                3.0,
+                19500L,
+                1219500L
+        );
+
+        when(savingDepositService.getInterestPreview(1L, 1L, SavingProductType.INSTALLMENT))
+                .thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/savings/{savingId}/interest-preview", 1L)
+                        .param("savingType", "INSTALLMENT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.savingId").value(1L))
+                .andExpect(jsonPath("$.savingType").value("INSTALLMENT"))
+                .andExpect(jsonPath("$.principal").value(1200000L))
+                .andExpect(jsonPath("$.interestRate").value(3.0))
+                .andExpect(jsonPath("$.expectedInterest").value(19500L))
+                .andExpect(jsonPath("$.expectedTotalAmount").value(1219500L));
+
+        verify(savingDepositService)
+                .getInterestPreview(1L, 1L, SavingProductType.INSTALLMENT);
     }
 
     @Test

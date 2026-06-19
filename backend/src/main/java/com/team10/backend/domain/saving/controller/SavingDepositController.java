@@ -6,6 +6,7 @@ import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.service.SavingDepositService;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
+import com.team10.backend.domain.saving.type.SavingProductType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -87,6 +88,20 @@ public class SavingDepositController {
             @PathVariable Long installmentId
     ){
         InstallmentDetailRes response = savingDepositService.getInstallment(userId, installmentId);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "예상 이자 조회", description = "예금 또는 적금의 예상 이자와 만기 예상 수령액을 조회합니다.")
+    @GetMapping("/{savingId}/interest-preview")
+    public ResponseEntity<InterestPreviewRes> getInterestPreview(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long savingId,
+            @RequestParam SavingProductType savingType
+    ) {
+        InterestPreviewRes response =
+                savingDepositService.getInterestPreview(userId, savingId,
+                        savingType);
+
         return ResponseEntity.ok(response);
     }
 }
