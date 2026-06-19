@@ -14,13 +14,7 @@ import java.time.LocalDate;
 
 @Getter
 @Entity
-@Table(
-        name = "external_asset_accounts",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_external_asset_account_user_org_hash_type",
-                columnNames = {"user_id", "organization", "account_no_hash", "asset_type"}
-        )
-)
+@Table(name = "external_account")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 /** CODEF 등 외부기관에서 가져온 사용자 외부 계좌의 최신 스냅샷을 저장한다. */
 public class ExAccount extends BaseEntity {
@@ -30,13 +24,10 @@ public class ExAccount extends BaseEntity {
     private User user;
 
     @Column(nullable = false, length = 20)
-    private String organization;
+    private String organization; //금융기관코드
 
     @Column(nullable = false, length = 80)
-    private String accountNoMasked;
-
-    @Column(nullable = false, length = 128)
-    private String accountNoHash;
+    private String accountNumber;
 
     @Column(nullable = false, length = 100)
     private String accountName;
@@ -65,8 +56,7 @@ public class ExAccount extends BaseEntity {
     public static ExAccount create(
             User user,
             String organization,
-            String accountNoMasked,
-            String accountNoHash,
+            String accountNumber,
             String accountName,
             String accountAlias,
             ExAccountType assetType,
@@ -79,8 +69,7 @@ public class ExAccount extends BaseEntity {
         ExAccount account = new ExAccount();
         account.user = user;
         account.organization = organization;
-        account.accountNoMasked = accountNoMasked;
-        account.accountNoHash = accountNoHash;
+        account.accountNumber = accountNumber;
         account.accountName = accountName;
         account.accountAlias = accountAlias;
         account.assetType = assetType;
@@ -93,18 +82,31 @@ public class ExAccount extends BaseEntity {
         return account;
     }
 
-    public void updateSnapshot(String accountNoMasked, String accountName, String accountAlias, BigDecimal balance,
-                               BigDecimal withdrawableAmount, LocalDate openedAt, LocalDate maturityAt,
+    public void updateSnapshot(String accountName, String accountAlias, BigDecimal balance,
+                               BigDecimal withdrawableAmount, LocalDate maturityAt,
                                LocalDate lastTransactionAt) {
-        this.accountNoMasked = accountNoMasked;
         this.accountName = accountName;
         this.accountAlias = accountAlias;
         this.balance = balance == null ? BigDecimal.ZERO : balance;
         this.withdrawableAmount = withdrawableAmount;
-        this.openedAt = openedAt;
         this.maturityAt = maturityAt;
         this.lastTransactionAt = lastTransactionAt;
         this.status = ExAccountStatus.ACTIVE;
     }
-}
 
+    public void updateLastTransactionAt(LocalDate lastTransactionAt) {
+        this.lastTransactionAt = lastTransactionAt;
+        this.status = ExAccountStatus.ACTIVE;
+    }
+
+    public String getAccountNoMasked() {
+        if (accountNumber == null || accountNumber.length() <= 4) {
+            return accountNumber;
+        }
+
+        int prefixLength = Math.min(6, accountNumber.length() - 4);
+        String prefix = accountNumber.substring(0, prefixLength);
+        String suffix = accountNumber.substring(accountNumber.length() - 4);
+        return prefix + "*".repeat(accountNumber.length() - prefixLength - 4) + suffix;
+    }
+}

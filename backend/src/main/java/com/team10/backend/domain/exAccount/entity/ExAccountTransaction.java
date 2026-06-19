@@ -69,4 +69,16 @@ public class ExAccountTransaction extends BaseEntity {
         transaction.rawCategory = rawCategory;
         return transaction;
     }
+
+    public void updateSnapshot(LocalDateTime transactedAt, ExAccountTransactionDirection direction,
+                               BigDecimal amount, BigDecimal balanceAfter, String counterpartyName,
+                               String memo, String rawCategory) {
+        this.transactedAt = transactedAt;
+        this.direction = direction;
+        this.amount = amount == null ? BigDecimal.ZERO : amount;
+        this.balanceAfter = balanceAfter;
+        this.counterpartyName = counterpartyName;
+        this.memo = memo;
+        this.rawCategory = rawCategory;
+    }
 }
