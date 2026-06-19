@@ -1,7 +1,17 @@
 package com.team10.backend.domain.exAccount.exception;
 
 import com.team10.backend.global.exception.ErrorCode;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 
-public class ExAccountErrorCode {
+@Getter
+@RequiredArgsConstructor
+public enum ExAccountErrorCode implements ErrorCode {
 
+    EX_ACCOUNT_SYNC_ITEMS_REQUIRED(HttpStatus.BAD_REQUEST, "동기화할 외부 계좌 목록이 필요합니다."),
+    EX_ACCOUNT_SYNC_REQUIRED_FIELD_MISSING(HttpStatus.BAD_REQUEST, "외부 계좌 동기화 필수값이 누락되었습니다.");
+
+    private final HttpStatus status;
+    private final String message;
 }

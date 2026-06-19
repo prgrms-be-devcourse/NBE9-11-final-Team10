@@ -2,7 +2,9 @@ package com.team10.backend.domain.exAccount.service;
 
 import com.team10.backend.domain.exAccount.Type.ExAccountType;
 import com.team10.backend.domain.exAccount.entity.ExAccount;
+import com.team10.backend.domain.exAccount.exception.ExAccountErrorCode;
 import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.global.exception.BusinessException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -16,6 +18,12 @@ public class ExAccountSyncService {
         int updatedCount = 0;
 
         return new ExAccountSyncResult(items.size(), createdCount, updatedCount);
+    }
+
+    private void validateItems(List<ExAccountSyncItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_SYNC_ITEMS_REQUIRED);
+        }
     }
 
 
