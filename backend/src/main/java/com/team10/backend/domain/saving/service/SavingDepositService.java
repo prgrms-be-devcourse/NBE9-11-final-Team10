@@ -198,4 +198,52 @@ public class SavingDepositService {
 
         return InstallmentDetailRes.from(installment);
     }
+
+    public InterestPreviewRes getInterestPreview(
+            Long userId,
+            Long savingId,
+            SavingProductType savingType
+    ) {
+        if (savingType == SavingProductType.DEPOSIT) {
+            // 예금 조회
+            Deposit deposit = depositRepository.findByIdAndUserIdWithProduct(savingId, userId)
+                    .orElseThrow(() -> new
+                            BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
+            // 총 수령액 계산
+            Long expectedTotalAmount = deposit.getPrincipal() + deposit.getExpectedInterest();
+
+            return InterestPreviewRes.fromDeposit(deposit, expectedTotalAmount);
+        }
+
+        if (savingType == SavingProductType.INSTALLMENT) {
+            // 적금 조회
+            Installment installment = installmentRepository.findByIdAndUserIdWithProduct(savingId, userId)
+                    .orElseThrow(() -> new
+                            BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
+
+            int periodMonth = installment.getSavingProduct().getPeriodMonth(); // 적금 가입기간(개월)
+
+            // 적금은 매달 돈을 넣는다.
+            // 먼저 넣은 돈은 이자를 오래 받고, 나중에 넣은 돈은 이자를 짧게 받는다.
+            // 그래서 각 납입금의 이자 적용 개월 수 합계를 사용한다.
+            Long expectedInterest = (long) (
+                    installment.getMonthlyAmount()      // 매월 납입 금액
+                            * installment.getInterestRate() // 연 이율(%)
+                            / PERCENT_DIVISOR          // 퍼센트 값을 소수로 변환
+                            / MONTHS_IN_YEAR           // 연 이율을 월 이율로 변환
+                            * periodMonth              // 가입 기간 개월 수
+                            * (periodMonth + 1)        // 1부터 가입 기간까지의 합 계산용
+                            / 2                        // 등차수열 합 공식: n * (n + 1) / 2
+            );
+
+            Long expectedTotalAmount =
+                    installment.getTargetAmount() + expectedInterest; // 만기 예상 수령액 = 목표 금액 + 예상 이자
+
+
+            return InterestPreviewRes.fromInstallment(installment, expectedInterest, expectedTotalAmount);
+        }
+
+        // 이상한 타입이면 예외
+        throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
+    }
 }

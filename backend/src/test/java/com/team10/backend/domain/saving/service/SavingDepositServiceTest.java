@@ -19,6 +19,7 @@ import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentCreateRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentDetailRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentSummaryRes;
+import com.team10.backend.domain.saving.dto.res.InterestPreviewRes;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.Installment;
 import com.team10.backend.domain.saving.entity.SavingProduct;
@@ -353,6 +354,46 @@ class SavingDepositServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(SavingErrorCode.INSTALLMENT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("내 예금 예상 이자를 조회한다")
+    void getDepositInterestPreview() {
+        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
+
+        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(deposit));
+
+        InterestPreviewRes response =
+                savingDepositService.getInterestPreview(1L, 1L, SavingProductType.DEPOSIT);
+
+        assertThat(response.savingId()).isEqualTo(1L);
+        assertThat(response.savingType()).isEqualTo(SavingProductType.DEPOSIT);
+        assertThat(response.principal()).isEqualTo(1000000L);
+        assertThat(response.interestRate()).isEqualTo(3.5);
+        assertThat(response.expectedInterest()).isEqualTo(35000L);
+        assertThat(response.expectedTotalAmount()).isEqualTo(1035000L);
+        verify(depositRepository).findByIdAndUserIdWithProduct(1L, 1L);
+    }
+
+    @Test
+    @DisplayName("내 적금 예상 이자를 조회한다")
+    void getInstallmentInterestPreview() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+
+        when(installmentRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(installment));
+
+        InterestPreviewRes response =
+                savingDepositService.getInterestPreview(1L, 1L, SavingProductType.INSTALLMENT);
+
+        assertThat(response.savingId()).isEqualTo(1L);
+        assertThat(response.savingType()).isEqualTo(SavingProductType.INSTALLMENT);
+        assertThat(response.principal()).isEqualTo(1200000L);
+        assertThat(response.interestRate()).isEqualTo(3.0);
+        assertThat(response.expectedInterest()).isEqualTo(19500L);
+        assertThat(response.expectedTotalAmount()).isEqualTo(1219500L);
+        verify(installmentRepository).findByIdAndUserIdWithProduct(1L, 1L);
     }
 
     @Test
