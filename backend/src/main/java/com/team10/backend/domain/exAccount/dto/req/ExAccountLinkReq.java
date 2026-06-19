@@ -1,7 +1,8 @@
 package com.team10.backend.domain.exAccount.dto.req;
 
 import com.team10.backend.domain.exAccount.Type.ExAccountType;
-import com.team10.backend.domain.exAccount.service.ExAccountSyncService.ExAccountSyncItem;
+import com.team10.backend.domain.exAccount.entity.ExAccount;
+import com.team10.backend.domain.user.entity.User;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -50,8 +51,9 @@ public record ExAccountLinkReq(
         @Schema(description = "마지막 거래일", example = "2026-06-18", nullable = true)
         LocalDate lastTransactionAt
 ) {
-    public ExAccountSyncItem toSyncItem() {
-        return new ExAccountSyncItem(
+    public ExAccount toEntity(User user) {
+        return ExAccount.create(
+                user,
                 organization,
                 accountNumber,
                 accountName,
@@ -60,6 +62,17 @@ public record ExAccountLinkReq(
                 balance,
                 withdrawableAmount,
                 openedAt,
+                maturityAt,
+                lastTransactionAt
+        );
+    }
+
+    public void applyTo(ExAccount account) {
+        account.updateSnapshot(
+                accountName,
+                accountAlias,
+                balance,
+                withdrawableAmount,
                 maturityAt,
                 lastTransactionAt
         );

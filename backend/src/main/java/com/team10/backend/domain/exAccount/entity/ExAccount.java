@@ -94,6 +94,11 @@ public class ExAccount extends BaseEntity {
         this.status = ExAccountStatus.ACTIVE;
     }
 
+    public void updateLastTransactionAt(LocalDate lastTransactionAt) {
+        this.lastTransactionAt = lastTransactionAt;
+        this.status = ExAccountStatus.ACTIVE;
+    }
+
     public String getAccountNoMasked() {
         if (accountNumber == null || accountNumber.length() <= 4) {
             return accountNumber;

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ExAccountTransactionRepository extends JpaRepository<ExAccountTransaction, Long> {
@@ -14,4 +15,6 @@ public interface ExAccountTransactionRepository extends JpaRepository<ExAccountT
             Long exAccountId,
             Long userId
     );
+
+    Optional<ExAccountTransaction> findByExAccountIdAndTransactionKey(Long exAccountId, String transactionKey);
 }

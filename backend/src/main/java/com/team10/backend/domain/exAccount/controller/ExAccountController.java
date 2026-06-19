@@ -2,11 +2,14 @@ package com.team10.backend.domain.exAccount.controller;
 
 import com.team10.backend.domain.exAccount.dto.req.ExAccountCandidateReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
+import com.team10.backend.domain.exAccount.dto.req.ExAccountTransactionRefreshReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountDetailRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
+import com.team10.backend.domain.exAccount.dto.res.ExAccountTransactionRefreshRes;
 import com.team10.backend.domain.exAccount.service.ExAccountService;
 import com.team10.backend.domain.exAccount.service.ExAccountSyncService;
+import com.team10.backend.domain.exAccount.service.ExAccountTransactionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,6 +33,7 @@ import java.util.List;
 public class ExAccountController {
     private final ExAccountService exAccountService;
     private final ExAccountSyncService exAccountSyncService;
+    private final ExAccountTransactionService exAccountTransactionService;
 
     @Operation(summary = "연동된 외부 계좌 목록 조회", description = "인증 사용자가 연동 버튼으로 저장한 외부 계좌 목록을 조회합니다.")
     @GetMapping("/accounts")
@@ -44,6 +48,16 @@ public class ExAccountController {
             @PathVariable Long exAccountId
     ) {
         return ResponseEntity.ok(exAccountService.getAccountDetail(userId, exAccountId));
+    }
+
+    @Operation(summary = "외부 계좌 거래내역 새로고침", description = "외부기관에서 새로 조회한 거래내역을 선택한 외부 계좌에 저장하거나 갱신한 뒤 상세 정보와 거래내역을 반환합니다.")
+    @PostMapping("/accounts/{exAccountId}/transactions/refresh")
+    public ResponseEntity<ExAccountTransactionRefreshRes> refreshTransactions(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long exAccountId,
+            @Valid @RequestBody ExAccountTransactionRefreshReq request
+    ) {
+        return ResponseEntity.ok(exAccountTransactionService.refreshTransactions(userId, exAccountId, request.transactions()));
     }
 
     @Operation(summary = "외부 계좌 후보 조회", description = "외부기관에서 조회된 계좌 목록을 저장하지 않고 연동 후보로 반환합니다.")

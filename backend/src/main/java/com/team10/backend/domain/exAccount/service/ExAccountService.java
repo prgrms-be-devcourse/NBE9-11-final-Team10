@@ -31,8 +31,12 @@ public class ExAccountService {
         ExAccount account = accountRepository.findByIdAndUserId(exAccountId, userId)
                 .orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
 
+        return getAccountDetail(account, userId);
+    }
+
+    private ExAccountDetailRes getAccountDetail(ExAccount account, Long userId) {
         List<ExAccountTransactionRes> transactions = transactionRepository
-                .findAllByExAccountIdAndExAccountUserIdOrderByTransactedAtDesc(exAccountId, userId)
+                .findAllByExAccountIdAndExAccountUserIdOrderByTransactedAtDesc(account.getId(), userId)
                 .stream()
                 .map(ExAccountTransactionRes::from)
                 .toList();

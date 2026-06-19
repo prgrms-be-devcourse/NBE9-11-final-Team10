@@ -1,7 +1,7 @@
 package com.team10.backend.domain.exAccount.dto.res;
 
 import com.team10.backend.domain.exAccount.Type.ExAccountType;
-import com.team10.backend.domain.exAccount.service.ExAccountSyncService.ExAccountSyncItem;
+import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -32,18 +32,18 @@ public record ExAccountCandidateRes(
         @Schema(description = "이미 연동된 외부 계좌 여부", example = "false")
         boolean linked
 ) {
-    public static ExAccountCandidateRes from(ExAccountSyncItem item, boolean linked) {
+    public static ExAccountCandidateRes from(ExAccountLinkReq request, boolean linked) {
         return new ExAccountCandidateRes(
-                item.organization(),
-                maskAccountNumber(item.accountNumber()),
-                item.accountName(),
-                item.accountAlias(),
-                item.assetType(),
-                item.balance(),
-                item.withdrawableAmount(),
-                item.openedAt(),
-                item.maturityAt(),
-                item.lastTransactionAt(),
+                request.organization(),
+                maskAccountNumber(request.accountNumber()),
+                request.accountName(),
+                request.accountAlias(),
+                request.assetType(),
+                request.balance(),
+                request.withdrawableAmount(),
+                request.openedAt(),
+                request.maturityAt(),
+                request.lastTransactionAt(),
                 linked
         );
     }

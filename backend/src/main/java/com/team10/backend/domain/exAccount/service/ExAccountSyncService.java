@@ -1,6 +1,5 @@
 package com.team10.backend.domain.exAccount.service;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountType;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
@@ -14,8 +13,6 @@ import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 
 import static org.springframework.util.StringUtils.hasText;
@@ -28,113 +25,65 @@ public class ExAccountSyncService {
     private final UserRepository userRepository;
 
     public List<ExAccountCandidateRes> getLinkCandidates(Long userId, List<ExAccountLinkReq> requests) {
-        List<ExAccountSyncItem> items = requests == null
-                ? null
-                : requests.stream()
-                .map(ExAccountLinkReq::toSyncItem)
-                .toList();
+        validateItems(requests);
 
-        validateItems(items);
-
-        return items.stream()
+        return requests.stream()
                 .peek(this::validateItem)
-                .map(item -> ExAccountCandidateRes.from(item, isAlreadyLinked(userId, item)))
+                .map(request -> ExAccountCandidateRes.from(request, isAlreadyLinked(userId, request)))
                 .toList();
     }
 
     public ExAccountRes linkAccount(Long userId, ExAccountLinkReq request) {
-        ExAccountSyncItem item = request == null ? null : request.toSyncItem();
-        validateItem(item);
+        validateItem(request);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
-        ExAccount account = upsertAccount(user, item);
+        ExAccount account = upsertAccount(user, request);
         return ExAccountRes.from(account);
     }
 
-    private void validateItems(List<ExAccountSyncItem> items) {
-        if (items == null || items.isEmpty()) {
+    private void validateItems(List<ExAccountLinkReq> requests) {
+        if (requests == null || requests.isEmpty()) {
             throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_SYNC_ITEMS_REQUIRED);
         }
     }
 
 
-    private void validateItem(ExAccountSyncItem item) {
-        if (item == null
-                || !hasText(item.organization())
-                || !hasText(item.accountNumber())
-                || !hasText(item.accountName())
-                || item.assetType() == null) {
+    private void validateItem(ExAccountLinkReq request) {
+        if (request == null
+                || !hasText(request.organization())
+                || !hasText(request.accountNumber())
+                || !hasText(request.accountName())
+                || request.assetType() == null) {
             throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_SYNC_REQUIRED_FIELD_MISSING);
         }
     }
 
-    private boolean isAlreadyLinked(Long userId, ExAccountSyncItem item) {
+    private boolean isAlreadyLinked(Long userId, ExAccountLinkReq request) {
         return exAccountRepository
                 .findByUserIdAndOrganizationAndAccountNumber(
                         userId,
-                        item.organization(),
-                        item.accountNumber()
+                        request.organization(),
+                        request.accountNumber()
                 )
                 .isPresent();
     }
 
-    private ExAccount upsertAccount(User user, ExAccountSyncItem item) {
+    private ExAccount upsertAccount(User user, ExAccountLinkReq request) {
         ExAccount exAccount = exAccountRepository
                 .findByUserIdAndOrganizationAndAccountNumber(
                         user.getId(),
-                        item.organization(),
-                        item.accountNumber()
+                        request.organization(),
+                        request.accountNumber()
                 )
                 .orElse(null);
 
         if (exAccount == null) {
-            return exAccountRepository.save(item.toEntity(user));
+            return exAccountRepository.save(request.toEntity(user));
         }
 
-        exAccount.updateSnapshot(
-                item.accountName(),
-                item.accountAlias(),
-                item.balance(),
-                item.withdrawableAmount(),
-                item.maturityAt(),
-                item.lastTransactionAt()
-        );
+        request.applyTo(exAccount);
         return exAccount;
     }
-
-
-
-    public record ExAccountSyncItem(
-            String organization,
-            String accountNumber,
-            String accountName,
-            String accountAlias,
-            ExAccountType assetType,
-            BigDecimal balance,
-            BigDecimal withdrawableAmount,
-            LocalDate openedAt,
-            LocalDate maturityAt,
-            LocalDate lastTransactionAt
-    ) {
-
-        // 신규 저장이 필요할 때 ExAccount.create(...)
-        private ExAccount toEntity(User user) {
-            return ExAccount.create(
-                    user,
-                    organization,
-                    accountNumber,
-                    accountName,
-                    accountAlias,
-                    assetType,
-                    balance,
-                    withdrawableAmount,
-                    openedAt,
-                    maturityAt,
-                    lastTransactionAt
-            );
-        }
-    }
-
 }
