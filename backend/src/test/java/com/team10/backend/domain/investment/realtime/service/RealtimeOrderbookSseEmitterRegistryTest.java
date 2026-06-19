@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +25,7 @@ class RealtimeOrderbookSseEmitterRegistryTest {
         AtomicInteger terminatedCount = new AtomicInteger();
 
         RealtimeOrderbookSseConnection connection =
-                registry.register(1L, "005930", terminatedCount::incrementAndGet);
+                registry.register(1L, "005930", streamId -> terminatedCount.incrementAndGet());
 
         assertThat(connection.streamId()).isNotBlank();
         assertThat(connection.userId()).isEqualTo(1L);
@@ -66,8 +67,12 @@ class RealtimeOrderbookSseEmitterRegistryTest {
     @DisplayName("스트림 종료 시 연결과 stockCode 라우팅 인덱스를 제거하고 종료 콜백은 한 번만 실행한다")
     void complete() {
         AtomicInteger terminatedCount = new AtomicInteger();
+        AtomicReference<String> terminatedStreamId = new AtomicReference<>();
         RealtimeOrderbookSseConnection connection =
-                registry.register(1L, "005930", terminatedCount::incrementAndGet);
+                registry.register(1L, "005930", streamId -> {
+                    terminatedCount.incrementAndGet();
+                    terminatedStreamId.set(streamId);
+                });
 
         assertThat(registry.complete(connection.streamId())).isTrue();
         assertThat(registry.complete(connection.streamId())).isFalse();
@@ -77,6 +82,7 @@ class RealtimeOrderbookSseEmitterRegistryTest {
         assertThat(registry.streamCount()).isZero();
         assertThat(registry.streamCountByStockCode("005930")).isZero();
         assertThat(terminatedCount).hasValue(1);
+        assertThat(terminatedStreamId).hasValue(connection.streamId());
     }
 
     @Test

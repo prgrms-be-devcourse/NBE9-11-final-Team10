@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -45,12 +46,12 @@ public class RealtimeOrderbookSseEmitterRegistry {
      * <p>정책상 하나의 streamId는 하나의 stockCode만 구독한다. 같은 사용자가 여러 탭을 열면 이 메서드가 여러 번
      * 호출되어 서로 다른 streamId가 생성될 수 있다.
      *
-     * @param terminationCallback SSE 연결 종료 시 Redis 구독 상태를 정리하기 위해 호출할 콜백
+     * @param terminationCallback SSE 연결 종료 시 streamId를 기준으로 Redis 구독 상태를 정리하기 위해 호출할 콜백
      */
     public RealtimeOrderbookSseConnection register(
             Long userId,
             String stockCode,
-            Runnable terminationCallback
+            Consumer<String> terminationCallback
     ) {
         Objects.requireNonNull(userId, "userId must not be null");
         if (!StringUtils.hasText(stockCode)) {
@@ -64,7 +65,7 @@ public class RealtimeOrderbookSseEmitterRegistry {
                 userId,
                 stockCode,
                 emitter,
-                terminationCallback == null ? () -> {
+                terminationCallback == null ? ignored -> {
                 } : terminationCallback
         );
 
@@ -187,7 +188,14 @@ public class RealtimeOrderbookSseEmitterRegistry {
 
         registrations.remove(registration.streamId(), registration);
         removeFromStockIndex(registration.stockCode(), registration.streamId());
-        registration.terminationCallback().run();
+        try {
+            registration.terminationCallback().accept(registration.streamId());
+        } catch (RuntimeException e) {
+            log.warn("Failed to run realtime orderbook SSE termination callback. streamId={}, stockCode={}",
+                    registration.streamId(),
+                    registration.stockCode(),
+                    e);
+        }
     }
 
     /**
@@ -210,7 +218,7 @@ public class RealtimeOrderbookSseEmitterRegistry {
             Long userId,
             String stockCode,
             SseEmitter emitter,
-            Runnable terminationCallback,
+            Consumer<String> terminationCallback,
             AtomicBoolean closed
     ) {
 
@@ -219,7 +227,7 @@ public class RealtimeOrderbookSseEmitterRegistry {
                 Long userId,
                 String stockCode,
                 SseEmitter emitter,
-                Runnable terminationCallback
+                Consumer<String> terminationCallback
         ) {
             this(streamId, userId, stockCode, emitter, terminationCallback, new AtomicBoolean(false));
         }

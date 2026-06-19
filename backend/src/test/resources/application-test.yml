@@ -39,6 +39,11 @@ exchange-rate:
   sync:
     enabled: false
 
+investment:
+  realtime:
+    redis-pub-sub:
+      enabled: false
+
 
 kis:
   app-key: test-key
