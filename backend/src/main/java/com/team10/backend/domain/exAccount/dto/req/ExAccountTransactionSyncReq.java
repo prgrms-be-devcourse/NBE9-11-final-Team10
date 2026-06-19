@@ -11,22 +11,22 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Schema(description = "외부 계좌 거래내역 동기화 항목")
+@Schema(description = "외부 계좌 거래내역 동기화 항목. 거래내역 새로고침 요청에서 사용합니다.")
 public record ExAccountTransactionSyncReq(
-        @Schema(description = "외부기관 거래 고유키", example = "KB-20260618143000-0001")
+        @Schema(description = "외부기관 거래 고유키. 같은 외부 계좌 안에서 중복 여부를 판단하는 기준입니다.", example = "KB-20260618143000-0001", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank(message = "거래 고유키는 필수입니다.")
         @Size(max = 160, message = "거래 고유키는 160자 이하여야 합니다.")
         String transactionKey,
 
-        @Schema(description = "거래 일시", example = "2026-06-18T14:30:00")
+        @Schema(description = "거래 일시", example = "2026-06-18T14:30:00", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "거래 일시는 필수입니다.")
         LocalDateTime transactedAt,
 
-        @Schema(description = "입출금 방향", example = "OUT")
+        @Schema(description = "입출금 방향", example = "OUT", allowableValues = {"IN", "OUT"}, requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "입출금 방향은 필수입니다.")
         ExAccountTransactionDirection direction,
 
-        @Schema(description = "거래 금액", example = "45000.00")
+        @Schema(description = "거래 금액", example = "45000.00", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotNull(message = "거래 금액은 필수입니다.")
         BigDecimal amount,
 

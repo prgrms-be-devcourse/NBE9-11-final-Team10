@@ -13,7 +13,7 @@ public record ExAccountTransactionRefreshRes(
         @Schema(description = "갱신된 거래내역 수", example = "15")
         int updatedCount,
 
-        @Schema(description = "새로고침 후 상세 정보 및 거래내역")
+        @Schema(description = "새로고침 후 외부 계좌 상세 정보와 거래내역")
         ExAccountDetailRes detail
 ) {
     public static ExAccountTransactionRefreshRes of(
