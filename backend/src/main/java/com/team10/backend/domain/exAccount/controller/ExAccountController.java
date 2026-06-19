@@ -3,6 +3,7 @@ package com.team10.backend.domain.exAccount.controller;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountCandidateReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
+import com.team10.backend.domain.exAccount.dto.res.ExAccountDetailRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
 import com.team10.backend.domain.exAccount.service.ExAccountService;
 import com.team10.backend.domain.exAccount.service.ExAccountSyncService;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,6 +35,15 @@ public class ExAccountController {
     @GetMapping("/accounts")
     public ResponseEntity<List<ExAccountRes>> getAccounts(@AuthenticationPrincipal Long userId) {
         return ResponseEntity.ok(exAccountService.getAccounts(userId));
+    }
+
+    @Operation(summary = "외부 계좌 상세 및 거래내역 조회", description = "인증 사용자가 선택한 외부 계좌의 상세 정보와 해당 계좌 거래내역을 함께 조회합니다.")
+    @GetMapping("/accounts/{exAccountId}")
+    public ResponseEntity<ExAccountDetailRes> getAccountDetail(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long exAccountId
+    ) {
+        return ResponseEntity.ok(exAccountService.getAccountDetail(userId, exAccountId));
     }
 
     @Operation(summary = "외부 계좌 후보 조회", description = "외부기관에서 조회된 계좌 목록을 저장하지 않고 연동 후보로 반환합니다.")

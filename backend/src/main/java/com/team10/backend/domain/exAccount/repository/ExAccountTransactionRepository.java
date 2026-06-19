@@ -9,4 +9,9 @@ import java.util.List;
 @Repository
 public interface ExAccountTransactionRepository extends JpaRepository<ExAccountTransaction, Long> {
     List<ExAccountTransaction> findAllByExAccountUserIdOrderByTransactedAtDesc(Long userId);
+
+    List<ExAccountTransaction> findAllByExAccountIdAndExAccountUserIdOrderByTransactedAtDesc(
+            Long exAccountId,
+            Long userId
+    );
 }
