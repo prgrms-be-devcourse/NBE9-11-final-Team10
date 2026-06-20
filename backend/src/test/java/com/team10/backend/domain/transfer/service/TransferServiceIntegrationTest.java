@@ -18,14 +18,14 @@ import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import com.team10.backend.global.idempotency.entity.Idempotency;
 import com.team10.backend.global.idempotency.repository.IdempotencyRepository;
-import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import com.team10.backend.global.idempotency.type.IdempotencyStatus;
 import jakarta.persistence.EntityManager;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -42,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @ActiveProfiles("test")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class TransferServiceIntegrationTest {
 
     @Autowired
@@ -65,6 +64,16 @@ class TransferServiceIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @BeforeEach
+    void setUp() {
+        cleanDatabase();
+    }
+
+    @AfterEach
+    void tearDown() {
+        cleanDatabase();
+    }
 
     @Test
     @DisplayName("입금 성공 시 실제 DB에 잔액과 입금 거래내역이 저장된다")
@@ -117,7 +126,7 @@ class TransferServiceIntegrationTest {
 
         Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
         Idempotency idempotency = idempotencyRepository
-                .findByUser_IdAndOperationTypeAndIdempotencyKey(user.getId(), IdempotencyOperationType.DEPOSIT, "same-deposit-key")
+                .findByUser_IdAndIdempotencyKey(user.getId(), "same-deposit-key")
                 .orElseThrow();
 
         assertEquals(firstResponse, retryResponse);
@@ -254,7 +263,7 @@ class TransferServiceIntegrationTest {
 
         Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
         Idempotency idempotency = idempotencyRepository
-                .findByUser_IdAndOperationTypeAndIdempotencyKey(sender.getId(), IdempotencyOperationType.TRANSFER, "same-request-key")
+                .findByUser_IdAndIdempotencyKey(sender.getId(), "same-request-key")
                 .orElseThrow();
 
         assertEquals(firstResponse, retryResponse);
@@ -343,7 +352,7 @@ class TransferServiceIntegrationTest {
         Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
         List<Transfer> transfers = transferRepository.findAll();
         Idempotency idempotency = idempotencyRepository
-                .findByUser_IdAndOperationTypeAndIdempotencyKey(sender.getId(), IdempotencyOperationType.TRANSFER, "insufficient-balance-key")
+                .findByUser_IdAndIdempotencyKey(sender.getId(), "insufficient-balance-key")
                 .orElseThrow();
 
         assertEquals(TransferErrorCode.INSUFFICIENT_BALANCE, exception.getErrorCode());
@@ -509,6 +518,19 @@ class TransferServiceIntegrationTest {
 
     private void flushAndClear() {
         entityManager.clear();
+    }
+
+    private void cleanDatabase() {
+        transactionTemplate.executeWithoutResult(status -> {
+            entityManager.createNativeQuery("SET REFERENTIAL_INTEGRITY FALSE").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM transaction_histories").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM transfers").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM idempotency_keys").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM accounts").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM users").executeUpdate();
+            entityManager.createNativeQuery("SET REFERENTIAL_INTEGRITY TRUE").executeUpdate();
+            entityManager.clear();
+        });
     }
 
     private List<Throwable> runConcurrently(int threadCount, ThrowingRunnable task) throws InterruptedException {
