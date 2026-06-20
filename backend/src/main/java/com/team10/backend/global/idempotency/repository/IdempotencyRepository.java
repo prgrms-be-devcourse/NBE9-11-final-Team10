@@ -1,7 +1,6 @@
 package com.team10.backend.global.idempotency.repository;
 
 import com.team10.backend.global.idempotency.entity.Idempotency;
-import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,11 +11,7 @@ import java.util.Optional;
 
 public interface IdempotencyRepository extends JpaRepository<Idempotency, Long> {
 
-    Optional<Idempotency> findByUser_IdAndOperationTypeAndIdempotencyKey(
-            Long userId,
-            IdempotencyOperationType operationType,
-            String idempotencyKey
-    );
+    Optional<Idempotency> findByUser_IdAndIdempotencyKey(Long userId, String idempotencyKey);
 
     @Query("""
         select i

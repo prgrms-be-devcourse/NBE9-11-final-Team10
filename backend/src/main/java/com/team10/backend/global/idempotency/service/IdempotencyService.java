@@ -41,8 +41,8 @@ public class IdempotencyService {
         validateIdempotencyKey(idempotencyKey);
 
         return idempotencyRepository
-                .findByUser_IdAndOperationTypeAndIdempotencyKey(userId, operationType, idempotencyKey)
-                .map(existing -> resolveExisting(existing, requestHash, responseType))
+                .findByUser_IdAndIdempotencyKey(userId, idempotencyKey)
+                .map(existing -> resolveExisting(existing, requestHash, operationType, responseType))
                 .orElseGet(() -> createProcessing(userId, operationType, idempotencyKey, requestHash, responseType));
     }
 
@@ -90,9 +90,11 @@ public class IdempotencyService {
     private <T> IdempotencyReserveResult<T> resolveExisting(
             Idempotency idempotency,
             String requestHash,
+            IdempotencyOperationType operationType,
             Class<T> responseType
     ) {
-        if (!idempotency.getRequestHash().equals(requestHash)) {
+        // 기존 멱등성 레코드와 현재 요청의 operation 또는 payload가 다르면 conflict
+        if (isDifferentRequest(idempotency, operationType, requestHash)) {
             throw new BusinessException(GlobalErrorCode.IDEMPOTENCY_REQUEST_CONFLICT);
         }
 
@@ -115,6 +117,15 @@ public class IdempotencyService {
         }
 
         throw new BusinessException(GlobalErrorCode.IDEMPOTENCY_REQUEST_PROCESSING);
+    }
+
+    private boolean isDifferentRequest(
+            Idempotency idempotency,
+            IdempotencyOperationType operationType,
+            String requestHash
+    ) {
+        return idempotency.getOperationType() != operationType
+                || !idempotency.getRequestHash().equals(requestHash);
     }
 
     private void validateIdempotencyKey(String idempotencyKey) {
