@@ -16,12 +16,15 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.context.expression.MethodBasedEvaluationContext;
 import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.ParameterNameDiscoverer;
+import org.springframework.expression.Expression;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 @Aspect
@@ -35,6 +38,8 @@ public class IdempotencyAspect {
 
     private final SpelExpressionParser parser = new SpelExpressionParser(); // 문자열로 된 SpEL 표현식을 읽는 객체
     private final ParameterNameDiscoverer parameterNameDiscoverer = new DefaultParameterNameDiscoverer(); // 메서드 파라미터 이름을 알아내는 도구
+    // key = SpEL 표현식 문자열, value = 파싱된 Expression 객체
+    private final Map<String, Expression> expressionCache = new ConcurrentHashMap<>(); // 파싱된 Expression 객체를 캐싱
 
     // @Around: 메서드 실행 전, 후, 예외 발생 시점까지 전부 감쌀 수 있는 AOP 방식
     // "@annotation(idempotent)":
@@ -109,8 +114,10 @@ public class IdempotencyAspect {
                 parameterNameDiscoverer // 파라미터 이름을 찾는 도구
         );
 
-        // parser.parseExpression(expression): 문자열 표현식을 SpEL Expression 객체로 파싱
-        return parser.parseExpression(expression).getValue(context);
+        // 캐시값 없으면 문자열 표현식을 SpEL Expression 객체로 파싱 후 저장
+        return expressionCache
+                .computeIfAbsent(expression, parser::parseExpression)
+                .getValue(context);
     }
 
     // operationType + hashFields에 적은 값들을 모아서 SHA-256 hash 생성
