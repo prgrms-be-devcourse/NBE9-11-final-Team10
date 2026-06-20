@@ -46,15 +46,33 @@ public class IdempotencyReservationFacade {
                 // Hibernate 예외에서 실제 DB constraint 이름 꺼냄
                 String constraintName = constraintViolationException.getConstraintName();
 
-                // equalsIgnoreCase사용: DB나 Hibernate가 constraint 이름을 대문자로 반환할 수 있기 때문
-                return constraintName != null
-                        && constraintName.equalsIgnoreCase(IDEMPOTENCY_UNIQUE_CONSTRAINT);
+                if (isIdempotencyConstraintName(constraintName)) {
+                    return true;
+                }
+            }
+
+            // 어떤 환경에서는 실제로 UK 위반이 났는데도 Hibernate가 constraint name을 못 뽑아서 null을 줄 수 있다.
+            // 예외메시지 예시: Unique index or primary key violation: "UK_USER_IDEMPOTENCY_KEY ..."
+            String message = current.getMessage();
+            if (containsIdempotencyConstraintName(message)) {
+                return true;
             }
 
             // 또 다른 Throwable(예외) 객체 = 하위객체 | null
             current = current.getCause();
         }
         return false;
+    }
+
+    private boolean isIdempotencyConstraintName(String constraintName) {
+        // equalsIgnoreCase사용: DB나 Hibernate가 constraint 이름을 대문자로 반환할 수 있기 때문
+        return constraintName != null
+                && constraintName.equalsIgnoreCase(IDEMPOTENCY_UNIQUE_CONSTRAINT);
+    }
+
+    private boolean containsIdempotencyConstraintName(String message) {
+        return message != null
+                && message.toLowerCase().contains(IDEMPOTENCY_UNIQUE_CONSTRAINT.toLowerCase());
     }
 
 }
