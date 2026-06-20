@@ -1,5 +1,7 @@
 package com.team10.backend.domain.investment.client.realtime;
 
+import static com.team10.backend.domain.investment.config.KisConstants.RealtimeWebSocket.ORDERBOOK_TR_ID;
+
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookLevel;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
 import java.util.ArrayList;
@@ -14,8 +16,6 @@ import org.springframework.util.StringUtils;
  */
 @Component
 public class KisOrderbookMessageParser {
-
-    public static final String ORDERBOOK_TR_ID = "H0STASP0";
 
     private static final int ORDERBOOK_LEVEL_COUNT = 10;
     private static final int MIN_FIELD_COUNT = 45;
