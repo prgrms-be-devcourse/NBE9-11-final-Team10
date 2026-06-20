@@ -6,6 +6,7 @@ import com.team10.backend.domain.exchange.dto.res.CurrencyRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeOrderRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeQuoteRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeRateRes;
+import com.team10.backend.domain.exchange.entity.Currency;
 import com.team10.backend.domain.exchange.service.ExchangeRateService;
 import com.team10.backend.domain.exchange.service.ExchangeService;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
