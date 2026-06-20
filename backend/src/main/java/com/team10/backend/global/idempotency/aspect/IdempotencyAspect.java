@@ -94,6 +94,10 @@ public class IdempotencyAspect {
     private String resolveString(ProceedingJoinPoint joinPoint, String expression) {
         Object value = evaluate(joinPoint, expression);
 
+        if (value == null) {
+            return null;
+        }
+
         if (value instanceof String stringValue) {
             return stringValue;
         }
