@@ -17,6 +17,7 @@ import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -155,14 +156,19 @@ public class ExchangeBusinessService {
             FxWallet fxWallet,
             ExchangeDirection direction
     ) {
-        return exchangeOrderRepository.save(ExchangeOrder.createCompleted(
-                user,
-                quote,
-                krwAccount,
-                fxWallet,
-                direction,
-                LocalDateTime.now()
-        ));
+        try {
+            return exchangeOrderRepository.save(ExchangeOrder.createCompleted(
+                    user,
+                    quote,
+                    krwAccount,
+                    fxWallet,
+                    direction,
+                    LocalDateTime.now()
+            ));
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ExchangeErrorCode.EXCHANGE_QUOTE_ALREADY_USED);
+        }
+
     }
 
     private Long toKrwLong(BigDecimal amount) {
