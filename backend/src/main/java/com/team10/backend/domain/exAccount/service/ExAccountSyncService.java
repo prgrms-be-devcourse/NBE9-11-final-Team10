@@ -110,7 +110,7 @@ public class ExAccountSyncService {
     }
 
     private String normalizeAccountNumber(String accountNumber) {
-        return accountNumber.replaceAll("[\\s-]", "");
+        return accountNumber.replace(" ", "").replace("-", "");
     }
 
     private String maskAccountNumber(String accountNumber) {
