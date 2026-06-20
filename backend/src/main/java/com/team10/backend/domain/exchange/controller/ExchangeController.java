@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -51,8 +52,7 @@ public class ExchangeController {
     @PostMapping("/currencies/quotes")
     @Operation(description = "환전 견적 생성")
     public ResponseEntity<ExchangeQuoteRes> createExchangeQuote(
-            // TODO: 인증된 사용자(@AuthenticationPrincipal)에서 userId 꺼내쓰도록 수정
-            @RequestParam Long userId,
+            @AuthenticationPrincipal Long userId,
             @Valid @RequestBody ExchangeQuoteCreateReq request
     ) {
         ExchangeQuoteRes response = exchangeService.createQuote(
