@@ -36,7 +36,6 @@ public class ExchangeBusinessService {
     @Transactional
     public ExchangeOrderRes executeExchangeOrder(
             Long userId,
-            String idempotencyKey,
             Long exchangeQuoteId,
             Long krwAccountId,
             Long fxWalletId

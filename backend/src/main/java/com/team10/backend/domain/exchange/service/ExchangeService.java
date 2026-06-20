@@ -100,7 +100,6 @@ public class ExchangeService {
     ) {
         return exchangeBusinessService.executeExchangeOrder(
                 userId,
-                idempotencyKey,
                 exchangeQuoteId,
                 krwAccountId,
                 fxWalletId
