@@ -10,6 +10,7 @@ import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
+import com.team10.backend.global.security.HmacSha256Hasher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +24,7 @@ public class ExAccountSyncService {
 
     private final ExAccountRepository exAccountRepository;
     private final UserRepository userRepository;
+    private final HmacSha256Hasher hmacSha256Hasher;
 
     public List<ExAccountCandidateRes> getLinkCandidates(Long userId, List<ExAccountLinkReq> requests) {
         validateItems(requests);
@@ -55,6 +57,7 @@ public class ExAccountSyncService {
         if (request == null
                 || !hasText(request.organization())
                 || !hasText(request.accountNumber())
+                || !hasText(normalizeAccountNumber(request.accountNumber()))
                 || !hasText(request.accountName())
                 || request.assetType() == null) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
@@ -62,29 +65,61 @@ public class ExAccountSyncService {
     }
 
     private boolean isAlreadyLinked(Long userId, ExAccountLinkReq request) {
+        String accountNumberHash = hashAccountNumber(request.accountNumber());
+
         return exAccountRepository
-                .findByUserIdAndOrganizationAndAccountNumber(
+                .findByUserIdAndOrganizationAndAccountNumberHash(
                         userId,
                         request.organization(),
-                        request.accountNumber()
+                        accountNumberHash
                 )
                 .isPresent();
     }
 
     private ExAccount upsertAccount(User user, ExAccountLinkReq request) {
+        String normalizedAccountNumber = normalizeAccountNumber(request.accountNumber());
+        String accountNumberHash = hmacSha256Hasher.hash(normalizedAccountNumber);
+        String accountNumberMasked = maskAccountNumber(normalizedAccountNumber);
+
         ExAccount exAccount = exAccountRepository
-                .findByUserIdAndOrganizationAndAccountNumber(
+                .findByUserIdAndOrganizationAndAccountNumberHash(
                         user.getId(),
                         request.organization(),
-                        request.accountNumber()
+                        accountNumberHash
                 )
                 .orElse(null);
 
         if (exAccount == null) {
-            return exAccountRepository.save(request.toEntity(user));
+            return exAccountRepository.save(
+                    request.toEntity(user, accountNumberHash, accountNumberMasked)
+            );
         }
 
         request.applyTo(exAccount);
         return exAccount;
+    }
+
+    /** 조회와 저장에서 같은 결과가 나오도록 공백과 하이픈을 제거한다. */
+    private String normalizeAccountNumber(String accountNumber) {
+        return accountNumber.replaceAll("[\\s-]", "");
+    }
+
+    /** 정규화된 계좌번호를 서버 비밀키로 HMAC-SHA-256 해싱한다. */
+    private String hashAccountNumber(String accountNumber) {
+        return hmacSha256Hasher.hash(normalizeAccountNumber(accountNumber));
+    }
+
+    /** 원본 대신 저장하고 응답할 수 있도록 앞 6자리와 뒤 4자리만 남긴다. */
+    private String maskAccountNumber(String accountNumber) {
+        if (accountNumber.length() <= 4) {
+            return "*".repeat(accountNumber.length());
+        }
+
+        int prefixLength = Math.min(6, accountNumber.length() - 4);
+        String prefix = accountNumber.substring(0, prefixLength);
+        String suffix = accountNumber.substring(accountNumber.length() - 4);
+        int maskLength = accountNumber.length() - prefixLength - 4;
+
+        return prefix + "*".repeat(maskLength) + suffix;
     }
 }

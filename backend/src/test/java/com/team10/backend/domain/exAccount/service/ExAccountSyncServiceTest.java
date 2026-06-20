@@ -13,12 +13,13 @@ import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
 import com.team10.backend.domain.exAccount.entity.ExAccount;
-import com.team10.backend.domain.exAccount.exception.ExAccountErrorCode;
 import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.exception.GlobalErrorCode;
+import com.team10.backend.global.security.HmacSha256Hasher;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -29,17 +30,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ExAccountSyncServiceTest {
 
+    private static final String ACCOUNT_NUMBER_HASH = "account-number-hash";
+
     @Mock
     private ExAccountRepository exAccountRepository;
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private HmacSha256Hasher hmacSha256Hasher;
 
     @InjectMocks
     private ExAccountSyncService exAccountSyncService;
@@ -52,14 +59,27 @@ class ExAccountSyncServiceTest {
     }
 
     @Test
+    @DisplayName("외부 계좌 후보 목록이 비어 있으면 공통 입력 오류로 실패한다")
+    void getLinkCandidatesWithEmptyRequests() {
+        assertThatThrownBy(() -> exAccountSyncService.getLinkCandidates(1L, List.of()))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(GlobalErrorCode.INVALID_INPUT_VALUE);
+
+        verify(exAccountRepository, never())
+                .findByUserIdAndOrganizationAndAccountNumberHash(any(), any(), any());
+    }
+
+    @Test
     @DisplayName("외부 계좌 후보 조회는 DB에 저장하지 않고 연동 여부만 반환한다")
     void getLinkCandidates() {
-        ExAccountLinkReq request = createLinkReq("국민은행", "12345678901234", "KB Star 입출금통장");
+        ExAccountLinkReq request = createLinkReq("국민은행", "123-456 7890-1234", "KB Star 입출금통장");
 
-        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumber(
+        when(hmacSha256Hasher.hash("12345678901234")).thenReturn(ACCOUNT_NUMBER_HASH);
+        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
                 1L,
                 "국민은행",
-                "12345678901234"
+                ACCOUNT_NUMBER_HASH
         )).thenReturn(Optional.empty());
 
         List<ExAccountCandidateRes> responses = exAccountSyncService.getLinkCandidates(1L, List.of(request));
@@ -78,10 +98,11 @@ class ExAccountSyncServiceTest {
         ExAccountLinkReq request = createLinkReq("국민은행", "12345678901234", "KB Star 입출금통장");
         ExAccount account = createExAccount(10L, user, request);
 
-        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumber(
+        when(hmacSha256Hasher.hash("12345678901234")).thenReturn(ACCOUNT_NUMBER_HASH);
+        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
                 1L,
                 "국민은행",
-                "12345678901234"
+                ACCOUNT_NUMBER_HASH
         )).thenReturn(Optional.of(account));
 
         List<ExAccountCandidateRes> responses = exAccountSyncService.getLinkCandidates(1L, List.of(request));
@@ -97,10 +118,11 @@ class ExAccountSyncServiceTest {
         ExAccountLinkReq request = createLinkReq("국민은행", "12345678901234", "KB Star 입출금통장");
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumber(
+        when(hmacSha256Hasher.hash("12345678901234")).thenReturn(ACCOUNT_NUMBER_HASH);
+        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
                 1L,
                 "국민은행",
-                "12345678901234"
+                ACCOUNT_NUMBER_HASH
         )).thenReturn(Optional.empty());
         when(exAccountRepository.save(any(ExAccount.class))).thenAnswer(invocation -> {
             ExAccount account = invocation.getArgument(0);
@@ -112,10 +134,14 @@ class ExAccountSyncServiceTest {
 
         assertThat(response.id()).isEqualTo(10L);
         assertThat(response.organization()).isEqualTo("국민은행");
+        assertThat(response.accountNoMasked()).isEqualTo("123456****1234");
         assertThat(response.accountName()).isEqualTo("KB Star 입출금통장");
         assertThat(response.status()).isEqualTo(ExAccountStatus.ACTIVE);
 
-        verify(exAccountRepository).save(any(ExAccount.class));
+        ArgumentCaptor<ExAccount> accountCaptor = ArgumentCaptor.forClass(ExAccount.class);
+        verify(exAccountRepository).save(accountCaptor.capture());
+        assertThat(accountCaptor.getValue().getAccountNumberHash()).isEqualTo(ACCOUNT_NUMBER_HASH);
+        assertThat(accountCaptor.getValue().getAccountNumberMasked()).isEqualTo("123456****1234");
     }
 
     @Test
@@ -126,10 +152,11 @@ class ExAccountSyncServiceTest {
         ExAccountLinkReq updateRequest = createLinkReq("국민은행", "12345678901234", "급여 통장");
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumber(
+        when(hmacSha256Hasher.hash("12345678901234")).thenReturn(ACCOUNT_NUMBER_HASH);
+        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
                 1L,
                 "국민은행",
-                "12345678901234"
+                ACCOUNT_NUMBER_HASH
         )).thenReturn(Optional.of(account));
 
         ExAccountRes response = exAccountSyncService.linkAccount(1L, updateRequest);
@@ -162,7 +189,7 @@ class ExAccountSyncServiceTest {
         assertThatThrownBy(() -> exAccountSyncService.linkAccount(1L, request))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ExAccountErrorCode.EX_ACCOUNT_SYNC_REQUIRED_FIELD_MISSING);
+                .isEqualTo(GlobalErrorCode.INVALID_INPUT_VALUE);
 
         verify(userRepository, never()).findById(any());
         verify(exAccountRepository, never()).save(any());
@@ -184,7 +211,7 @@ class ExAccountSyncServiceTest {
     }
 
     private ExAccount createExAccount(Long id, User user, ExAccountLinkReq request) {
-        ExAccount account = request.toEntity(user);
+        ExAccount account = request.toEntity(user, ACCOUNT_NUMBER_HASH, "123456****1234");
         ReflectionTestUtils.setField(account, "id", id);
         return account;
     }

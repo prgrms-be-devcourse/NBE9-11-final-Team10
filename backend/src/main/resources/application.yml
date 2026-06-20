@@ -28,3 +28,6 @@ exchange-rate:
     enabled: true
     fixed-delay-ms: 60000 # 동기화 시간 1분
 
+security:
+  hmac:
+    secret: ${HMAC_SECRET}

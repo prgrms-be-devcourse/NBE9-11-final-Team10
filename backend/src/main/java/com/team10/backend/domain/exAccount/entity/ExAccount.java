@@ -14,7 +14,13 @@ import java.time.LocalDate;
 
 @Getter
 @Entity
-@Table(name = "external_account")
+@Table(
+        name = "external_account",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_external_account_user_org_number_hash",
+                columnNames = {"user_id", "organization", "account_number_hash"}
+        )
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 /** CODEF 등 외부기관에서 가져온 사용자 외부 계좌의 최신 스냅샷을 저장한다. */
 public class ExAccount extends BaseEntity {
@@ -26,8 +32,13 @@ public class ExAccount extends BaseEntity {
     @Column(nullable = false, length = 20)
     private String organization; //금융기관코드
 
-    @Column(nullable = false, length = 80)
-    private String accountNumber;
+    /** 정규화된 계좌번호의 HMAC-SHA-256 값. 동일 계좌 조회에 사용한다. */
+    @Column(name = "account_number_hash", nullable = false, length = 64)
+    private String accountNumberHash;
+
+    /** 화면 표시용 계좌번호. 원본 계좌번호는 저장하지 않는다. */
+    @Column(name = "account_number_masked", nullable = false, length = 80)
+    private String accountNumberMasked;
 
     @Column(nullable = false, length = 100)
     private String accountName;
@@ -56,7 +67,8 @@ public class ExAccount extends BaseEntity {
     public static ExAccount create(
             User user,
             String organization,
-            String accountNumber,
+            String accountNumberHash,
+            String accountNumberMasked,
             String accountName,
             String accountAlias,
             ExAccountType assetType,
@@ -69,7 +81,8 @@ public class ExAccount extends BaseEntity {
         ExAccount account = new ExAccount();
         account.user = user;
         account.organization = organization;
-        account.accountNumber = accountNumber;
+        account.accountNumberHash = accountNumberHash;
+        account.accountNumberMasked = accountNumberMasked;
         account.accountName = accountName;
         account.accountAlias = accountAlias;
         account.assetType = assetType;
@@ -100,13 +113,6 @@ public class ExAccount extends BaseEntity {
     }
 
     public String getAccountNoMasked() {
-        if (accountNumber == null || accountNumber.length() <= 4) {
-            return accountNumber;
-        }
-
-        int prefixLength = Math.min(6, accountNumber.length() - 4);
-        String prefix = accountNumber.substring(0, prefixLength);
-        String suffix = accountNumber.substring(accountNumber.length() - 4);
-        return prefix + "*".repeat(accountNumber.length() - prefixLength - 4) + suffix;
+        return accountNumberMasked;
     }
 }

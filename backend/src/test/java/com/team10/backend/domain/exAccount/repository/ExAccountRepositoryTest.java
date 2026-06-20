@@ -54,7 +54,8 @@ class ExAccountRepositoryTest {
         assertThat(accounts).hasSize(1);
         assertThat(accounts.get(0).getId()).isEqualTo(ownerAccount.getId());
         assertThat(accounts.get(0).getOrganization()).isEqualTo("국민은행");
-        assertThat(accounts.get(0).getAccountNumber()).isEqualTo("12345678901234");
+        assertThat(accounts.get(0).getAccountNumberHash()).isEqualTo("hash-12345678901234");
+        assertThat(accounts.get(0).getAccountNumberMasked()).isEqualTo("123456****1234");
     }
 
     @Test
@@ -69,17 +70,17 @@ class ExAccountRepositoryTest {
     }
 
     @Test
-    @DisplayName("같은 사용자, 기관, 계좌번호로 기존 외부 계좌를 조회한다")
-    void findByUserIdAndOrganizationAndAccountNumber() {
-        Optional<ExAccount> found = exAccountRepository.findByUserIdAndOrganizationAndAccountNumber(
+    @DisplayName("같은 사용자, 기관, 계좌번호 해시로 기존 외부 계좌를 조회한다")
+    void findByUserIdAndOrganizationAndAccountNumberHash() {
+        Optional<ExAccount> found = exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
                 owner.getId(),
                 "국민은행",
-                "12345678901234"
+                "hash-12345678901234"
         );
-        Optional<ExAccount> missing = exAccountRepository.findByUserIdAndOrganizationAndAccountNumber(
+        Optional<ExAccount> missing = exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
                 owner.getId(),
                 "신한은행",
-                "12345678901234"
+                "hash-12345678901234"
         );
 
         assertThat(found).isPresent();
@@ -103,7 +104,8 @@ class ExAccountRepositoryTest {
         ExAccount account = ExAccount.create(
                 user,
                 organization,
-                accountNumber,
+                "hash-" + accountNumber,
+                accountNumber.substring(0, 6) + "****" + accountNumber.substring(accountNumber.length() - 4),
                 accountName,
                 "생활비 통장",
                 ExAccountType.DEMAND,

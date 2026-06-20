@@ -29,6 +29,10 @@ spring:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
+security:
+  hmac:
+    secret: dGVzdC1obWFjLXNlY3JldA==
+
 
 
 logging:

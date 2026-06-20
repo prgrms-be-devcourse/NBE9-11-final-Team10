@@ -49,13 +49,19 @@ public record ExAccountCandidateRes(
     }
 
     private static String maskAccountNumber(String accountNumber) {
-        if (accountNumber == null || accountNumber.length() <= 4) {
+        if (accountNumber == null) {
             return accountNumber;
         }
 
-        int prefixLength = Math.min(6, accountNumber.length() - 4);
-        String prefix = accountNumber.substring(0, prefixLength);
-        String suffix = accountNumber.substring(accountNumber.length() - 4);
-        return prefix + "*".repeat(accountNumber.length() - prefixLength - 4) + suffix;
+        // 표시할 때도 저장/조회와 동일하게 공백과 하이픈을 제거한다.
+        String normalized = accountNumber.replaceAll("[\\s-]", "");
+        if (normalized.length() <= 4) {
+            return "*".repeat(normalized.length());
+        }
+
+        int prefixLength = Math.min(6, normalized.length() - 4);
+        String prefix = normalized.substring(0, prefixLength);
+        String suffix = normalized.substring(normalized.length() - 4);
+        return prefix + "*".repeat(normalized.length() - prefixLength - 4) + suffix;
     }
 }

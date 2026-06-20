@@ -21,6 +21,7 @@ import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.exAccount.repository.ExAccountTransactionRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.exception.GlobalErrorCode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -128,13 +129,26 @@ class ExAccountTransactionServiceTest {
     @Test
     @DisplayName("거래내역 새로고침 목록이 비어 있으면 실패한다")
     void refreshTransactionsWithEmptyTransactions() {
-        when(accountRepository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(account));
-
         assertThatThrownBy(() -> exAccountTransactionService.refreshTransactions(1L, 10L, List.of()))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ExAccountErrorCode.EX_ACCOUNT_TRANSACTION_SYNC_ITEMS_REQUIRED);
+                .isEqualTo(GlobalErrorCode.INVALID_INPUT_VALUE);
 
+        verify(accountRepository, never()).findByIdAndUserId(any(), any());
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("필수값이 누락된 거래내역은 계좌 조회 전에 공통 입력 오류로 실패한다")
+    void refreshTransactionsWithRequiredFieldMissing() {
+        ExAccountTransactionSyncReq request = createTransactionSyncReq("", "스타벅스");
+
+        assertThatThrownBy(() -> exAccountTransactionService.refreshTransactions(1L, 10L, List.of(request)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(GlobalErrorCode.INVALID_INPUT_VALUE);
+
+        verify(accountRepository, never()).findByIdAndUserId(any(), any());
         verify(transactionRepository, never()).save(any());
     }
 
@@ -164,7 +178,11 @@ class ExAccountTransactionServiceTest {
                 null,
                 LocalDate.of(2026, 6, 1)
         );
-        ExAccount account = request.toEntity(user);
+        ExAccount account = request.toEntity(
+                user,
+                "account-number-hash",
+                "123456****1234"
+        );
         ReflectionTestUtils.setField(account, "id", id);
         return account;
     }
