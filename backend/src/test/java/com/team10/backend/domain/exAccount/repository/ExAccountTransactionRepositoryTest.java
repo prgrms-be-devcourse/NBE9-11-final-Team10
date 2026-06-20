@@ -168,7 +168,7 @@ class ExAccountTransactionRepositoryTest {
         ExAccount account = ExAccount.create(
                 user,
                 organization,
-                "hash-" + accountNumber,
+                "a".repeat(64),
                 accountNumber.substring(0, 6) + "****" + accountNumber.substring(accountNumber.length() - 4),
                 accountName,
                 "생활비 통장",

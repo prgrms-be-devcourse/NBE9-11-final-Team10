@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+/** CODEF 등 외부기관에서 가져온 사용자 외부 계좌의 최신 스냅샷을 저장한다. */
 @Getter
 @Entity
 @Table(
@@ -22,7 +23,6 @@ import java.time.LocalDate;
         )
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-/** CODEF 등 외부기관에서 가져온 사용자 외부 계좌의 최신 스냅샷을 저장한다. */
 public class ExAccount extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)

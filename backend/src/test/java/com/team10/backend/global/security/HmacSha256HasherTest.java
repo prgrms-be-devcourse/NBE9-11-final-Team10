@@ -2,6 +2,7 @@ package com.team10.backend.global.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Arrays;
 import java.util.Base64;
@@ -44,5 +45,21 @@ class HmacSha256HasherTest {
         assertThatNullPointerException()
                 .isThrownBy(() -> hasher.hash(null))
                 .withMessage("해싱할 값은 null일 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("비밀키가 비어 있으면 생성할 수 없다")
+    void rejectsBlankSecret() {
+        assertThatThrownBy(() -> new HmacSha256Hasher(" "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("HMAC 비밀키가 설정되지 않았습니다.");
+    }
+
+    @Test
+    @DisplayName("비밀키가 Base64 형식이 아니면 생성할 수 없다")
+    void rejectsInvalidBase64Secret() {
+        assertThatThrownBy(() -> new HmacSha256Hasher("not-base64!"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("HMAC 비밀키는 유효한 Base64 형식이어야 합니다.");
     }
 }

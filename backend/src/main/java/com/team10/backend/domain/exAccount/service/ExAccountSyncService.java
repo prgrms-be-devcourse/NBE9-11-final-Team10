@@ -30,7 +30,7 @@ public class ExAccountSyncService {
         validateItems(requests);
 
         return requests.stream()
-                .map(request -> ExAccountCandidateRes.from(request, isAlreadyLinked(userId, request)))
+                .map(request -> toCandidate(userId, request))
                 .toList();
     }
 
@@ -52,7 +52,6 @@ public class ExAccountSyncService {
         requests.forEach(this::validateItem);
     }
 
-
     private void validateItem(ExAccountLinkReq request) {
         if (request == null
                 || !hasText(request.organization())
@@ -64,34 +63,33 @@ public class ExAccountSyncService {
         }
     }
 
-    private boolean isAlreadyLinked(Long userId, ExAccountLinkReq request) {
-        String accountNumberHash = hashAccountNumber(request.accountNumber());
-
-        return exAccountRepository
+    private ExAccountCandidateRes toCandidate(Long userId, ExAccountLinkReq request) {
+        ProtectedAccountNumber accountNumber = protectAccountNumber(request.accountNumber());
+        boolean linked = exAccountRepository
                 .findByUserIdAndOrganizationAndAccountNumberHash(
                         userId,
                         request.organization(),
-                        accountNumberHash
+                        accountNumber.hash()
                 )
                 .isPresent();
+
+        return ExAccountCandidateRes.from(request, accountNumber.masked(), linked);
     }
 
     private ExAccount upsertAccount(User user, ExAccountLinkReq request) {
-        String normalizedAccountNumber = normalizeAccountNumber(request.accountNumber());
-        String accountNumberHash = hmacSha256Hasher.hash(normalizedAccountNumber);
-        String accountNumberMasked = maskAccountNumber(normalizedAccountNumber);
+        ProtectedAccountNumber accountNumber = protectAccountNumber(request.accountNumber());
 
         ExAccount exAccount = exAccountRepository
                 .findByUserIdAndOrganizationAndAccountNumberHash(
                         user.getId(),
                         request.organization(),
-                        accountNumberHash
+                        accountNumber.hash()
                 )
                 .orElse(null);
 
         if (exAccount == null) {
             return exAccountRepository.save(
-                    request.toEntity(user, accountNumberHash, accountNumberMasked)
+                    request.toEntity(user, accountNumber.hash(), accountNumber.masked())
             );
         }
 
@@ -99,17 +97,18 @@ public class ExAccountSyncService {
         return exAccount;
     }
 
-    /** 조회와 저장에서 같은 결과가 나오도록 공백과 하이픈을 제거한다. */
+    private ProtectedAccountNumber protectAccountNumber(String accountNumber) {
+        String normalized = normalizeAccountNumber(accountNumber);
+        return new ProtectedAccountNumber(
+                hmacSha256Hasher.hash(normalized),
+                maskAccountNumber(normalized)
+        );
+    }
+
     private String normalizeAccountNumber(String accountNumber) {
         return accountNumber.replaceAll("[\\s-]", "");
     }
 
-    /** 정규화된 계좌번호를 서버 비밀키로 HMAC-SHA-256 해싱한다. */
-    private String hashAccountNumber(String accountNumber) {
-        return hmacSha256Hasher.hash(normalizeAccountNumber(accountNumber));
-    }
-
-    /** 원본 대신 저장하고 응답할 수 있도록 앞 6자리와 뒤 4자리만 남긴다. */
     private String maskAccountNumber(String accountNumber) {
         if (accountNumber.length() <= 4) {
             return "*".repeat(accountNumber.length());
@@ -121,5 +120,8 @@ public class ExAccountSyncService {
         int maskLength = accountNumber.length() - prefixLength - 4;
 
         return prefix + "*".repeat(maskLength) + suffix;
+    }
+
+    private record ProtectedAccountNumber(String hash, String masked) {
     }
 }

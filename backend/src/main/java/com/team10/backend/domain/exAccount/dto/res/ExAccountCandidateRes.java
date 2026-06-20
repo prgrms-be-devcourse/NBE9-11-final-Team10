@@ -32,10 +32,14 @@ public record ExAccountCandidateRes(
         @Schema(description = "이미 연동된 외부 계좌 여부", example = "false")
         boolean linked
 ) {
-    public static ExAccountCandidateRes from(ExAccountLinkReq request, boolean linked) {
+    public static ExAccountCandidateRes from(
+            ExAccountLinkReq request,
+            String accountNumberMasked,
+            boolean linked
+    ) {
         return new ExAccountCandidateRes(
                 request.organization(),
-                maskAccountNumber(request.accountNumber()),
+                accountNumberMasked,
                 request.accountName(),
                 request.accountAlias(),
                 request.assetType(),
@@ -46,22 +50,5 @@ public record ExAccountCandidateRes(
                 request.lastTransactionAt(),
                 linked
         );
-    }
-
-    private static String maskAccountNumber(String accountNumber) {
-        if (accountNumber == null) {
-            return accountNumber;
-        }
-
-        // 표시할 때도 저장/조회와 동일하게 공백과 하이픈을 제거한다.
-        String normalized = accountNumber.replaceAll("[\\s-]", "");
-        if (normalized.length() <= 4) {
-            return "*".repeat(normalized.length());
-        }
-
-        int prefixLength = Math.min(6, normalized.length() - 4);
-        String prefix = normalized.substring(0, prefixLength);
-        String suffix = normalized.substring(normalized.length() - 4);
-        return prefix + "*".repeat(normalized.length() - prefixLength - 4) + suffix;
     }
 }
