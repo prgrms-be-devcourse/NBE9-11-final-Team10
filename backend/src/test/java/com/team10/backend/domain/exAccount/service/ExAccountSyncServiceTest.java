@@ -93,6 +93,40 @@ class ExAccountSyncServiceTest {
     }
 
     @Test
+    @DisplayName("10자리 계좌번호도 최소 3자리를 마스킹한다")
+    void getLinkCandidatesMasksTenDigitAccountNumber() {
+        ExAccountLinkReq request = createLinkReq("국민은행", "1234567890", "KB Star 입출금통장");
+
+        when(hmacSha256Hasher.hash("1234567890")).thenReturn(ACCOUNT_NUMBER_HASH);
+        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
+                1L,
+                "국민은행",
+                ACCOUNT_NUMBER_HASH
+        )).thenReturn(Optional.empty());
+
+        List<ExAccountCandidateRes> responses = exAccountSyncService.getLinkCandidates(1L, List.of(request));
+
+        assertThat(responses.get(0).accountNoMasked()).isEqualTo("123***7890");
+    }
+
+    @Test
+    @DisplayName("짧은 계좌번호도 가능한 범위에서 최소 3자리를 마스킹한다")
+    void getLinkCandidatesMasksShortAccountNumber() {
+        ExAccountLinkReq request = createLinkReq("국민은행", "123456", "KB Star 입출금통장");
+
+        when(hmacSha256Hasher.hash("123456")).thenReturn(ACCOUNT_NUMBER_HASH);
+        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
+                1L,
+                "국민은행",
+                ACCOUNT_NUMBER_HASH
+        )).thenReturn(Optional.empty());
+
+        List<ExAccountCandidateRes> responses = exAccountSyncService.getLinkCandidates(1L, List.of(request));
+
+        assertThat(responses.get(0).accountNoMasked()).isEqualTo("***456");
+    }
+
+    @Test
     @DisplayName("이미 연동된 외부 계좌 후보는 linked true로 반환한다")
     void getLinkCandidatesWithLinkedAccount() {
         ExAccountLinkReq request = createLinkReq("국민은행", "12345678901234", "KB Star 입출금통장");

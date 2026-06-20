@@ -22,6 +22,10 @@ import static org.springframework.util.StringUtils.hasText;
 @RequiredArgsConstructor
 public class ExAccountSyncService {
 
+    private static final int MAX_VISIBLE_PREFIX_LENGTH = 6;
+    private static final int MAX_VISIBLE_SUFFIX_LENGTH = 4;
+    private static final int MIN_MASK_LENGTH = 3;
+
     private final ExAccountRepository exAccountRepository;
     private final UserRepository userRepository;
     private final HmacSha256Hasher hmacSha256Hasher;
@@ -110,14 +114,19 @@ public class ExAccountSyncService {
     }
 
     private String maskAccountNumber(String accountNumber) {
-        if (accountNumber.length() <= 4) {
-            return "*".repeat(accountNumber.length());
+        int length = accountNumber.length();
+        if (length <= MAX_VISIBLE_SUFFIX_LENGTH) {
+            return "*".repeat(length);
         }
 
-        int prefixLength = Math.min(6, accountNumber.length() - 4);
+        int suffixLength = Math.min(MAX_VISIBLE_SUFFIX_LENGTH, length - MIN_MASK_LENGTH);
+        int prefixLength = Math.min(
+                MAX_VISIBLE_PREFIX_LENGTH,
+                length - suffixLength - MIN_MASK_LENGTH
+        );
         String prefix = accountNumber.substring(0, prefixLength);
-        String suffix = accountNumber.substring(accountNumber.length() - 4);
-        int maskLength = accountNumber.length() - prefixLength - 4;
+        String suffix = accountNumber.substring(length - suffixLength);
+        int maskLength = length - prefixLength - suffixLength;
 
         return prefix + "*".repeat(maskLength) + suffix;
     }
