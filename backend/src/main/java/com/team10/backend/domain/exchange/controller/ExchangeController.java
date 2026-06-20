@@ -1,7 +1,9 @@
 package com.team10.backend.domain.exchange.controller;
 
+import com.team10.backend.domain.exchange.dto.req.ExchangeOrderCreateReq;
 import com.team10.backend.domain.exchange.dto.req.ExchangeQuoteCreateReq;
 import com.team10.backend.domain.exchange.dto.res.CurrencyRes;
+import com.team10.backend.domain.exchange.dto.res.ExchangeOrderRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeQuoteRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeRateRes;
 import com.team10.backend.domain.exchange.entity.Currency;
@@ -65,8 +67,19 @@ public class ExchangeController {
 
     @PostMapping("/currencies/orders")
     @Operation(description = "환전 주문 실행")
-    public ResponseEntity<List<Currency>> createExchangeOrder() {
-        throw new UnsupportedOperationException("구현 예정 기능");
+    public ResponseEntity<ExchangeOrderRes> createExchangeOrder(
+            @AuthenticationPrincipal Long userId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody ExchangeOrderCreateReq request
+    ) {
+        ExchangeOrderRes response = exchangeService.createExchangeOrder(
+                userId,
+                idempotencyKey,
+                request.exchangeQuoteId(),
+                request.krwAccountId(),
+                request.fxWalletId()
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/currencies/orders/{exchangeOrderId}")
