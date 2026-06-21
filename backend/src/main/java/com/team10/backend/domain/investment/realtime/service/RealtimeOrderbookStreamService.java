@@ -1,5 +1,6 @@
 package com.team10.backend.domain.investment.realtime.service;
 
+import com.team10.backend.domain.investment.config.KisProperties;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
 import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookSseConstants;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookStreamCreatedRes;
@@ -11,6 +12,7 @@ import com.team10.backend.domain.investment.stock.entity.Stock;
 import com.team10.backend.domain.investment.stock.repository.StockRepository;
 import com.team10.backend.global.exception.BusinessException;
 import java.io.IOException;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -24,9 +26,11 @@ public class RealtimeOrderbookStreamService {
     private final RealtimeOrderbookSubscriptionStore subscriptionStore;
     private final RealtimeOrderbookInstanceIdProvider instanceIdProvider;
     private final RealtimeOrderbookSubscriptionChangedEventPublisher eventPublisher;
+    private final KisProperties kisProperties;
 
     public RealtimeOrderbookSseConnection openStream(Long userId, String stockCode) {
         validateTradableStock(stockCode);
+        validateKisSubscriptionLimit(stockCode);
 
         RealtimeOrderbookSseConnection connection = emitterRegistry.register(
                 userId,
@@ -90,6 +94,17 @@ public class RealtimeOrderbookStreamService {
 
         if (!stock.isTradable()) {
             throw new BusinessException(InvestmentErrorCode.STOCK_NOT_TRADABLE);
+        }
+    }
+
+    private void validateKisSubscriptionLimit(String stockCode) {
+        Set<String> activeStockCodes = subscriptionStore.findActiveStockCodes();
+        if (activeStockCodes.contains(stockCode)) {
+            return;
+        }
+
+        if (activeStockCodes.size() >= kisProperties.websocketMaxSubscriptions()) {
+            throw new BusinessException(InvestmentErrorCode.REALTIME_ORDERBOOK_SUBSCRIPTION_LIMIT_EXCEEDED);
         }
     }
 }

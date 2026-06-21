@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.team10.backend.domain.investment.config.KisProperties;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
 import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEvent;
 import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEventPublisher;
@@ -20,6 +21,7 @@ import com.team10.backend.domain.investment.type.CurrencyCode;
 import com.team10.backend.global.exception.BusinessException;
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,12 +51,21 @@ class RealtimeOrderbookStreamServiceTest {
     @BeforeEach
     void setUp() {
         emitterRegistry = new RealtimeOrderbookSseEmitterRegistry();
-        streamService = new RealtimeOrderbookStreamService(
+        streamService = streamService(41);
+    }
+
+    private RealtimeOrderbookStreamService streamService(int maxSubscriptions) {
+        return new RealtimeOrderbookStreamService(
                 stockRepository,
                 emitterRegistry,
                 subscriptionStore,
                 instanceIdProvider,
-                eventPublisher
+                eventPublisher,
+                new KisProperties(
+                        "app-key",
+                        "app-secret",
+                        maxSubscriptions
+                )
         );
     }
 
@@ -62,6 +73,7 @@ class RealtimeOrderbookStreamServiceTest {
     @DisplayName("거래 가능한 종목으로 SSE 스트림을 생성하고 Redis 구독 상태와 STARTED 이벤트를 저장한다")
     void openStream() {
         when(stockRepository.findByStockCode("005930")).thenReturn(Optional.of(stock(StockStatus.ACTIVE)));
+        when(subscriptionStore.findActiveStockCodes()).thenReturn(Set.of());
         when(instanceIdProvider.getInstanceId()).thenReturn("instance-a");
 
         RealtimeOrderbookSseConnection connection = streamService.openStream(1L, "005930");
@@ -91,6 +103,39 @@ class RealtimeOrderbookStreamServiceTest {
         assertThat(eventCaptor.getValue().userId()).isEqualTo(1L);
         assertThat(eventCaptor.getValue().stockCode()).isEqualTo("005930");
         assertThat(eventCaptor.getValue().eventType()).isEqualTo(RealtimeOrderbookSubscriptionChangedEvent.EventType.STARTED);
+    }
+
+    @Test
+    @DisplayName("KIS 구독 종목 제한에 도달했어도 이미 활성 구독 중인 종목은 SSE 스트림을 생성한다")
+    void openStreamWithAlreadyActiveStockWhenSubscriptionLimitReached() {
+        streamService = streamService(1);
+        when(stockRepository.findByStockCode("005930")).thenReturn(Optional.of(stock(StockStatus.ACTIVE)));
+        when(subscriptionStore.findActiveStockCodes()).thenReturn(Set.of("005930"));
+        when(instanceIdProvider.getInstanceId()).thenReturn("instance-a");
+
+        RealtimeOrderbookSseConnection connection = streamService.openStream(1L, "005930");
+
+        assertThat(connection.stockCode()).isEqualTo("005930");
+        verify(subscriptionStore).save(any());
+        verify(eventPublisher).publish(any());
+    }
+
+    @Test
+    @DisplayName("KIS 구독 종목 제한에 도달한 상태에서 새로운 종목은 SSE 스트림을 생성할 수 없다")
+    void openStreamWithSubscriptionLimitExceededForNewStock() {
+        streamService = streamService(1);
+        when(stockRepository.findByStockCode("005930")).thenReturn(Optional.of(stock(StockStatus.ACTIVE)));
+        when(subscriptionStore.findActiveStockCodes()).thenReturn(Set.of("000660"));
+
+        assertThatThrownBy(() -> streamService.openStream(1L, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.REALTIME_ORDERBOOK_SUBSCRIPTION_LIMIT_EXCEEDED);
+
+        verify(subscriptionStore, never()).save(any());
+        verify(eventPublisher, never()).publish(any());
+        verify(instanceIdProvider, never()).getInstanceId();
+        assertThat(emitterRegistry.streamCount()).isZero();
     }
 
     @Test
