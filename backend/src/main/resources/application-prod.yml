@@ -1,6 +1,10 @@
 spring:
   # 운영 DB 설정 - ec2 instance
   # datasource:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
 
   jpa:
     show-sql: false
