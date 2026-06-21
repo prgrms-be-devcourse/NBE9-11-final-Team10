@@ -1,12 +1,5 @@
 package com.team10.backend.domain.exchange.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountType;
@@ -25,10 +18,6 @@ import com.team10.backend.domain.exchange.type.ExchangeOrderStatus;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,7 +25,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class ExchangeBusinessServiceTest {
@@ -105,7 +105,7 @@ class ExchangeBusinessServiceTest {
         assertThat(response.status()).isEqualTo(ExchangeOrderStatus.COMPLETED);
         assertThat(krwAccount.getBalance()).isEqualTo(100000L);
         assertThat(fxWallet.getBalance()).isEqualByComparingTo("72.2826");
-        verify(exchangeOrderRepository).save(any(ExchangeOrder.class));
+        verify(exchangeOrderRepository).saveAndFlush(any(ExchangeOrder.class));
     }
 
     @Test
@@ -137,7 +137,7 @@ class ExchangeBusinessServiceTest {
         assertThat(response.status()).isEqualTo(ExchangeOrderStatus.COMPLETED);
         assertThat(krwAccount.getBalance()).isEqualTo(113716L);
         assertThat(fxWallet.getBalance()).isEqualByComparingTo("10.0000");
-        verify(exchangeOrderRepository).save(any(ExchangeOrder.class));
+        verify(exchangeOrderRepository).saveAndFlush(any(ExchangeOrder.class));
     }
 
     @Test
@@ -168,7 +168,7 @@ class ExchangeBusinessServiceTest {
                 .isEqualTo(ExchangeErrorCode.EXCHANGE_QUOTE_ACCESS_DENIED);
 
         verify(accountRepository, never()).findByIdAndUserIdForUpdate(any(), any());
-        verify(exchangeOrderRepository, never()).save(any());
+        verify(exchangeOrderRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -200,7 +200,7 @@ class ExchangeBusinessServiceTest {
                 .isEqualTo(ExchangeErrorCode.EXCHANGE_QUOTE_ALREADY_USED);
 
         verify(accountRepository, never()).findByIdAndUserIdForUpdate(any(), any());
-        verify(exchangeOrderRepository, never()).save(any());
+        verify(exchangeOrderRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -232,7 +232,7 @@ class ExchangeBusinessServiceTest {
                 .isEqualTo(ExchangeErrorCode.EXCHANGE_QUOTE_EXPIRED);
 
         verify(accountRepository, never()).findByIdAndUserIdForUpdate(any(), any());
-        verify(exchangeOrderRepository, never()).save(any());
+        verify(exchangeOrderRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -269,7 +269,7 @@ class ExchangeBusinessServiceTest {
 
         assertThat(krwAccount.getBalance()).isEqualTo(200000L);
         assertThat(fxWallet.getBalance()).isEqualByComparingTo(BigDecimal.ZERO);
-        verify(exchangeOrderRepository, never()).save(any());
+        verify(exchangeOrderRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -302,12 +302,45 @@ class ExchangeBusinessServiceTest {
 
         assertThat(krwAccount.getBalance()).isEqualTo(200000L);
         assertThat(fxWallet.getBalance()).isEqualByComparingTo(BigDecimal.ZERO);
-        verify(exchangeOrderRepository, never()).save(any());
+        verify(exchangeOrderRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("주문 저장 중 견적 유니크 제약 위반이 발생하면 이미 사용된 견적으로 처리한다")
+    void executeExchangeOrderWithDuplicateQuoteUniqueViolation() {
+        ExchangeQuote quote = createQuote(
+                10L,
+                user,
+                krw,
+                usd,
+                new BigDecimal("100000"),
+                new BigDecimal("1380.000000"),
+                new BigDecimal("250.0000"),
+                new BigDecimal("72.2826"),
+                LocalDateTime.now().plusMinutes(5)
+        );
+        Account krwAccount = createAccount(20L, user, 200000L);
+        FxWallet fxWallet = createWallet(30L, user, usd, BigDecimal.ZERO);
+        mockSuccessFlowWithoutSave(quote, krwAccount, fxWallet);
+        when(exchangeOrderRepository.saveAndFlush(any(ExchangeOrder.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate exchange quote"));
+
+        assertThatThrownBy(() -> exchangeBusinessService.executeExchangeOrder(
+                1L,
+                10L,
+                20L,
+                30L
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ExchangeErrorCode.EXCHANGE_QUOTE_ALREADY_USED);
+
+        verify(exchangeOrderRepository).saveAndFlush(any(ExchangeOrder.class));
     }
 
     private void mockSuccessFlow(ExchangeQuote quote, Account krwAccount, FxWallet fxWallet) {
         mockSuccessFlowWithoutSave(quote, krwAccount, fxWallet);
-        when(exchangeOrderRepository.save(any(ExchangeOrder.class))).thenAnswer(invocation -> {
+        when(exchangeOrderRepository.saveAndFlush(any(ExchangeOrder.class))).thenAnswer(invocation -> {
             ExchangeOrder order = invocation.getArgument(0);
             ReflectionTestUtils.setField(order, "id", 40L);
             return order;
