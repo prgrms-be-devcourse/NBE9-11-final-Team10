@@ -1,33 +1,12 @@
 package com.team10.backend.domain.saving.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentCaptor.forClass;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
-import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
-import com.team10.backend.domain.saving.dto.req.EarlyCancelReq;
-import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
-import com.team10.backend.domain.saving.dto.req.MaturityReq;
-import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
-import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
-import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
-import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
-import com.team10.backend.domain.saving.dto.res.EarlyCancelRes;
-import com.team10.backend.domain.saving.dto.res.InstallmentCreateRes;
-import com.team10.backend.domain.saving.dto.res.InstallmentDetailRes;
-import com.team10.backend.domain.saving.dto.res.InstallmentSummaryRes;
-import com.team10.backend.domain.saving.dto.res.InterestPreviewRes;
-import com.team10.backend.domain.saving.dto.res.MaturityRes;
-import com.team10.backend.domain.saving.dto.res.WithdrawalLockRes;
+import com.team10.backend.domain.saving.dto.req.*;
+import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.Installment;
 import com.team10.backend.domain.saving.entity.SavingProduct;
@@ -46,9 +25,6 @@ import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,6 +34,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentCaptor.forClass;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SavingDepositServiceTest {
@@ -685,6 +671,179 @@ class SavingDepositServiceTest {
         assertThat(histories)
                 .extracting(TransactionHistory::getAmount)
                 .containsExactly(1035000L, 119500L);
+    }
+
+    @Test
+    @DisplayName("정기 납입 대상 적금의 자동이체에 성공한다")
+    void processDueInstallmentPayments() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
+
+        when(installmentRepository.findAllPaymentTargets(
+                InstallmentStatus.ACTIVE,
+                LocalDate.now()
+        )).thenReturn(List.of(installment));
+
+        int processedCount = savingDepositService.processDueInstallmentPayments();
+
+        assertThat(processedCount).isEqualTo(1);
+        assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
+        assertThat(installment.getPaidAmount()).isEqualTo(200000L);
+        assertThat(installment.getNextPaymentDate()).isEqualTo(LocalDate.now().plusMonths(1));
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
+
+        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
+        verify(transactionHistoryRepository).save(captor.capture());
+        TransactionHistory history = captor.getValue();
+        assertThat(history.getType()).isEqualTo(TransactionType.INSTALLMENT_PAYMENT);
+        assertThat(history.getDirection()).isEqualTo(TransactionDirection.OUT);
+        assertThat(history.getAmount()).isEqualTo(100000L);
+        assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
+        assertThat(history.getBalanceAfter()).isEqualTo(1900000L);
+        assertThat(history.getMemo()).isEqualTo("적금 월 납입 자동이체");
+    }
+
+    @Test
+    @DisplayName("정기 납입 자동이체 잔액이 부족하면 납입 실패 상태로 변경한다")
+    void processDueInstallmentPaymentsWithInsufficientBalance() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
+        ReflectionTestUtils.setField(activeAccount, "balance", 50000L);
+
+        when(installmentRepository.findAllPaymentTargets(
+                InstallmentStatus.ACTIVE,
+                LocalDate.now()
+        )).thenReturn(List.of(installment));
+
+        int processedCount = savingDepositService.processDueInstallmentPayments();
+
+        assertThat(processedCount).isEqualTo(1);
+        assertThat(activeAccount.getBalance()).isEqualTo(50000L);
+        assertThat(installment.getPaidAmount()).isEqualTo(100000L);
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.PAYMENT_FAILED);
+        assertThat(installment.getPaymentRetryCount()).isEqualTo(1);
+        assertThat(installment.getLastPaymentFailedDate()).isEqualTo(LocalDate.now());
+        assertThat(installment.getNextPaymentRetryDate()).isEqualTo(LocalDate.now().plusDays(1));
+        assertThat(installment.getPaymentFailureReason()).isEqualTo("잔액 부족");
+        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+    }
+
+    @Test
+    @DisplayName("목표 금액을 이미 채운 적금은 자동이체하지 않는다")
+    void processDueInstallmentPaymentsWithReachedTargetAmount() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
+        ReflectionTestUtils.setField(installment, "paidAmount", 1200000L);
+
+        when(installmentRepository.findAllPaymentTargets(
+                InstallmentStatus.ACTIVE,
+                LocalDate.now()
+        )).thenReturn(List.of(installment));
+
+        int processedCount = savingDepositService.processDueInstallmentPayments();
+
+        assertThat(processedCount).isEqualTo(1);
+        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
+        assertThat(installment.getPaidAmount()).isEqualTo(1200000L);
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
+        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+    }
+
+    @Test
+    @DisplayName("다음 납입일이 만기일 이상이면 자동이체하지 않는다")
+    void processDueInstallmentPaymentsOnOrAfterMaturityDate() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
+        ReflectionTestUtils.setField(installment, "maturityDate", LocalDate.now());
+
+        when(installmentRepository.findAllPaymentTargets(
+                InstallmentStatus.ACTIVE,
+                LocalDate.now()
+        )).thenReturn(List.of(installment));
+
+        int processedCount = savingDepositService.processDueInstallmentPayments();
+
+        assertThat(processedCount).isEqualTo(1);
+        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
+        assertThat(installment.getPaidAmount()).isEqualTo(100000L);
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
+        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+    }
+
+    @Test
+    @DisplayName("출금 계좌가 비활성이면 자동이체하지 않고 납입 실패 상태로 변경한다")
+    void processDueInstallmentPaymentsWithInactiveAccount() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
+        ReflectionTestUtils.setField(activeAccount, "status", AccountStatus.CLOSED);
+
+        when(installmentRepository.findAllPaymentTargets(
+                InstallmentStatus.ACTIVE,
+                LocalDate.now()
+        )).thenReturn(List.of(installment));
+
+        int processedCount = savingDepositService.processDueInstallmentPayments();
+
+        assertThat(processedCount).isEqualTo(1);
+        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
+        assertThat(installment.getPaidAmount()).isEqualTo(100000L);
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.PAYMENT_FAILED);
+        assertThat(installment.getPaymentRetryCount()).isEqualTo(1);
+        assertThat(installment.getPaymentFailureReason()).isEqualTo("출금 계좌 비활성");
+        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+    }
+
+    @Test
+    @DisplayName("실패한 적금 납입 재시도에 성공하면 ACTIVE 상태로 복구한다")
+    void retryFailedInstallmentPayments() {
+        Installment installment = createInstallment(1L, InstallmentStatus.PAYMENT_FAILED);
+        ReflectionTestUtils.setField(installment, "paymentRetryCount", 1);
+        ReflectionTestUtils.setField(installment, "nextPaymentRetryDate", LocalDate.now());
+        ReflectionTestUtils.setField(installment, "lastPaymentFailedDate", LocalDate.now().minusDays(1));
+        ReflectionTestUtils.setField(installment, "paymentFailureReason", "잔액 부족");
+
+        when(installmentRepository.findAllRetryTargets(
+                InstallmentStatus.PAYMENT_FAILED,
+                LocalDate.now()
+        )).thenReturn(List.of(installment));
+
+        int retryCount = savingDepositService.retryFailedInstallmentPayments();
+
+        assertThat(retryCount).isEqualTo(1);
+        assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
+        assertThat(installment.getPaidAmount()).isEqualTo(200000L);
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
+        assertThat(installment.getPaymentRetryCount()).isZero();
+        assertThat(installment.getNextPaymentRetryDate()).isNull();
+        assertThat(installment.getLastPaymentFailedDate()).isNull();
+        assertThat(installment.getPaymentFailureReason()).isNull();
+        verify(transactionHistoryRepository).save(any(TransactionHistory.class));
+    }
+
+    @Test
+    @DisplayName("실패한 적금 납입 재시도가 최대 횟수에 도달하면 다음 재시도일을 비운다")
+    void retryFailedInstallmentPaymentsWithMaxRetryCount() {
+        Installment installment = createInstallment(1L, InstallmentStatus.PAYMENT_FAILED);
+        ReflectionTestUtils.setField(installment, "paymentRetryCount", 2);
+        ReflectionTestUtils.setField(installment, "nextPaymentRetryDate", LocalDate.now());
+        ReflectionTestUtils.setField(activeAccount, "balance", 50000L);
+
+        when(installmentRepository.findAllRetryTargets(
+                InstallmentStatus.PAYMENT_FAILED,
+                LocalDate.now()
+        )).thenReturn(List.of(installment));
+
+        int retryCount = savingDepositService.retryFailedInstallmentPayments();
+
+        assertThat(retryCount).isEqualTo(1);
+        assertThat(activeAccount.getBalance()).isEqualTo(50000L);
+        assertThat(installment.getPaidAmount()).isEqualTo(100000L);
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.PAYMENT_FAILED);
+        assertThat(installment.getPaymentRetryCount()).isEqualTo(3);
+        assertThat(installment.getLastPaymentFailedDate()).isEqualTo(LocalDate.now());
+        assertThat(installment.getNextPaymentRetryDate()).isNull();
+        assertThat(installment.getPaymentFailureReason()).isEqualTo("잔액 부족");
+        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
     }
 
     @Test

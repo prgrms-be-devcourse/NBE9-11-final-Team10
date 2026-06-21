@@ -39,6 +39,7 @@ public class SavingDepositService {
     private static final String INSTALLMENT_CANCEL_REFUND_MEMO = "적금 중도 해지 반환";
     private static final String DEPOSIT_MATURITY_PAYOUT_MEMO = "예금 만기 지급";
     private static final String INSTALLMENT_MATURITY_PAYOUT_MEMO = "적금 만기 지급";
+    private static final String INSTALLMENT_PAYMENT_MEMO = "적금 월 납입 자동이체";
 
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final DepositRepository depositRepository;
@@ -446,6 +447,77 @@ public class SavingDepositService {
         return deposits.size() + installments.size();
     }
 
+    @Transactional
+    public int processDueInstallmentPayments() {
+        LocalDate today = LocalDate.now();
+
+        List<Installment> installments =
+                installmentRepository.findAllPaymentTargets(
+                        InstallmentStatus.ACTIVE,
+                        today
+                );
+
+        installments.forEach(this::processInstallmentPayment);
+
+        return installments.size();
+    }
+
+    @Transactional
+    public int retryFailedInstallmentPayments() {
+        LocalDate today = LocalDate.now();
+
+        List<Installment> installments =
+                installmentRepository.findAllRetryTargets(
+                        InstallmentStatus.PAYMENT_FAILED,
+                        today
+                );
+
+        installments.forEach(this::processInstallmentPayment);
+
+        return installments.size();
+
+    }
+
+    private void processInstallmentPayment(Installment installment) {
+        Account withdrawAccount = installment.getWithdrawAccount();
+
+        if (installment.getPaidAmount() >= installment.getTargetAmount()
+                || !installment.getNextPaymentDate().isBefore(installment.getMaturityDate())) {
+            return;
+        }
+
+        if (!withdrawAccount.isActive()) {
+            installment.failPayment("출금 계좌 비활성", LocalDate.now());
+            return;
+        }
+
+        if (withdrawAccount.getBalance() < installment.getMonthlyAmount()) {
+            installment.failPayment("잔액 부족", LocalDate.now());
+            return;
+        }
+
+        Long paymentAmount = installment.getMonthlyAmount();
+        Long balanceBefore = withdrawAccount.getBalance();
+
+        withdrawAccount.withdraw(paymentAmount);
+
+        Long balanceAfter = withdrawAccount.getBalance();
+
+        TransactionHistory transactionHistory =
+                TransactionHistory.createInstallmentPayment(
+                        withdrawAccount,
+                        paymentAmount,
+                        balanceBefore,
+                        balanceAfter,
+                        INSTALLMENT_PAYMENT_MEMO,
+                        LocalDateTime.now()
+                );
+
+        transactionHistoryRepository.save(transactionHistory);
+
+        installment.payMonthlyAmount();
+
+    }
 
     private MaturityRes matureDeposit(Deposit deposit) {
         // 기존 matureSaving 안에 있던 예금 만기 처리 코드
@@ -528,5 +600,6 @@ public class SavingDepositService {
         return MaturityRes.fromInstallment(installment, interestAmount,
                 payoutAmount);
     }
+
 }
 
