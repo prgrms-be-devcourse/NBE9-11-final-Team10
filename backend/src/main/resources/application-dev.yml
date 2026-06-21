@@ -4,9 +4,14 @@ spring:
     username: app
     password: app1234
 
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+
   jpa:
     hibernate:
-      ddl-auto: update # prod 환경에서 반드시 validate or none 으로 수정
+      ddl-auto: validate # dev 환경도 prod와 동일하게 validate 설정
 
     show-sql: true # jpa가 실행한 sql문 콘솔에 출력
 
