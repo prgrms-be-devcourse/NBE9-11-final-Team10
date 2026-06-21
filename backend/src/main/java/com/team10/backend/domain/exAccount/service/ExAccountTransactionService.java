@@ -10,6 +10,7 @@ import com.team10.backend.domain.exAccount.exception.ExAccountErrorCode;
 import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.exAccount.repository.ExAccountTransactionRepository;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.exception.GlobalErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,17 +42,15 @@ public class ExAccountTransactionService {
             Long exAccountId,
             List<ExAccountTransactionSyncReq> transactions
     ) {
+        validateTransactions(transactions);
+
         ExAccount account = accountRepository.findByIdAndUserId(exAccountId, userId)
                 .orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
-
-        validateTransactions(transactions);
 
         int createdCount = 0;
         int updatedCount = 0;
 
         for (ExAccountTransactionSyncReq transaction : transactions) {
-            validateTransaction(transaction);
-
             if (upsertTransaction(account, transaction)) {
                 createdCount++;
                 continue;
@@ -72,8 +71,10 @@ public class ExAccountTransactionService {
 
     private void validateTransactions(List<ExAccountTransactionSyncReq> transactions) {
         if (transactions == null || transactions.isEmpty()) {
-            throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_TRANSACTION_SYNC_ITEMS_REQUIRED);
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
         }
+
+        transactions.forEach(this::validateTransaction);
     }
 
     private void validateTransaction(ExAccountTransactionSyncReq transaction) {
@@ -82,7 +83,7 @@ public class ExAccountTransactionService {
                 || transaction.transactedAt() == null
                 || transaction.direction() == null
                 || transaction.amount() == null) {
-            throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_TRANSACTION_SYNC_REQUIRED_FIELD_MISSING);
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
         }
     }
 

@@ -53,11 +53,13 @@ public record ExAccountLinkReq(
         @Schema(description = "마지막 거래일", example = "2026-06-18", nullable = true)
         LocalDate lastTransactionAt
 ) {
-    public ExAccount toEntity(User user) {
+    /** 원본 계좌번호 대신 서비스에서 만든 해시와 마스킹 값으로 엔티티를 생성한다. */
+    public ExAccount toEntity(User user, String accountNumberHash, String accountNumberMasked) {
         return ExAccount.create(
                 user,
                 organization,
-                accountNumber,
+                accountNumberHash,
+                accountNumberMasked,
                 accountName,
                 accountAlias,
                 assetType,

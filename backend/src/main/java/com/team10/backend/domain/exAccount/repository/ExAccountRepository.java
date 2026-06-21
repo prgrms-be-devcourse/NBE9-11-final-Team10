@@ -13,10 +13,10 @@ public interface ExAccountRepository extends JpaRepository<ExAccount, Long> {
 
     Optional<ExAccount> findByIdAndUserId(Long id, Long userId);
 
-    //같은 사용자 + 같은 기관 + 같은 계좌번호이면 같은 외부 계좌로 본다.
-    Optional<ExAccount> findByUserIdAndOrganizationAndAccountNumber(
+    // 같은 사용자 + 같은 기관 + 같은 계좌번호 해시이면 같은 외부 계좌로 본다.
+    Optional<ExAccount> findByUserIdAndOrganizationAndAccountNumberHash(
             Long userId,
             String organization,
-            String accountNumber
+            String accountNumberHash
     );
 }

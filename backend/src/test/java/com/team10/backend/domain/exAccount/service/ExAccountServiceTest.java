@@ -107,7 +107,11 @@ class ExAccountServiceTest {
                 null,
                 LocalDate.of(2026, 6, 18)
         );
-        ExAccount account = request.toEntity(user);
+        ExAccount account = request.toEntity(
+                user,
+                "account-number-hash",
+                "123456****1234"
+        );
         ReflectionTestUtils.setField(account, "id", id);
         return account;
     }

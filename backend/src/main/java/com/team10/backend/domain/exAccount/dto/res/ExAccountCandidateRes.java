@@ -32,10 +32,14 @@ public record ExAccountCandidateRes(
         @Schema(description = "이미 연동된 외부 계좌 여부", example = "false")
         boolean linked
 ) {
-    public static ExAccountCandidateRes from(ExAccountLinkReq request, boolean linked) {
+    public static ExAccountCandidateRes from(
+            ExAccountLinkReq request,
+            String accountNumberMasked,
+            boolean linked
+    ) {
         return new ExAccountCandidateRes(
                 request.organization(),
-                maskAccountNumber(request.accountNumber()),
+                accountNumberMasked,
                 request.accountName(),
                 request.accountAlias(),
                 request.assetType(),
@@ -46,16 +50,5 @@ public record ExAccountCandidateRes(
                 request.lastTransactionAt(),
                 linked
         );
-    }
-
-    private static String maskAccountNumber(String accountNumber) {
-        if (accountNumber == null || accountNumber.length() <= 4) {
-            return accountNumber;
-        }
-
-        int prefixLength = Math.min(6, accountNumber.length() - 4);
-        String prefix = accountNumber.substring(0, prefixLength);
-        String suffix = accountNumber.substring(accountNumber.length() - 4);
-        return prefix + "*".repeat(accountNumber.length() - prefixLength - 4) + suffix;
     }
 }
