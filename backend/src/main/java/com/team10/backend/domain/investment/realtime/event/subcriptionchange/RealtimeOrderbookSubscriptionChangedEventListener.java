@@ -1,7 +1,7 @@
 package com.team10.backend.domain.investment.realtime.event.subcriptionchange;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookKisSubscriptionCoordinator;
+import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookKisLeaderService;
 import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseEmitterRegistry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -18,7 +18,7 @@ public class RealtimeOrderbookSubscriptionChangedEventListener implements Messag
 
     private final ObjectMapper objectMapper;
     private final RealtimeOrderbookSseEmitterRegistry emitterRegistry;
-    private final RealtimeOrderbookKisSubscriptionCoordinator kisSubscriptionCoordinator;
+    private final RealtimeOrderbookKisLeaderService kisLeaderService;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
@@ -46,6 +46,6 @@ public class RealtimeOrderbookSubscriptionChangedEventListener implements Messag
         }
 
         // Redis의 정보를 기반으로 WebSocket 연결 수정
-        kisSubscriptionCoordinator.reconcileStock(event.stockCode());
+        kisLeaderService.reconcileStockIfLeader(event.stockCode());
     }
 }

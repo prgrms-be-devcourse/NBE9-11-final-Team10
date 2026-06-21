@@ -45,6 +45,8 @@ investment:
       enabled: false
     stream-lease-renewal:
       enabled: false
+    kis-leader-reconcile:
+      enabled: false
 
 
 kis:
