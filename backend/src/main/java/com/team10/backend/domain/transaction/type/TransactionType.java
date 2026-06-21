@@ -4,6 +4,7 @@ public enum TransactionType {
     DEPOSIT, // 입금 [ 서비스 상에서의 ]
     TRANSFER, // 계좌 이체
     PAYMENT, // 결제 [ 추후 서비스 상의 물건 결제 구현 염두 ]
+    SAVING_CANCEL_REFUND, // 예금/적금 중도 해지 반환금 입금
     /*
     TODO : REFUND, FEE, INTEREST, TAX ... 추가 기능 개발 시 도입 고려
     */

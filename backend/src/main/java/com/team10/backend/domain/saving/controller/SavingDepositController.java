@@ -1,6 +1,7 @@
 package com.team10.backend.domain.saving.controller;
 
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
+import com.team10.backend.domain.saving.dto.req.EarlyCancelReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
 import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
 import com.team10.backend.domain.saving.dto.res.*;
@@ -115,6 +116,18 @@ public class SavingDepositController {
     ) {
         WithdrawalLockRes response =
                 savingDepositService.updateWithdrawalLock(userId, savingId, request);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "중도 해지", description = "가입중 상태의 예금 또는 적금을 중도 해지합니다.")
+    @PostMapping("/{savingId}/cancel")
+    public ResponseEntity<EarlyCancelRes> cancelSaving(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long savingId,
+            @Valid @RequestBody EarlyCancelReq request
+    ) {
+        EarlyCancelRes response = savingDepositService.cancelSaving(userId, savingId, request);
 
         return ResponseEntity.ok(response);
     }

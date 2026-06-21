@@ -78,4 +78,8 @@ public class Deposit extends BaseEntity {
         this.withdrawalLocked = lockYn;
         this.withdrawalLockReason = reason;
     }
+
+    public void cancel() {
+        this.status = DepositStatus.CANCELLED;
+    }
 }
