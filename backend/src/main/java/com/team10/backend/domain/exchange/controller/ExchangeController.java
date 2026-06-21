@@ -6,7 +6,6 @@ import com.team10.backend.domain.exchange.dto.res.CurrencyRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeOrderRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeQuoteRes;
 import com.team10.backend.domain.exchange.dto.res.ExchangeRateRes;
-import com.team10.backend.domain.exchange.entity.Currency;
 import com.team10.backend.domain.exchange.service.ExchangeRateService;
 import com.team10.backend.domain.exchange.service.ExchangeService;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
@@ -82,16 +81,23 @@ public class ExchangeController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @GetMapping("/currencies/orders/{exchangeOrderId}")
-    @Operation(description = "환전 주문 상세 조회")
-    public ResponseEntity<List<Currency>> getExchangeOrder() {
-        throw new UnsupportedOperationException("구현 예정 기능");
-    }
-
     @GetMapping("/currencies/orders")
     @Operation(description = "내 환전 주문 목록 조회")
-    public ResponseEntity<List<Currency>> getExchangeOrders() {
-        throw new UnsupportedOperationException("구현 예정 기능");
+    public ResponseEntity<List<ExchangeOrderRes>> getExchangeOrders(
+            @AuthenticationPrincipal Long userId
+    ) {
+        List<ExchangeOrderRes> response = exchangeService.getExchangeOrders(userId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/currencies/orders/{exchangeOrderId}")
+    @Operation(description = "환전 주문 상세 조회")
+    public ResponseEntity<ExchangeOrderRes> getExchangeOrder(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long exchangeOrderId
+    ) {
+        ExchangeOrderRes response = exchangeService.getExchangeOrder(userId, exchangeOrderId);
+        return ResponseEntity.ok(response);
     }
 
 }
