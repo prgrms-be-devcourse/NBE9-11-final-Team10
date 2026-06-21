@@ -23,10 +23,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -195,6 +197,91 @@ class ExchangeControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("환전 주문 상세 조회 API는 인증 사용자와 주문 ID를 받아 200을 반환한다")
+    void getExchangeOrder() throws Exception {
+        ExchangeOrderRes response = new ExchangeOrderRes(
+                100L,
+                1L,
+                ExchangeDirection.KRW_TO_FOREIGN,
+                ExchangeOrderStatus.COMPLETED,
+                10L,
+                20L,
+                new BigDecimal("100000"),
+                new BigDecimal("72.2826"),
+                new BigDecimal("1380.000000"),
+                new BigDecimal("0.002500"),
+                new BigDecimal("250.0000"),
+                LocalDateTime.of(2026, 6, 21, 10, 0),
+                LocalDateTime.of(2026, 6, 21, 10, 0, 1)
+        );
+
+        when(exchangeService.getExchangeOrder(eq(1L), eq(100L))).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/exchanges/currencies/orders/{exchangeOrderId}", 100L))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.exchangeOrderId").value(100L))
+                .andExpect(jsonPath("$.exchangeQuoteId").value(1L))
+                .andExpect(jsonPath("$.direction").value("KRW_TO_FOREIGN"))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.krwAccountId").value(10L))
+                .andExpect(jsonPath("$.fxWalletId").value(20L))
+                .andExpect(jsonPath("$.fromAmount").value(100000))
+                .andExpect(jsonPath("$.toAmount").value(72.2826));
+
+        verify(exchangeService).getExchangeOrder(eq(1L), eq(100L));
+    }
+
+    @Test
+    @DisplayName("내 환전 주문 목록 조회 API는 인증 사용자의 주문 목록을 200으로 반환한다")
+    void getExchangeOrders() throws Exception {
+        ExchangeOrderRes first = new ExchangeOrderRes(
+                101L,
+                11L,
+                ExchangeDirection.FOREIGN_TO_KRW,
+                ExchangeOrderStatus.COMPLETED,
+                10L,
+                20L,
+                new BigDecimal("10.0000"),
+                new BigDecimal("13716.0000"),
+                new BigDecimal("1375.000000"),
+                new BigDecimal("0.002500"),
+                new BigDecimal("34.0000"),
+                LocalDateTime.of(2026, 6, 21, 11, 0),
+                LocalDateTime.of(2026, 6, 21, 11, 0, 1)
+        );
+        ExchangeOrderRes second = new ExchangeOrderRes(
+                100L,
+                1L,
+                ExchangeDirection.KRW_TO_FOREIGN,
+                ExchangeOrderStatus.COMPLETED,
+                10L,
+                20L,
+                new BigDecimal("100000"),
+                new BigDecimal("72.2826"),
+                new BigDecimal("1380.000000"),
+                new BigDecimal("0.002500"),
+                new BigDecimal("250.0000"),
+                LocalDateTime.of(2026, 6, 21, 10, 0),
+                LocalDateTime.of(2026, 6, 21, 10, 0, 1)
+        );
+
+        when(exchangeService.getExchangeOrders(eq(1L))).thenReturn(List.of(first, second));
+
+        mockMvc.perform(get("/api/v1/exchanges/currencies/orders"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].exchangeOrderId").value(101L))
+                .andExpect(jsonPath("$[0].direction").value("FOREIGN_TO_KRW"))
+                .andExpect(jsonPath("$[0].fromAmount").value(10.0000))
+                .andExpect(jsonPath("$[0].toAmount").value(13716.0000))
+                .andExpect(jsonPath("$[1].exchangeOrderId").value(100L))
+                .andExpect(jsonPath("$[1].direction").value("KRW_TO_FOREIGN"))
+                .andExpect(jsonPath("$[1].fromAmount").value(100000))
+                .andExpect(jsonPath("$[1].toAmount").value(72.2826));
+
+        verify(exchangeService).getExchangeOrders(eq(1L));
     }
 
 }
