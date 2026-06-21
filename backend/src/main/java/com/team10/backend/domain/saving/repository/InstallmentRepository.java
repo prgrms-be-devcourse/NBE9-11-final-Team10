@@ -2,7 +2,9 @@ package com.team10.backend.domain.saving.repository;
 
 import com.team10.backend.domain.saving.entity.Installment;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -60,4 +62,34 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
             @Param("status") InstallmentStatus status,
             @Param("today") LocalDate today
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+          select i
+          from Installment i
+          join fetch i.withdrawAccount
+          where i.status = :status
+          and i.nextPaymentRetryDate <= :today
+          """)
+    List<Installment> findAllRetryTargets(
+            @Param("status") InstallmentStatus status,
+            @Param("today") LocalDate today
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+          select i
+          from Installment i
+          join fetch i.withdrawAccount
+          where i.status = :status
+          and i.autoTransferYn = true
+          and i.nextPaymentDate <= :today
+          and i.paidAmount < i.targetAmount
+          and i.nextPaymentDate < i.maturityDate
+          """)
+    List<Installment> findAllPaymentTargets(
+            @Param("status") InstallmentStatus status,
+            @Param("today") LocalDate today
+    );
+
 }
