@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,5 +46,18 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
     Optional<Installment> findByIdAndUserIdWithProduct(
             @Param("installmentId") Long installmentId,
             @Param("userId") Long userId
+    );
+
+    @Query("""
+          select i
+          from Installment i
+          join fetch i.savingProduct
+          join fetch i.withdrawAccount
+          where i.status = :status
+          and i.maturityDate <= :today
+          """)
+    List<Installment> findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+            @Param("status") InstallmentStatus status,
+            @Param("today") LocalDate today
     );
 }
