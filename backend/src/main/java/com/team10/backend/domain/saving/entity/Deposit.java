@@ -82,4 +82,8 @@ public class Deposit extends BaseEntity {
     public void cancel() {
         this.status = DepositStatus.CANCELLED;
     }
+
+    public void mature() {
+        this.status = DepositStatus.MATURED;
+    }
 }
