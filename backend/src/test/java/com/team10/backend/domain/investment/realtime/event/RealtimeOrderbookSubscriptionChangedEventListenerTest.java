@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants;
 import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEvent;
 import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEventListener;
-import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionEventType;
 import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookKisLeaderService;
 import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseEmitterRegistry;
 import java.nio.charset.StandardCharsets;
@@ -36,7 +35,7 @@ class RealtimeOrderbookSubscriptionChangedEventListenerTest {
                 "stream-1",
                 1L,
                 "005930",
-                RealtimeOrderbookSubscriptionEventType.ENDED
+                RealtimeOrderbookSubscriptionChangedEvent.EventType.ENDED
         );
 
         listener.onMessage(message(event), null);
@@ -52,7 +51,7 @@ class RealtimeOrderbookSubscriptionChangedEventListenerTest {
                 "stream-1",
                 1L,
                 "005930",
-                RealtimeOrderbookSubscriptionEventType.STARTED
+                RealtimeOrderbookSubscriptionChangedEvent.EventType.STARTED
         );
 
         listener.onMessage(message(event), null);

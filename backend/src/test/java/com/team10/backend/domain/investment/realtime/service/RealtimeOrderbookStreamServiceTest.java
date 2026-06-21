@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
 import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEvent;
 import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEventPublisher;
-import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionEventType;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscription;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;
 import com.team10.backend.domain.investment.stock.entity.Stock;
@@ -91,7 +90,7 @@ class RealtimeOrderbookStreamServiceTest {
         assertThat(eventCaptor.getValue().streamId()).isEqualTo(connection.streamId());
         assertThat(eventCaptor.getValue().userId()).isEqualTo(1L);
         assertThat(eventCaptor.getValue().stockCode()).isEqualTo("005930");
-        assertThat(eventCaptor.getValue().eventType()).isEqualTo(RealtimeOrderbookSubscriptionEventType.STARTED);
+        assertThat(eventCaptor.getValue().eventType()).isEqualTo(RealtimeOrderbookSubscriptionChangedEvent.EventType.STARTED);
     }
 
     @Test
@@ -137,7 +136,7 @@ class RealtimeOrderbookStreamServiceTest {
         ArgumentCaptor<RealtimeOrderbookSubscriptionChangedEvent> eventCaptor =
                 ArgumentCaptor.forClass(RealtimeOrderbookSubscriptionChangedEvent.class);
         verify(eventPublisher).publish(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().eventType()).isEqualTo(RealtimeOrderbookSubscriptionEventType.ENDED);
+        assertThat(eventCaptor.getValue().eventType()).isEqualTo(RealtimeOrderbookSubscriptionChangedEvent.EventType.ENDED);
         assertThat(eventCaptor.getValue().streamId()).isEqualTo("stream-1");
     }
 

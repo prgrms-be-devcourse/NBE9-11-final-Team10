@@ -6,7 +6,7 @@ public record RealtimeOrderbookSubscriptionChangedEvent(
         String streamId,
         Long userId,
         String stockCode,
-        RealtimeOrderbookSubscriptionEventType eventType
+        EventType eventType
 ) {
 
     public static RealtimeOrderbookSubscriptionChangedEvent started(
@@ -16,7 +16,7 @@ public record RealtimeOrderbookSubscriptionChangedEvent(
                 subscription.streamId(),
                 subscription.userId(),
                 subscription.stockCode(),
-                RealtimeOrderbookSubscriptionEventType.STARTED
+                EventType.STARTED
         );
     }
 
@@ -27,7 +27,12 @@ public record RealtimeOrderbookSubscriptionChangedEvent(
                 subscription.streamId(),
                 subscription.userId(),
                 subscription.stockCode(),
-                RealtimeOrderbookSubscriptionEventType.ENDED
+                EventType.ENDED
         );
+    }
+
+    public enum EventType {
+        STARTED,
+        ENDED
     }
 }

@@ -41,7 +41,7 @@ public class RealtimeOrderbookSubscriptionChangedEventListener implements Messag
 
     private void handle(RealtimeOrderbookSubscriptionChangedEvent event) {
         // 구독 종료 시 로컬 SSE 연결 정리
-        if (event.eventType() == RealtimeOrderbookSubscriptionEventType.ENDED) {
+        if (event.eventType() == RealtimeOrderbookSubscriptionChangedEvent.EventType.ENDED) {
             emitterRegistry.complete(event.streamId());
         }
 
