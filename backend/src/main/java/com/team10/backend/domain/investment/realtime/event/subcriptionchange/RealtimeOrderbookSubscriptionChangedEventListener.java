@@ -1,6 +1,7 @@
 package com.team10.backend.domain.investment.realtime.event.subcriptionchange;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookKisSubscriptionCoordinator;
 import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseEmitterRegistry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +18,7 @@ public class RealtimeOrderbookSubscriptionChangedEventListener implements Messag
 
     private final ObjectMapper objectMapper;
     private final RealtimeOrderbookSseEmitterRegistry emitterRegistry;
+    private final RealtimeOrderbookKisSubscriptionCoordinator kisSubscriptionCoordinator;
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
@@ -30,14 +32,20 @@ public class RealtimeOrderbookSubscriptionChangedEventListener implements Messag
             log.warn("Failed to parse realtime orderbook subscription changed event. payload={}",
                     new String(message.getBody(), StandardCharsets.UTF_8),
                     e);
+        } catch (RuntimeException e) {
+            log.warn("Failed to handle realtime orderbook subscription changed event. payload={}",
+                    new String(message.getBody(), StandardCharsets.UTF_8),
+                    e);
         }
     }
 
     private void handle(RealtimeOrderbookSubscriptionChangedEvent event) {
-        if (event.eventType() != RealtimeOrderbookSubscriptionEventType.ENDED) {
-            return;
+        // 구독 종료 시 로컬 SSE 연결 정리
+        if (event.eventType() == RealtimeOrderbookSubscriptionEventType.ENDED) {
+            emitterRegistry.complete(event.streamId());
         }
 
-        emitterRegistry.complete(event.streamId());
+        // Redis의 정보를 기반으로 WebSocket 연결 수정
+        kisSubscriptionCoordinator.reconcileStock(event.stockCode());
     }
 }
