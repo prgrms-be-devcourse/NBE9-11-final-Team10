@@ -1,9 +1,6 @@
 package com.team10.backend.domain.saving.controller;
 
-import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
-import com.team10.backend.domain.saving.dto.req.EarlyCancelReq;
-import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
-import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
+import com.team10.backend.domain.saving.dto.req.*;
 import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.service.SavingDepositService;
 import com.team10.backend.domain.saving.type.DepositStatus;
@@ -128,6 +125,19 @@ public class SavingDepositController {
             @Valid @RequestBody EarlyCancelReq request
     ) {
         EarlyCancelRes response = savingDepositService.cancelSaving(userId, savingId, request);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "만기 처리", description = "만기일이 도래한 예금 또는 적금을 만기 처리합니다.")
+    @PostMapping("/{savingId}/maturity")
+    public ResponseEntity<MaturityRes> matureSaving(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long savingId,
+            @Valid @RequestBody MaturityReq request
+    ) {
+        MaturityRes response =
+                savingDepositService.matureSaving(userId, savingId, request);
 
         return ResponseEntity.ok(response);
     }

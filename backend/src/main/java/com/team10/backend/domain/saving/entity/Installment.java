@@ -95,4 +95,8 @@ public class Installment extends BaseEntity {
     public void cancel() {
         this.status = InstallmentStatus.CANCELLED;
     }
+
+    public void mature() {
+        this.status = InstallmentStatus.MATURED;
+    }
 }

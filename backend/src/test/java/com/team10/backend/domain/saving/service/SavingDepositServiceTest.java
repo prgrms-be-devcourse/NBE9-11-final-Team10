@@ -15,6 +15,7 @@ import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.req.EarlyCancelReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
+import com.team10.backend.domain.saving.dto.req.MaturityReq;
 import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
 import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
 import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
@@ -24,6 +25,7 @@ import com.team10.backend.domain.saving.dto.res.InstallmentCreateRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentDetailRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentSummaryRes;
 import com.team10.backend.domain.saving.dto.res.InterestPreviewRes;
+import com.team10.backend.domain.saving.dto.res.MaturityRes;
 import com.team10.backend.domain.saving.dto.res.WithdrawalLockRes;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.Installment;
@@ -551,6 +553,102 @@ class SavingDepositServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("만기일이 지난 가입중 예금을 만기 처리한다")
+    void matureDeposit() {
+        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
+        ReflectionTestUtils.setField(deposit, "maturityDate", LocalDate.now());
+        MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
+
+        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(deposit));
+
+        MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
+
+        assertThat(response.savingId()).isEqualTo(1L);
+        assertThat(response.savingType()).isEqualTo(SavingProductType.DEPOSIT);
+        assertThat(response.principalAmount()).isEqualTo(1000000L);
+        assertThat(response.interestAmount()).isEqualTo(35000L);
+        assertThat(response.payoutAmount()).isEqualTo(1035000L);
+        assertThat(response.status()).isEqualTo("MATURED");
+        assertThat(activeAccount.getBalance()).isEqualTo(3035000L);
+        assertThat(deposit.getStatus()).isEqualTo(DepositStatus.MATURED);
+
+        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
+        verify(transactionHistoryRepository).save(captor.capture());
+        TransactionHistory history = captor.getValue();
+        assertThat(history.getType()).isEqualTo(TransactionType.SAVING_MATURITY);
+        assertThat(history.getDirection()).isEqualTo(TransactionDirection.IN);
+        assertThat(history.getAmount()).isEqualTo(1035000L);
+        assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
+        assertThat(history.getBalanceAfter()).isEqualTo(3035000L);
+        assertThat(history.getMemo()).isEqualTo("예금 만기 지급");
+        verify(depositRepository).findByIdAndUserIdWithProduct(1L, 1L);
+    }
+
+    @Test
+    @DisplayName("만기일이 지난 가입중 적금을 만기 처리한다")
+    void matureInstallment() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        ReflectionTestUtils.setField(installment, "maturityDate", LocalDate.now());
+        MaturityReq request = new MaturityReq(SavingProductType.INSTALLMENT);
+
+        when(installmentRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(installment));
+
+        MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
+
+        assertThat(response.savingId()).isEqualTo(1L);
+        assertThat(response.savingType()).isEqualTo(SavingProductType.INSTALLMENT);
+        assertThat(response.principalAmount()).isEqualTo(100000L);
+        assertThat(response.interestAmount()).isEqualTo(19500L);
+        assertThat(response.payoutAmount()).isEqualTo(119500L);
+        assertThat(response.status()).isEqualTo("MATURED");
+        assertThat(activeAccount.getBalance()).isEqualTo(2119500L);
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.MATURED);
+
+        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
+        verify(transactionHistoryRepository).save(captor.capture());
+        TransactionHistory history = captor.getValue();
+        assertThat(history.getType()).isEqualTo(TransactionType.SAVING_MATURITY);
+        assertThat(history.getDirection()).isEqualTo(TransactionDirection.IN);
+        assertThat(history.getAmount()).isEqualTo(119500L);
+        assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
+        assertThat(history.getBalanceAfter()).isEqualTo(2119500L);
+        assertThat(history.getMemo()).isEqualTo("적금 만기 지급");
+        verify(installmentRepository).findByIdAndUserIdWithProduct(1L, 1L);
+    }
+
+    @Test
+    @DisplayName("가입중 상태가 아니면 만기 처리에 실패한다")
+    void matureSavingWithNotActiveStatus() {
+        Deposit deposit = createDeposit(1L, DepositStatus.MATURED);
+        MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
+
+        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(deposit));
+
+        assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED);
+    }
+
+    @Test
+    @DisplayName("만기일이 아직 지나지 않으면 만기 처리에 실패한다")
+    void matureSavingBeforeMaturityDate() {
+        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
+        MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
+
+        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(deposit));
+
+        assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.SAVING_NOT_MATURED_YET);
     }
 
     @Test

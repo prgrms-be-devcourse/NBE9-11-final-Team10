@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
 import com.team10.backend.domain.saving.dto.req.EarlyCancelReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
+import com.team10.backend.domain.saving.dto.req.MaturityReq;
 import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
 import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.service.SavingDepositService;
@@ -341,6 +342,48 @@ class SavingDepositControllerTest {
         EarlyCancelReq request = new EarlyCancelReq(null);
 
         mockMvc.perform(post("/api/v1/savings/{savingId}/cancel", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("만기 처리 API는 인증 사용자의 예금 또는 적금을 만기 처리한다")
+    void matureSaving() throws Exception {
+        MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
+        MaturityRes response = new MaturityRes(
+                1L,
+                SavingProductType.DEPOSIT,
+                1000000L,
+                35000L,
+                1035000L,
+                "MATURED"
+        );
+
+        when(savingDepositService.matureSaving(eq(1L), eq(1L), any(MaturityReq.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/savings/{savingId}/maturity", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.savingId").value(1L))
+                .andExpect(jsonPath("$.savingType").value("DEPOSIT"))
+                .andExpect(jsonPath("$.principalAmount").value(1000000L))
+                .andExpect(jsonPath("$.interestAmount").value(35000L))
+                .andExpect(jsonPath("$.payoutAmount").value(1035000L))
+                .andExpect(jsonPath("$.status").value("MATURED"));
+
+        verify(savingDepositService)
+                .matureSaving(eq(1L), eq(1L), any(MaturityReq.class));
+    }
+
+    @Test
+    @DisplayName("만기 처리 API는 필수값이 없으면 400을 반환한다")
+    void matureSavingWithoutRequiredValue() throws Exception {
+        MaturityReq request = new MaturityReq(null);
+
+        mockMvc.perform(post("/api/v1/savings/{savingId}/maturity", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
