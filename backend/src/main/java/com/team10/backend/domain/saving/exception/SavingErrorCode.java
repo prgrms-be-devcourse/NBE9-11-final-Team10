@@ -16,7 +16,8 @@ public enum SavingErrorCode implements ErrorCode {
     INVALID_TARGET_AMOUNT(HttpStatus.BAD_REQUEST, "적금 목표 금액이 올바르지 않습니다."),
     INSTALLMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "적금 가입 정보를 찾을 수 없습니다."),
     INVALID_SAVING_TYPE(HttpStatus.BAD_REQUEST, "지원하지 않는 저축 타입입니다."),
-    WITHDRAWAL_UNLOCK_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "출금 제한 해제 사유가 필요합니다.");
+    WITHDRAWAL_UNLOCK_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "출금 제한 해제 사유가 필요합니다."),
+    SAVING_CANCEL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "가입중 상태에서만 중도 해지할 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;

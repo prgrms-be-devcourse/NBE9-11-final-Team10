@@ -2,6 +2,7 @@ package com.team10.backend.domain.saving.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,11 +13,13 @@ import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
+import com.team10.backend.domain.saving.dto.req.EarlyCancelReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
 import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
 import com.team10.backend.domain.saving.dto.res.DepositCreateRes;
 import com.team10.backend.domain.saving.dto.res.DepositDetailRes;
 import com.team10.backend.domain.saving.dto.res.DepositSummaryRes;
+import com.team10.backend.domain.saving.dto.res.EarlyCancelRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentCreateRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentDetailRes;
 import com.team10.backend.domain.saving.dto.res.InstallmentSummaryRes;
@@ -32,6 +35,10 @@ import com.team10.backend.domain.saving.repository.SavingProductRepository;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
 import com.team10.backend.domain.saving.type.SavingProductType;
+import com.team10.backend.domain.transaction.entity.TransactionHistory;
+import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
+import com.team10.backend.domain.transaction.type.TransactionDirection;
+import com.team10.backend.domain.transaction.type.TransactionType;
 import com.team10.backend.domain.transfer.exception.TransferErrorCode;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
@@ -43,6 +50,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -65,6 +73,9 @@ class SavingDepositServiceTest {
 
     @Mock
     private InstallmentRepository installmentRepository;
+
+    @Mock
+    private TransactionHistoryRepository transactionHistoryRepository;
 
     @InjectMocks
     private SavingDepositService savingDepositService;
@@ -461,6 +472,85 @@ class SavingDepositServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(SavingErrorCode.WITHDRAWAL_UNLOCK_REASON_REQUIRED);
+    }
+
+    @Test
+    @DisplayName("가입중 예금을 중도 해지한다")
+    void cancelDeposit() {
+        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
+        EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
+
+        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(deposit));
+
+        EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
+
+        assertThat(response.savingId()).isEqualTo(1L);
+        assertThat(response.savingType()).isEqualTo(SavingProductType.DEPOSIT);
+        assertThat(response.principalAmount()).isEqualTo(1000000L);
+        assertThat(response.interestAmount()).isEqualTo(17500L);
+        assertThat(response.refundAmount()).isEqualTo(1017500L);
+        assertThat(response.status()).isEqualTo("CANCELLED");
+        assertThat(activeAccount.getBalance()).isEqualTo(3017500L);
+        assertThat(deposit.getStatus()).isEqualTo(DepositStatus.CANCELLED);
+
+        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
+        verify(transactionHistoryRepository).save(captor.capture());
+        TransactionHistory history = captor.getValue();
+        assertThat(history.getType()).isEqualTo(TransactionType.SAVING_CANCEL_REFUND);
+        assertThat(history.getDirection()).isEqualTo(TransactionDirection.IN);
+        assertThat(history.getAmount()).isEqualTo(1017500L);
+        assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
+        assertThat(history.getBalanceAfter()).isEqualTo(3017500L);
+        assertThat(history.getMemo()).isEqualTo("예금 중도 해지 반환");
+        verify(depositRepository).findByIdAndUserIdWithProduct(1L, 1L);
+    }
+
+    @Test
+    @DisplayName("가입중 적금을 중도 해지한다")
+    void cancelInstallment() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        EarlyCancelReq request = new EarlyCancelReq(SavingProductType.INSTALLMENT);
+
+        when(installmentRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(installment));
+
+        EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
+
+        assertThat(response.savingId()).isEqualTo(1L);
+        assertThat(response.savingType()).isEqualTo(SavingProductType.INSTALLMENT);
+        assertThat(response.principalAmount()).isEqualTo(100000L);
+        assertThat(response.interestAmount()).isEqualTo(9750L);
+        assertThat(response.refundAmount()).isEqualTo(109750L);
+        assertThat(response.status()).isEqualTo("CANCELLED");
+        assertThat(activeAccount.getBalance()).isEqualTo(2109750L);
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.CANCELLED);
+
+        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
+        verify(transactionHistoryRepository).save(captor.capture());
+        TransactionHistory history = captor.getValue();
+        assertThat(history.getType()).isEqualTo(TransactionType.SAVING_CANCEL_REFUND);
+        assertThat(history.getDirection()).isEqualTo(TransactionDirection.IN);
+        assertThat(history.getAmount()).isEqualTo(109750L);
+        assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
+        assertThat(history.getBalanceAfter()).isEqualTo(2109750L);
+        assertThat(history.getMemo()).isEqualTo("적금 중도 해지 반환");
+        verify(installmentRepository).findByIdAndUserIdWithProduct(1L, 1L);
+    }
+
+    @Test
+    @DisplayName("가입중 상태가 아니면 중도 해지에 실패한다")
+    void cancelSavingWithNotActiveStatus() {
+        Deposit deposit = createDeposit(1L, DepositStatus.MATURED);
+        EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
+
+        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+                .thenReturn(Optional.of(deposit));
+
+        assertThatThrownBy(() -> savingDepositService.cancelSaving(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
     }
 
     @Test

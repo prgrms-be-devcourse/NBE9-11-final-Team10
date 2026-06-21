@@ -91,4 +91,8 @@ public class Installment extends BaseEntity {
         this.withdrawalLocked = lockYn;
         this.withdrawalLockReason = reason;
     }
+
+    public void cancel() {
+        this.status = InstallmentStatus.CANCELLED;
+    }
 }

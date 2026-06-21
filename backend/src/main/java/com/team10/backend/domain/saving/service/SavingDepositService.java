@@ -4,6 +4,7 @@ import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
+import com.team10.backend.domain.saving.dto.req.EarlyCancelReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
 import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
 import com.team10.backend.domain.saving.dto.res.*;
@@ -17,6 +18,8 @@ import com.team10.backend.domain.saving.repository.SavingProductRepository;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
 import com.team10.backend.domain.saving.type.SavingProductType;
+import com.team10.backend.domain.transaction.entity.TransactionHistory;
+import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
@@ -25,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -33,7 +37,11 @@ import java.util.List;
 public class SavingDepositService {
     private static final int MONTHS_IN_YEAR = 12;
     private static final int PERCENT_DIVISOR = 100;
+    private static final int EARLY_CANCEL_INTEREST_RATE_DIVISOR = 2;
+    private static final String DEPOSIT_CANCEL_REFUND_MEMO = "예금 중도 해지 반환";
+    private static final String INSTALLMENT_CANCEL_REFUND_MEMO = "적금 중도 해지 반환";
 
+    private final TransactionHistoryRepository transactionHistoryRepository;
     private final DepositRepository depositRepository;
     private final SavingProductRepository savingProductRepository;
     private final AccountRepository accountRepository;
@@ -224,18 +232,7 @@ public class SavingDepositService {
 
             int periodMonth = installment.getSavingProduct().getPeriodMonth(); // 적금 가입기간(개월)
 
-            // 적금은 매달 돈을 넣는다.
-            // 먼저 넣은 돈은 이자를 오래 받고, 나중에 넣은 돈은 이자를 짧게 받는다.
-            // 그래서 각 납입금의 이자 적용 개월 수 합계를 사용한다.
-            Long expectedInterest = (long) (
-                    installment.getMonthlyAmount()      // 매월 납입 금액
-                            * installment.getInterestRate() // 연 이율(%)
-                            / PERCENT_DIVISOR          // 퍼센트 값을 소수로 변환
-                            / MONTHS_IN_YEAR           // 연 이율을 월 이율로 변환
-                            * periodMonth              // 가입 기간 개월 수
-                            * (periodMonth + 1)        // 1부터 가입 기간까지의 합 계산용
-                            / 2                        // 등차수열 합 공식: n * (n + 1) / 2
-            );
+            Long expectedInterest = calculateInstallmentExpectedInterest(installment);
 
             Long expectedTotalAmount =
                     installment.getTargetAmount() + expectedInterest; // 만기 예상 수령액 = 목표 금액 + 예상 이자
@@ -284,4 +281,118 @@ public class SavingDepositService {
 
         throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
     }
+
+
+    @Transactional
+    public EarlyCancelRes cancelSaving(
+            Long userId,
+            Long savingId,
+            EarlyCancelReq request
+    ) {
+        if (request.savingType() == SavingProductType.DEPOSIT) {
+            Deposit deposit =
+                    depositRepository.findByIdAndUserIdWithProduct(savingId, userId)
+                            .orElseThrow(() -> new
+                                    BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
+
+            if (deposit.getStatus() != DepositStatus.ACTIVE) {
+                throw new
+                        BusinessException(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
+            }
+
+            Long interestAmount =
+                    deposit.getExpectedInterest() /
+                            EARLY_CANCEL_INTEREST_RATE_DIVISOR;
+
+            Long refundAmount =
+                    deposit.getPrincipal() + interestAmount;
+
+            Account withdrawAccount = deposit.getWithdrawAccount(); // 반환금을 받을 연결 계좌
+            Long balanceBefore = withdrawAccount.getBalance(); // 입금 전 계좌 잔액
+
+            withdrawAccount.deposit(refundAmount); // 중도 해지 반환금 입금
+
+            Long balanceAfter = withdrawAccount.getBalance(); // 입금 후 계좌 잔액
+
+            TransactionHistory transactionHistory =
+                    TransactionHistory.createSavingCancelRefund(
+                            withdrawAccount,
+                            refundAmount,
+                            balanceBefore,
+                            balanceAfter,
+                            DEPOSIT_CANCEL_REFUND_MEMO,
+                            LocalDateTime.now()
+                    );
+
+            transactionHistoryRepository.save(transactionHistory);
+
+            deposit.cancel();
+
+            return EarlyCancelRes.fromDeposit(deposit, interestAmount, refundAmount);
+        }
+
+        if (request.savingType() == SavingProductType.INSTALLMENT) {
+            Installment installment =
+                    installmentRepository.findByIdAndUserIdWithProduct(savingId,
+                                    userId)
+                            .orElseThrow(() -> new
+                                    BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND)
+                            );
+
+            if (installment.getStatus() != InstallmentStatus.ACTIVE) {
+                throw new
+                        BusinessException(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
+            }
+
+            Long expectedInterest =
+                    calculateInstallmentExpectedInterest(installment);
+
+            Long interestAmount =
+                    expectedInterest / EARLY_CANCEL_INTEREST_RATE_DIVISOR;
+
+            Long refundAmount =
+                    installment.getPaidAmount() + interestAmount;
+
+            Account withdrawAccount = installment.getWithdrawAccount(); // 반환금을 받을 연결 계좌
+            Long balanceBefore = withdrawAccount.getBalance(); // 입금 전 계좌 잔액
+
+            withdrawAccount.deposit(refundAmount); // 중도 해지 반환금 입금
+
+            Long balanceAfter = withdrawAccount.getBalance(); // 입금 후 계좌 잔액
+
+            TransactionHistory transactionHistory =
+                    TransactionHistory.createSavingCancelRefund(
+                            withdrawAccount,
+                            refundAmount,
+                            balanceBefore,
+                            balanceAfter,
+                            INSTALLMENT_CANCEL_REFUND_MEMO,
+                            LocalDateTime.now()
+                    );
+
+            transactionHistoryRepository.save(transactionHistory);
+
+            installment.cancel();
+
+            return EarlyCancelRes.fromInstallment(installment, interestAmount, refundAmount);
+        }
+
+        throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
+    }
+
+    private Long calculateInstallmentExpectedInterest(Installment installment) {
+        int periodMonth =
+                installment.getSavingProduct().getPeriodMonth(); // 적금 가입 기간(개월)
+
+        return (long) (
+                installment.getMonthlyAmount()      // 매월 납입하는 금액
+                        * installment.getInterestRate() // 연 이율(%). 예: 3.0
+                        / PERCENT_DIVISOR          // 3.0%를 0.03으로 바꾸기 위해 100으로 나눔
+                        / MONTHS_IN_YEAR           // 연 이율을 월 이율로 바꾸기 위해 12로 나눔
+                        * periodMonth              // 가입 기간 개월 수. 예: 12개월
+                        * (periodMonth + 1)        // 12 + 11 + ... + 1 계산을 위한 값
+                        / 2                        // n * (n + 1) / 2 공식으로 이자 적용 개월 수 합계 계산
+        );
+    }
 }
+

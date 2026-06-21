@@ -2,6 +2,7 @@ package com.team10.backend.domain.saving.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.saving.dto.req.DepositCreateReq;
+import com.team10.backend.domain.saving.dto.req.EarlyCancelReq;
 import com.team10.backend.domain.saving.dto.req.InstallmentCreateReq;
 import com.team10.backend.domain.saving.dto.req.WithdrawalLockReq;
 import com.team10.backend.domain.saving.dto.res.*;
@@ -298,6 +299,48 @@ class SavingDepositControllerTest {
         WithdrawalLockReq request = new WithdrawalLockReq(null, true, "목표 저축");
 
         mockMvc.perform(post("/api/v1/savings/{savingId}/withdrawal-lock", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("중도 해지 API는 인증 사용자의 예금 또는 적금을 해지한다")
+    void cancelSaving() throws Exception {
+        EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
+        EarlyCancelRes response = new EarlyCancelRes(
+                1L,
+                SavingProductType.DEPOSIT,
+                1000000L,
+                17500L,
+                1017500L,
+                "CANCELLED"
+        );
+
+        when(savingDepositService.cancelSaving(eq(1L), eq(1L), any(EarlyCancelReq.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/savings/{savingId}/cancel", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.savingId").value(1L))
+                .andExpect(jsonPath("$.savingType").value("DEPOSIT"))
+                .andExpect(jsonPath("$.principalAmount").value(1000000L))
+                .andExpect(jsonPath("$.interestAmount").value(17500L))
+                .andExpect(jsonPath("$.refundAmount").value(1017500L))
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        verify(savingDepositService)
+                .cancelSaving(eq(1L), eq(1L), any(EarlyCancelReq.class));
+    }
+
+    @Test
+    @DisplayName("중도 해지 API는 필수값이 없으면 400을 반환한다")
+    void cancelSavingWithoutRequiredValue() throws Exception {
+        EarlyCancelReq request = new EarlyCancelReq(null);
+
+        mockMvc.perform(post("/api/v1/savings/{savingId}/cancel", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
