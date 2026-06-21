@@ -157,7 +157,8 @@ public class ExchangeBusinessService {
             ExchangeDirection direction
     ) {
         try {
-            return exchangeOrderRepository.save(ExchangeOrder.createCompleted(
+            // exchange_quote_id unique 위반이 해당 시점에 발생해서 try-catch 문으로 처리하도록 saveAndFlush 사용
+            return exchangeOrderRepository.saveAndFlush(ExchangeOrder.createCompleted(
                     user,
                     quote,
                     krwAccount,
