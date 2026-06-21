@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,4 +47,18 @@ public interface DepositRepository extends JpaRepository<Deposit, Long> {
             @Param("depositId") Long depositId,
             @Param("userId") Long userId
     );
+
+    @Query("""
+      select d
+      from Deposit d
+      join fetch d.savingProduct
+      join fetch d.withdrawAccount
+      where d.status = :status
+      and d.maturityDate <= :today
+      """)
+    List<Deposit> findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+            @Param("status") DepositStatus status,
+            @Param("today") LocalDate today
+    );
+
 }

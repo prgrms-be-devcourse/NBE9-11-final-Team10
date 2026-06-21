@@ -406,41 +406,7 @@ public class SavingDepositService {
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
 
-            if (deposit.getStatus() != DepositStatus.ACTIVE) {
-                throw new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED);
-            }
-
-            if (deposit.getMaturityDate().isAfter(LocalDate.now())) {
-                throw new BusinessException(SavingErrorCode.SAVING_NOT_MATURED_YET);
-            }
-
-            Long interestAmount = deposit.getExpectedInterest();
-
-            Long payoutAmount =
-                    deposit.getPrincipal() + interestAmount;
-
-            Account withdrawAccount = deposit.getWithdrawAccount();
-            Long balanceBefore = withdrawAccount.getBalance();
-
-            withdrawAccount.deposit(payoutAmount);
-
-            Long balanceAfter = withdrawAccount.getBalance();
-
-            TransactionHistory transactionHistory =
-                    TransactionHistory.createSavingMaturityPayout(
-                            withdrawAccount,
-                            payoutAmount,
-                            balanceBefore,
-                            balanceAfter,
-                            DEPOSIT_MATURITY_PAYOUT_MEMO,
-                            LocalDateTime.now()
-                    );
-
-            transactionHistoryRepository.save(transactionHistory);
-
-            deposit.mature();
-
-            return MaturityRes.fromDeposit(deposit, interestAmount, payoutAmount);
+            return matureDeposit(deposit);
         }
 
         if (request.savingType() == SavingProductType.INSTALLMENT) {
@@ -449,46 +415,118 @@ public class SavingDepositService {
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
 
-            if (installment.getStatus() != InstallmentStatus.ACTIVE) {
-                throw new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED);
-            }
-
-            if (installment.getMaturityDate().isAfter(LocalDate.now())) {
-                throw new BusinessException(SavingErrorCode.SAVING_NOT_MATURED_YET);
-            }
-
-            Long interestAmount =
-                    calculateInstallmentExpectedInterest(installment);
-
-            Long payoutAmount =
-                    installment.getPaidAmount() + interestAmount;
-
-            Account withdrawAccount = installment.getWithdrawAccount();
-            Long balanceBefore = withdrawAccount.getBalance();
-
-            withdrawAccount.deposit(payoutAmount);
-
-            Long balanceAfter = withdrawAccount.getBalance();
-
-            TransactionHistory transactionHistory =
-                    TransactionHistory.createSavingMaturityPayout(
-                            withdrawAccount,
-                            payoutAmount,
-                            balanceBefore,
-                            balanceAfter,
-                            INSTALLMENT_MATURITY_PAYOUT_MEMO,
-                            LocalDateTime.now()
-                    );
-
-            transactionHistoryRepository.save(transactionHistory);
-
-            installment.mature();
-
-            return MaturityRes.fromInstallment(installment, interestAmount,
-                    payoutAmount);
+            return matureInstallment(installment);
         }
 
         throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
+    }
+
+
+    @Transactional
+    public int matureDueSavings() {
+        LocalDate today = LocalDate.now();
+
+        List<Deposit> deposits =
+
+                depositRepository.findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+                        DepositStatus.ACTIVE,
+                        today
+                );
+
+        List<Installment> installments =
+
+                installmentRepository.findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+                        InstallmentStatus.ACTIVE,
+                        today
+                );
+
+        deposits.forEach(this::matureDeposit);
+        installments.forEach(this::matureInstallment);
+
+        return deposits.size() + installments.size();
+    }
+
+
+    private MaturityRes matureDeposit(Deposit deposit) {
+        // 기존 matureSaving 안에 있던 예금 만기 처리 코드
+
+        if (deposit.getStatus() != DepositStatus.ACTIVE) {
+            throw new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED);
+        }
+
+        if (deposit.getMaturityDate().isAfter(LocalDate.now())) {
+            throw new BusinessException(SavingErrorCode.SAVING_NOT_MATURED_YET);
+        }
+
+        Long interestAmount = deposit.getExpectedInterest();
+
+        Long payoutAmount =
+                deposit.getPrincipal() + interestAmount;
+
+        Account withdrawAccount = deposit.getWithdrawAccount();
+        Long balanceBefore = withdrawAccount.getBalance();
+
+        withdrawAccount.deposit(payoutAmount);
+
+        Long balanceAfter = withdrawAccount.getBalance();
+
+        TransactionHistory transactionHistory =
+                TransactionHistory.createSavingMaturityPayout(
+                        withdrawAccount,
+                        payoutAmount,
+                        balanceBefore,
+                        balanceAfter,
+                        DEPOSIT_MATURITY_PAYOUT_MEMO,
+                        LocalDateTime.now()
+                );
+
+        transactionHistoryRepository.save(transactionHistory);
+
+        deposit.mature();
+
+        return MaturityRes.fromDeposit(deposit, interestAmount, payoutAmount);
+    }
+
+    private MaturityRes matureInstallment(Installment installment) {
+        // 기존 matureSaving 안에 있던 적금 만기 처리 코드
+
+        if (installment.getStatus() != InstallmentStatus.ACTIVE) {
+            throw new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED);
+        }
+
+        if (installment.getMaturityDate().isAfter(LocalDate.now())) {
+            throw new BusinessException(SavingErrorCode.SAVING_NOT_MATURED_YET);
+        }
+
+        Long interestAmount =
+                calculateInstallmentExpectedInterest(installment);
+
+        Long payoutAmount =
+                installment.getPaidAmount() + interestAmount;
+
+        Account withdrawAccount = installment.getWithdrawAccount();
+        Long balanceBefore = withdrawAccount.getBalance();
+
+        withdrawAccount.deposit(payoutAmount);
+
+        Long balanceAfter = withdrawAccount.getBalance();
+
+        TransactionHistory transactionHistory =
+                TransactionHistory.createSavingMaturityPayout(
+                        withdrawAccount,
+                        payoutAmount,
+                        balanceBefore,
+                        balanceAfter,
+                        INSTALLMENT_MATURITY_PAYOUT_MEMO,
+                        LocalDateTime.now()
+                );
+
+        transactionHistoryRepository.save(transactionHistory);
+
+        installment.mature();
+
+        return MaturityRes.fromInstallment(installment, interestAmount,
+                payoutAmount);
     }
 }
 

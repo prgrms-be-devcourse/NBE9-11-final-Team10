@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -649,6 +650,41 @@ class SavingDepositServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(SavingErrorCode.SAVING_NOT_MATURED_YET);
+    }
+
+    @Test
+    @DisplayName("만기 대상 예금과 적금을 일괄 만기 처리한다")
+    void matureDueSavings() {
+        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        ReflectionTestUtils.setField(deposit, "maturityDate", LocalDate.now());
+        ReflectionTestUtils.setField(installment, "maturityDate", LocalDate.now());
+
+        when(depositRepository.findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+                DepositStatus.ACTIVE,
+                LocalDate.now()
+        )).thenReturn(List.of(deposit));
+        when(installmentRepository.findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+                InstallmentStatus.ACTIVE,
+                LocalDate.now()
+        )).thenReturn(List.of(installment));
+
+        int maturedCount = savingDepositService.matureDueSavings();
+
+        assertThat(maturedCount).isEqualTo(2);
+        assertThat(deposit.getStatus()).isEqualTo(DepositStatus.MATURED);
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.MATURED);
+        assertThat(activeAccount.getBalance()).isEqualTo(3154500L);
+
+        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
+        verify(transactionHistoryRepository, times(2)).save(captor.capture());
+        List<TransactionHistory> histories = captor.getAllValues();
+        assertThat(histories)
+                .extracting(TransactionHistory::getType)
+                .containsExactly(TransactionType.SAVING_MATURITY, TransactionType.SAVING_MATURITY);
+        assertThat(histories)
+                .extracting(TransactionHistory::getAmount)
+                .containsExactly(1035000L, 119500L);
     }
 
     @Test
