@@ -15,6 +15,8 @@ import com.team10.backend.domain.exchange.repository.FxWalletLedgerRepository;
 import com.team10.backend.domain.exchange.repository.FxWalletRepository;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
 import com.team10.backend.domain.exchange.type.ExchangeDirection;
+import com.team10.backend.domain.transaction.entity.TransactionHistory;
+import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
 import com.team10.backend.domain.transaction.type.TransactionDirection;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
@@ -36,6 +38,7 @@ public class ExchangeBusinessService {
     private final FxWalletLedgerRepository fxWalletLedgerRepository;
     private final ExchangeOrderRepository exchangeOrderRepository;
     private final ExchangeQuoteRepository exchangeQuoteRepository;
+    private final TransactionHistoryRepository transactionHistoryRepository;
     private final UserRepository userRepository;
 
     @Transactional
@@ -59,13 +62,31 @@ public class ExchangeBusinessService {
 
         Account krwAccount = exchangeResources.krwAccount;
         FxWallet fxWallet = exchangeResources.fxWallet;
-        BigDecimal fxBalanceBefore = fxWallet.getBalance(); // 이전 잔액 캡쳐
+        Long krwBalanceBefore = krwAccount.getBalance();    // 이전 원화 잔액 캡쳐
+        BigDecimal fxBalanceBefore = fxWallet.getBalance(); // 이전 외화 잔액 캡쳐
 
         // 잔액 반영
         applyExchange(direction, quote, krwAccount, fxWallet);
 
+        LocalDateTime completedAt = LocalDateTime.now();
+        TransactionHistory transactionHistory = saveKrwTransactionHistory(
+                direction,
+                quote,
+                krwAccount,
+                krwBalanceBefore,
+                completedAt
+        );
+
         // 완료한 주문 저장
-        ExchangeOrder order = saveCompletedOrder(user, quote, krwAccount, fxWallet, direction);
+        ExchangeOrder order = saveCompletedOrder(
+                user,
+                quote,
+                krwAccount,
+                fxWallet,
+                direction,
+                transactionHistory,
+                completedAt
+        );
         saveFxWalletLedger(direction, quote, fxWallet, order, fxBalanceBefore);
 
         return ExchangeOrderRes.from(order);
@@ -160,7 +181,9 @@ public class ExchangeBusinessService {
             ExchangeQuote quote,
             Account krwAccount,
             FxWallet fxWallet,
-            ExchangeDirection direction
+            ExchangeDirection direction,
+            TransactionHistory transactionHistory,
+            LocalDateTime completedAt
     ) {
         try {
             // exchange_quote_id unique 위반이 해당 시점에 발생해서 try-catch 문으로 처리하도록 saveAndFlush 사용
@@ -170,12 +193,43 @@ public class ExchangeBusinessService {
                     krwAccount,
                     fxWallet,
                     direction,
-                    LocalDateTime.now()
+                    transactionHistory,
+                    completedAt
             ));
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(ExchangeErrorCode.EXCHANGE_QUOTE_ALREADY_USED);
         }
 
+    }
+
+    private TransactionHistory saveKrwTransactionHistory(
+            ExchangeDirection direction,
+            ExchangeQuote quote,
+            Account krwAccount,
+            Long balanceBefore,
+            LocalDateTime transactedAt
+    ) {
+        return transactionHistoryRepository.save(TransactionHistory.createExchange(
+                krwAccount,
+                resolveKrwTransactionDirection(direction),
+                resolveKrwTransactionAmount(direction, quote),
+                balanceBefore,
+                krwAccount.getBalance(),
+                "환전",
+                transactedAt
+        ));
+    }
+
+    private TransactionDirection resolveKrwTransactionDirection(ExchangeDirection direction) {
+        return direction == ExchangeDirection.KRW_TO_FOREIGN
+                ? TransactionDirection.OUT
+                : TransactionDirection.IN;
+    }
+
+    private Long resolveKrwTransactionAmount(ExchangeDirection direction, ExchangeQuote quote) {
+        return direction == ExchangeDirection.KRW_TO_FOREIGN
+                ? toKrwLong(quote.getFromAmount())
+                : toKrwLong(quote.getExpectedToAmount());
     }
 
     private void saveFxWalletLedger(
