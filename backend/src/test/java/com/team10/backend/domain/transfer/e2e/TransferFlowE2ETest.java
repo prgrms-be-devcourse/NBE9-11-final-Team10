@@ -8,6 +8,7 @@ import com.team10.backend.domain.transaction.entity.TransactionHistory;
 import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
 import com.team10.backend.domain.transaction.type.TransactionDirection;
 import com.team10.backend.domain.transaction.type.TransactionType;
+import com.team10.backend.domain.transfer.dto.req.DepositReq;
 import com.team10.backend.domain.transfer.dto.req.TransferReq;
 import com.team10.backend.domain.transfer.entity.Transfer;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
@@ -548,6 +549,197 @@ class TransferFlowE2ETest {
         assertEquals(0, transferRepository.count());
         assertEquals(0, transactionHistoryRepository.count());
         assertEquals(0, idempotencyRepository.count());
+    }
+
+    @Test
+    @DisplayName("정상 입금 E2E - API 응답, 계좌 잔액, 입금 거래내역, 멱등성 성공 상태를 검증한다")
+    void topUp_success_persistsConsistentState() throws Exception {
+        // given. 실제 사용자와 입금 대상 계좌를 DB에 준비한다.
+        // - 입금 전 잔액: 10,000원
+        User user = saveUser("topup-success@example.com", "입금자");
+        Account account = saveAccount(user, "100200300111", 10_000L);
+        String idempotencyKey = "flow-topup-success-key";
+
+        DepositReq request = new DepositReq(
+                account.getId(),
+                5_000L,
+                "정상 입금"
+        );
+
+        // when. 인증된 계좌 소유자 관점에서 실제 입금 API를 호출한다.
+        // 컨트롤러 -> 서비스 -> 멱등성 AOP -> 트랜잭션 -> DB 저장 흐름을 모두 통과한다.
+        mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .with(authentication(authenticatedUser(user.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. HTTP 응답은 입금 거래내역 스냅샷을 반환해야 한다.
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value(account.getId()))
+                .andExpect(jsonPath("$.type").value("DEPOSIT"))
+                .andExpect(jsonPath("$.amount").value(5_000L))
+                .andExpect(jsonPath("$.balanceBefore").value(10_000L))
+                .andExpect(jsonPath("$.balanceAfter").value(15_000L))
+                .andExpect(jsonPath("$.memo").value("정상 입금"))
+                .andExpect(jsonPath("$.transactedAt").exists());
+
+        entityManager.clear();
+
+        // then 2. 계좌 잔액은 입금액만큼 증가해야 한다.
+        Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
+        assertEquals(15_000L, savedAccount.getBalance());
+
+        // then 3. 입금은 송금 원장을 만들지 않고, 입금 거래내역 1건만 남겨야 한다.
+        assertEquals(0, transferRepository.count());
+
+        List<TransactionHistory> histories = transactionHistoryRepository.findAll();
+        assertEquals(1, histories.size());
+
+        TransactionHistory history = histories.getFirst();
+        assertEquals(savedAccount.getId(), history.getAccount().getId());
+        assertEquals(TransactionType.DEPOSIT, history.getType());
+        assertEquals(TransactionDirection.IN, history.getDirection());
+        assertEquals(5_000L, history.getAmount());
+        assertEquals(10_000L, history.getBalanceBefore());
+        assertEquals(15_000L, history.getBalanceAfter());
+        assertEquals("정상 입금", history.getMemo());
+        assertNotNull(history.getTransactedAt());
+
+        // then 4. 멱등성 레코드는 SUCCESS로 완료되고, 재시도 응답에 쓸 responseBody를 보관해야 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(user.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.SUCCESS, idempotency.getStatus());
+        assertNotNull(idempotency.getResponseBody());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("비소유 계좌 입금 E2E - 로그인 사용자가 소유하지 않은 계좌에는 입금하지 않는다")
+    void topUp_accountOwnedByAnotherUser_returnsAccountNotFoundWithoutChangingState() throws Exception {
+        // given. 실제 계좌 소유자와 공격자 역할의 사용자를 DB에 준비한다.
+        // 공격자가 타인의 계좌 ID를 알고 있어도 입금에 사용할 수 없어야 한다.
+        User owner = saveUser("topup-owner@example.com", "계좌주");
+        User attacker = saveUser("topup-attacker@example.com", "공격자");
+        Account ownerAccount = saveAccount(owner, "100200300121", 10_000L);
+        String idempotencyKey = "flow-topup-not-owned-key";
+
+        DepositReq request = new DepositReq(
+                ownerAccount.getId(),
+                5_000L,
+                "비소유 계좌 입금 시도"
+        );
+
+        // when. 공격자 인증으로 타인의 계좌에 입금을 요청한다.
+        mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .with(authentication(authenticatedUser(attacker.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. 권한/존재 정보를 노출하지 않도록 ACCOUNT_NOT_FOUND로 거부해야 한다.
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("계좌를 찾을 수 없습니다."));
+
+        entityManager.clear();
+
+        // then 2. 실패한 소유권 검증 요청은 계좌 잔액과 원장 데이터를 변경하면 안 된다.
+        Account savedOwnerAccount = accountRepository.findById(ownerAccount.getId()).orElseThrow();
+        assertEquals(10_000L, savedOwnerAccount.getBalance());
+        assertEquals(0, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+
+        // then 3. 멱등성 레코드는 FAILED로 완료되어 같은 실패 요청이 재처리되지 않도록 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(attacker.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("비활성 계좌 입금 E2E - CLOSED 상태의 계좌에는 입금하지 않는다")
+    void topUp_inactiveAccount_returnsAccountNotActiveWithoutChangingState() throws Exception {
+        // given. 입금 대상 계좌를 준비하고 CLOSED 상태로 변경한다.
+        User user = saveUser("topup-inactive@example.com", "입금자");
+        Account account = saveAccount(user, "100200300131", 10_000L);
+        closeAccount(account.getId());
+        String idempotencyKey = "flow-topup-inactive-key";
+
+        DepositReq request = new DepositReq(
+                account.getId(),
+                5_000L,
+                "비활성 계좌 입금 시도"
+        );
+
+        // when. CLOSED 상태의 계좌에 입금을 요청한다.
+        mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .with(authentication(authenticatedUser(user.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. API는 비활성 계좌 에러를 반환해야 한다.
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_ACTIVE"))
+                .andExpect(jsonPath("$.message").value("활성 계좌가 아닙니다."));
+
+        entityManager.clear();
+
+        // then 2. 비활성 계좌 검증 실패는 계좌 잔액과 원장 데이터를 변경하면 안 된다.
+        Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
+        assertEquals(10_000L, savedAccount.getBalance());
+        assertEquals(0, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+
+        // then 3. 멱등성 레코드는 FAILED로 완료되어 실패 요청의 재처리 가능성을 막아야 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(user.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("계좌 ID 미존재 입금 E2E - 존재하지 않는 계좌 ID에는 입금하지 않는다")
+    void topUp_accountIdNotFound_returnsAccountNotFoundWithoutPersistingHistory() throws Exception {
+        // given. 인증 사용자는 존재하지만 요청의 입금 대상 계좌 ID는 DB에 존재하지 않는다.
+        User user = saveUser("topup-missing-account@example.com", "입금자");
+        Long missingAccountId = 999_999L;
+        String idempotencyKey = "flow-topup-missing-account-key";
+
+        DepositReq request = new DepositReq(
+                missingAccountId,
+                5_000L,
+                "없는 계좌 입금"
+        );
+
+        // when. 존재하지 않는 계좌 ID로 입금을 요청한다.
+        mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .with(authentication(authenticatedUser(user.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. 계좌를 찾을 수 없다는 에러를 반환해야 한다.
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("계좌를 찾을 수 없습니다."));
+
+        entityManager.clear();
+
+        // then 2. 계좌 조회 단계에서 실패했으므로 송금 원장과 거래내역은 생성되면 안 된다.
+        assertEquals(0, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+
+        // then 3. 멱등성 레코드는 FAILED로 완료되어 같은 실패 요청이 재처리되지 않도록 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(user.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
     }
 
     private UsernamePasswordAuthenticationToken authenticatedUser(Long userId) {
