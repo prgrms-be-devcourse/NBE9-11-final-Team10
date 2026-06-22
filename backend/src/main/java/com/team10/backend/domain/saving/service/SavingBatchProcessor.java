@@ -46,12 +46,32 @@ public class SavingBatchProcessor {
     }
 
     private void processInstallmentPayment(Installment installment) {
+        LocalDate today = LocalDate.now(clock);
+
+        if (installment.getStatus() != InstallmentStatus.ACTIVE
+                && installment.getStatus() != InstallmentStatus.PAYMENT_FAILED) {
+            return;
+        }
+
+        if (installment.getStatus() == InstallmentStatus.ACTIVE
+                && installment.getNextPaymentDate().isAfter(today)) {
+            return;
+        }
+
+        if (installment.getStatus() == InstallmentStatus.PAYMENT_FAILED
+                && (installment.getNextPaymentRetryDate() == null
+                || installment.getNextPaymentRetryDate().isAfter(today))) {
+            return;
+        }
+
         Account withdrawAccount = installment.getWithdrawAccount();
 
         if (installment.getPaidAmount() >= installment.getTargetAmount()
-                || !installment.getNextPaymentDate().isBefore(installment.getMaturityDate())) {
+                || !
+                installment.getNextPaymentDate().isBefore(installment.getMaturityDate())) {
             return;
         }
+
 
         if (!withdrawAccount.isActive()) {
             installment.failPayment("출금 계좌 비활성", LocalDate.now(clock));
@@ -84,6 +104,16 @@ public class SavingBatchProcessor {
 
         installment.payMonthlyAmount();
 
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public MaturityRes matureDeposit(Long depositId, Long userId) {
+        Deposit deposit =
+                depositRepository.findByIdAndUserIdWithProductForUpdate(depositId, userId)
+                        .orElseThrow(() -> new
+                                BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
+
+        return matureDeposit(deposit);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -133,6 +163,17 @@ public class SavingBatchProcessor {
         deposit.mature();
 
         return MaturityRes.fromDeposit(deposit, interestAmount, payoutAmount);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public MaturityRes matureInstallment(Long installmentId, Long userId) {
+        Installment installment =
+                installmentRepository.findByIdAndUserIdWithProductForUpdate(installmentId,
+                                userId)
+                        .orElseThrow(() -> new
+                                BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
+
+        return matureInstallment(installment);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
