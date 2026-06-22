@@ -90,7 +90,7 @@ public class InvestmentAccountController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "투자 계좌 해지", description = "계좌 비밀번호 검증 후 예수금, 보유 종목, 미체결 주문이 없는 투자 계좌를 CLOSED 상태로 변경합니다.")
+    @Operation(summary = "투자 계좌 해지", description = "계좌 비밀번호 검증 후 예수금과 보유 종목이 없는 투자 계좌를 CLOSED 상태로 변경합니다.")
     @PostMapping("/{accountId}/close")
     public ResponseEntity<InvestmentAccountCloseRes> closeAccount(
             @Parameter(hidden = true)

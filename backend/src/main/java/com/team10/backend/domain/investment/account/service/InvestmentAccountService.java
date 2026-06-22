@@ -14,8 +14,6 @@ import com.team10.backend.domain.investment.account.repository.InvestmentAccount
 import com.team10.backend.domain.investment.account.type.InvestmentAccountStatus;
 import com.team10.backend.domain.investment.account.util.InvestmentAccountNumberGenerator;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
-import com.team10.backend.domain.investment.order.repository.InvestmentOrderRepository;
-import com.team10.backend.domain.investment.order.type.InvestmentOrderStatus;
 import com.team10.backend.domain.investment.portfolio.repository.InvestmentHoldingRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.exception.UserErrorCode;
@@ -39,7 +37,6 @@ public class InvestmentAccountService {
     private final PasswordEncoder passwordEncoder;
     private final InvestmentAccountOpenVerificationKeyService verificationKeyService;
     private final InvestmentHoldingRepository investmentHoldingRepository;
-    private final InvestmentOrderRepository investmentOrderRepository;
 
     public List<InvestmentAccountSummaryRes> getAccounts(Long userId) {
         return investmentAccountRepository.findAllByUserIdAndStatusNot(userId, InvestmentAccountStatus.CLOSED).stream()
@@ -165,11 +162,5 @@ public class InvestmentAccountService {
             throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_HOLDING_EXISTS);
         }
 
-        if (investmentOrderRepository.existsByInvestmentAccountIdAndStatusIn(
-                account.getId(),
-                List.of(InvestmentOrderStatus.PENDING, InvestmentOrderStatus.PARTIALLY_FILLED)
-        )) {
-            throw new BusinessException(InvestmentErrorCode.INVESTMENT_ACCOUNT_OPEN_ORDER_EXISTS);
-        }
     }
 }
