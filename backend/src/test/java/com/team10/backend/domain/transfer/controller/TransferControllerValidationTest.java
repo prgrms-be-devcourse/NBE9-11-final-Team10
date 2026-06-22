@@ -1,6 +1,7 @@
 package com.team10.backend.domain.transfer.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team10.backend.domain.transfer.dto.req.DepositReq;
 import com.team10.backend.domain.transfer.dto.req.TransferReq;
 import com.team10.backend.domain.transfer.service.TransferService;
 import com.team10.backend.support.security.AuthenticationPrincipalTestConfig;
@@ -110,6 +111,80 @@ class TransferControllerValidationTest {
         verifyTransferServiceNeverCalled();
     }
 
+    @Test
+    @DisplayName("입금 요청 검증 - 금액이 null이면 400을 반환하고 서비스를 호출하지 않는다")
+    void topUp_amountNull_returnsBadRequest() throws Exception {
+        DepositReq request = new DepositReq(1L, null, "금액 없음");
+
+        performTopUp(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+        verifyTransferServiceNeverCalled();
+    }
+
+    @Test
+    @DisplayName("입금 요청 검증 - 금액이 0이면 400을 반환하고 서비스를 호출하지 않는다")
+    void topUp_amountZero_returnsBadRequest() throws Exception {
+        DepositReq request = new DepositReq(1L, 0L, "0원 입금");
+
+        performTopUp(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+        verifyTransferServiceNeverCalled();
+    }
+
+    @Test
+    @DisplayName("입금 요청 검증 - 금액이 음수이면 400을 반환하고 서비스를 호출하지 않는다")
+    void topUp_amountNegative_returnsBadRequest() throws Exception {
+        DepositReq request = new DepositReq(1L, -1L, "음수 입금");
+
+        performTopUp(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+        verifyTransferServiceNeverCalled();
+    }
+
+    @Test
+    @DisplayName("입금 요청 검증 - accountId가 null이면 400을 반환하고 서비스를 호출하지 않는다")
+    void topUp_accountIdNull_returnsBadRequest() throws Exception {
+        DepositReq request = new DepositReq(null, 50_000L, "계좌 없음");
+
+        performTopUp(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+        verifyTransferServiceNeverCalled();
+    }
+
+    @Test
+    @DisplayName("입금 요청 검증 - Idempotency-Key 헤더가 없으면 400을 반환하고 서비스를 호출하지 않는다")
+    void topUp_missingIdempotencyKeyHeader_returnsBadRequest() throws Exception {
+        DepositReq request = new DepositReq(1L, 50_000L, "키 누락");
+
+        mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+        verifyTransferServiceNeverCalled();
+    }
+
+    @Test
+    @DisplayName("입금 요청 검증 - memo가 100자를 초과하면 400을 반환하고 서비스를 호출하지 않는다")
+    void topUp_memoTooLong_returnsBadRequest() throws Exception {
+        DepositReq request = new DepositReq(1L, 50_000L, "a".repeat(101));
+
+        performTopUp(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+        verifyTransferServiceNeverCalled();
+    }
+
     private org.springframework.test.web.servlet.ResultActions performTransfer(TransferReq request) throws Exception {
         return mockMvc.perform(post("/api/v1/transfers")
                 .header("Idempotency-Key", "validation-key")
@@ -117,7 +192,21 @@ class TransferControllerValidationTest {
                 .content(objectMapper.writeValueAsString(request)));
     }
 
+    private org.springframework.test.web.servlet.ResultActions performTopUp(DepositReq request) throws Exception {
+        return mockMvc.perform(post("/api/v1/transfers/topUp")
+                .header("Idempotency-Key", "validation-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+    }
+
     private void verifyTransferServiceNeverCalled() {
+        verify(transferService, never()).topUp(
+                anyLong(),
+                anyString(),
+                anyLong(),
+                any(),
+                any()
+        );
         verify(transferService, never()).transfer(
                 anyLong(),
                 anyString(),
