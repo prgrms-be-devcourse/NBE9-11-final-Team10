@@ -60,5 +60,5 @@ portone:
   channel-key: test-channel-key
 
 app:
-  encryption:
-    key: IHVNIRQkRQVL467W70YUxpqSszxvhquhFmIuxCkd2Us=
+  hmac:
+    key: +O0yIB/iZbAKeOPdw2Bf9fmvPxJLhpIB6SBNRxXeki4=
