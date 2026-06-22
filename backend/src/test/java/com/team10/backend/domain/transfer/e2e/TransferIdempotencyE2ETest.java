@@ -6,6 +6,7 @@ import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
+import com.team10.backend.domain.transfer.dto.req.DepositReq;
 import com.team10.backend.domain.transfer.dto.req.TransferReq;
 import com.team10.backend.domain.transfer.repository.TransferRepository;
 import com.team10.backend.domain.user.entity.User;
@@ -317,6 +318,158 @@ class TransferIdempotencyE2ETest {
 
         Idempotency idempotency = idempotencyRepository
                 .findByUser_IdAndIdempotencyKey(sender.getId(), sameKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.SUCCESS, idempotency.getStatus());
+        assertNotNull(idempotency.getResponseBody());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("입금 멱등성 재시도 E2E - 같은 키와 같은 요청은 최초 응답을 재사용하고 중복 입금하지 않는다")
+    void topUp_sameIdempotencyKeyAndSameRequest_replaysFirstResponseWithoutDuplicateDeposit() throws Exception {
+        // given. 실제 사용자와 입금 대상 계좌를 DB에 준비한다.
+        // - 최초 잔액: 10,000원
+        User user = saveUser("topup-retry@example.com", "입금자");
+        Account account = saveAccount(user, "100200300201", 10_000L);
+
+        String retryKey = "topup-idempotency-retry-key";
+        DepositReq firstRequest = new DepositReq(
+                account.getId(),
+                5_000L,
+                "초기 입금"
+        );
+
+        // when 1. 멱등성 키를 포함해 1차 입금을 요청한다.
+        // 이 요청은 실제 입금을 수행하고, 응답 본문을 멱등성 레코드에 저장해야 한다.
+        String firstResponse = mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .with(authentication(authenticatedUser(user.getId())))
+                        .header("Idempotency-Key", retryKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(firstRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("DEPOSIT"))
+                .andExpect(jsonPath("$.amount").value(5_000L))
+                .andExpect(jsonPath("$.balanceBefore").value(10_000L))
+                .andExpect(jsonPath("$.balanceAfter").value(15_000L))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        // when 2. 같은 계좌에 다른 입금을 한 번 더 수행한다.
+        // 이후 재시도가 현재 잔액 기준으로 새로 계산되는지, 최초 응답을 replay하는지 구분하기 위한 장치다.
+        DepositReq laterRequest = new DepositReq(
+                account.getId(),
+                2_000L,
+                "후속 입금"
+        );
+
+        mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .with(authentication(authenticatedUser(user.getId())))
+                        .header("Idempotency-Key", "topup-idempotency-later-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(laterRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balanceAfter").value(17_000L));
+
+        // when 3. 1차 요청과 동일한 키, 동일한 payload로 재시도한다.
+        // 정상 멱등성 동작이라면 실제 입금을 다시 수행하지 않고 1차 응답을 그대로 반환해야 한다.
+        String retryResponse = mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .with(authentication(authenticatedUser(user.getId())))
+                        .header("Idempotency-Key", retryKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(firstRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("DEPOSIT"))
+                .andExpect(jsonPath("$.amount").value(5_000L))
+                .andExpect(jsonPath("$.balanceBefore").value(10_000L))
+                .andExpect(jsonPath("$.balanceAfter").value(15_000L))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        entityManager.clear();
+
+        // then 1. 재시도 응답은 1차 응답과 완전히 같아야 한다.
+        assertEquals(firstResponse, retryResponse);
+
+        // then 2. 실제 잔액은 1차 입금 5,000원과 후속 입금 2,000원만 반영되어야 한다.
+        Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
+        assertEquals(17_000L, savedAccount.getBalance());
+
+        // then 3. 재시도는 새 거래내역을 만들면 안 된다.
+        assertEquals(0, transferRepository.count());
+        assertEquals(2, transactionHistoryRepository.count());
+
+        // then 4. 재시도 대상 멱등성 레코드는 SUCCESS 상태와 저장 응답을 유지해야 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(user.getId(), retryKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.SUCCESS, idempotency.getStatus());
+        assertNotNull(idempotency.getResponseBody());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("입금 멱등성 충돌 E2E - 같은 키와 다른 요청은 409를 반환하고 추가 입금하지 않는다")
+    void topUp_sameIdempotencyKeyAndDifferentRequest_returnsConflictWithoutAdditionalDeposit() throws Exception {
+        // given. 실제 사용자와 입금 대상 계좌를 DB에 준비한다.
+        // - 최초 잔액: 10,000원
+        User user = saveUser("topup-conflict@example.com", "입금자");
+        Account account = saveAccount(user, "100200300202", 10_000L);
+
+        String conflictKey = "topup-idempotency-conflict-key";
+        DepositReq firstRequest = new DepositReq(
+                account.getId(),
+                5_000L,
+                "초기 입금"
+        );
+
+        // when 1. 멱등성 키를 포함해 1차 입금을 성공시킨다.
+        // 이 시점의 요청 해시는 key + accountId + amount + memo 조합으로 저장된다.
+        mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .with(authentication(authenticatedUser(user.getId())))
+                        .header("Idempotency-Key", conflictKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(firstRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("DEPOSIT"))
+                .andExpect(jsonPath("$.amount").value(5_000L))
+                .andExpect(jsonPath("$.balanceAfter").value(15_000L));
+
+        // when 2. 같은 멱등성 키로 금액만 다른 입금 요청을 다시 보낸다.
+        // 같은 키에 다른 payload가 들어왔으므로 replay가 아니라 충돌로 거부되어야 한다.
+        DepositReq differentRequest = new DepositReq(
+                account.getId(),
+                6_000L,
+                "초기 입금"
+        );
+
+        mockMvc.perform(post("/api/v1/transfers/topUp")
+                        .with(authentication(authenticatedUser(user.getId())))
+                        .header("Idempotency-Key", conflictKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(differentRequest)))
+                // then 1. API는 멱등성 요청 충돌을 명확히 반환해야 한다.
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_REQUEST_CONFLICT"))
+                .andExpect(jsonPath("$.message").value("같은 키인데 요청 내용이 다릅니다."));
+
+        entityManager.clear();
+
+        // then 2. 충돌 요청은 계좌 잔액을 절대 변경하면 안 된다.
+        // 1차 입금 5,000원만 반영된 상태가 유지되어야 한다.
+        Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
+        assertEquals(15_000L, savedAccount.getBalance());
+
+        // then 3. 충돌 요청은 새 거래내역을 만들면 안 된다.
+        assertEquals(0, transferRepository.count());
+        assertEquals(1, transactionHistoryRepository.count());
+
+        // then 4. 기존 멱등성 레코드는 SUCCESS 상태를 유지해야 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(user.getId(), conflictKey)
                 .orElseThrow();
 
         assertEquals(IdempotencyStatus.SUCCESS, idempotency.getStatus());
