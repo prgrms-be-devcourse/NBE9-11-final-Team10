@@ -8,13 +8,17 @@ import com.team10.backend.domain.exchange.entity.Currency;
 import com.team10.backend.domain.exchange.entity.ExchangeOrder;
 import com.team10.backend.domain.exchange.entity.ExchangeQuote;
 import com.team10.backend.domain.exchange.entity.FxWallet;
+import com.team10.backend.domain.exchange.entity.FxWalletLedger;
 import com.team10.backend.domain.exchange.exception.ExchangeErrorCode;
 import com.team10.backend.domain.exchange.repository.ExchangeOrderRepository;
 import com.team10.backend.domain.exchange.repository.ExchangeQuoteRepository;
+import com.team10.backend.domain.exchange.repository.FxWalletLedgerRepository;
 import com.team10.backend.domain.exchange.repository.FxWalletRepository;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
 import com.team10.backend.domain.exchange.type.ExchangeDirection;
 import com.team10.backend.domain.exchange.type.ExchangeOrderStatus;
+import com.team10.backend.domain.transaction.entity.TransactionHistory;
+import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
@@ -48,10 +52,16 @@ class ExchangeBusinessServiceTest {
     private FxWalletRepository fxWalletRepository;
 
     @Mock
+    private FxWalletLedgerRepository fxWalletLedgerRepository;
+
+    @Mock
     private ExchangeOrderRepository exchangeOrderRepository;
 
     @Mock
     private ExchangeQuoteRepository exchangeQuoteRepository;
+
+    @Mock
+    private TransactionHistoryRepository transactionHistoryRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -340,6 +350,7 @@ class ExchangeBusinessServiceTest {
 
     private void mockSuccessFlow(ExchangeQuote quote, Account krwAccount, FxWallet fxWallet) {
         mockSuccessFlowWithoutSave(quote, krwAccount, fxWallet);
+        mockExchangeHistorySaves();
         when(exchangeOrderRepository.saveAndFlush(any(ExchangeOrder.class))).thenAnswer(invocation -> {
             ExchangeOrder order = invocation.getArgument(0);
             ReflectionTestUtils.setField(order, "id", 40L);
@@ -353,6 +364,11 @@ class ExchangeBusinessServiceTest {
         when(exchangeOrderRepository.existsByExchangeQuote_Id(10L)).thenReturn(false);
         when(accountRepository.findByIdAndUserIdForUpdate(20L, 1L)).thenReturn(Optional.of(krwAccount));
         when(fxWalletRepository.findByIdAndUserIdForUpdate(30L, 1L)).thenReturn(Optional.of(fxWallet));
+    }
+
+    private void mockExchangeHistorySaves() {
+        when(transactionHistoryRepository.save(any(TransactionHistory.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(fxWalletLedgerRepository.save(any(FxWalletLedger.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     private User createUser(Long id) {

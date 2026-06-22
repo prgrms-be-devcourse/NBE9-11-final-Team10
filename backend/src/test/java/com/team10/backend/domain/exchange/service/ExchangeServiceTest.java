@@ -252,6 +252,7 @@ class ExchangeServiceTest {
                 krwAccount,
                 fxWallet,
                 direction,
+                null,
                 completedAt
         );
         ReflectionTestUtils.setField(order, "id", id);
