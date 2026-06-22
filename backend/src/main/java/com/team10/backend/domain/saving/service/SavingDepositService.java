@@ -447,21 +447,11 @@ public class SavingDepositService {
             MaturityReq request
     ) {
         if (request.savingType() == SavingProductType.DEPOSIT) {
-            Deposit deposit =
-                    depositRepository.findByIdAndUserIdWithProductForUpdate(savingId, userId)
-                            .orElseThrow(() -> new
-                                    BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
-
-            return savingBatchProcessor.matureDeposit(deposit);
+            return savingBatchProcessor.matureDeposit(savingId);
         }
 
         if (request.savingType() == SavingProductType.INSTALLMENT) {
-            Installment installment =
-                    installmentRepository.findByIdAndUserIdWithProductForUpdate(savingId, userId)
-                            .orElseThrow(() -> new
-                                    BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
-
-            return savingBatchProcessor.matureInstallment(installment);
+            return savingBatchProcessor.matureInstallment(savingId);
         }
 
         throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
@@ -472,81 +462,80 @@ public class SavingDepositService {
     public int matureDueSavings() {
         LocalDate today = LocalDate.now(clock);
 
-        List<Deposit> deposits =
+        List<Long> depositIds =
 
-                depositRepository.findAllByStatusAndMaturityDateLessThanEqualWithAccount(
+                depositRepository.findIdsByStatusAndMaturityDateLessThanEqual(
                         DepositStatus.ACTIVE,
                         today
                 );
 
-        List<Installment> installments =
+        List<Long> installmentIds =
 
-                installmentRepository.findAllByStatusAndMaturityDateLessThanEqualWithAccount(
+                installmentRepository.findIdsByStatusAndMaturityDateLessThanEqual(
                         InstallmentStatus.ACTIVE,
                         today
                 );
 
-        for (Deposit deposit : deposits) {
+        for (Long depositId : depositIds) {
             try {
-                savingBatchProcessor.matureDeposit(deposit);
+                savingBatchProcessor.matureDeposit(depositId);
             } catch (Exception e) {
-                log.warn("예금 만기 처리 실패 depositId={}", deposit.getId(), e);
+                log.warn("예금 만기 처리 실패 depositId={}", depositId, e);
             }
         }
 
-        for (Installment installment : installments) {
+        for (Long installmentId : installmentIds) {
             try {
-                savingBatchProcessor.matureInstallment(installment);
+                savingBatchProcessor.matureInstallment(installmentId);
             } catch (Exception e) {
-                log.warn("적금 만기 처리 실패 installmentId={}", installment.getId(), e);
+                log.warn("적금 만기 처리 실패 installmentId={}", installmentId, e);
             }
         }
 
 
-        return deposits.size() + installments.size();
+        return depositIds.size() + installmentIds.size();
     }
 
     @Transactional
     public int processDueInstallmentPayments() {
         LocalDate today = LocalDate.now(clock);
 
-        List<Installment> installments =
-                installmentRepository.findAllPaymentTargets(
+        List<Long> installmentIds =
+                installmentRepository.findPaymentTargetIds(
                         InstallmentStatus.ACTIVE,
                         today
                 );
 
-        for (Installment installment : installments) {
+        for (Long installmentId : installmentIds) {
             try {
-                savingBatchProcessor.processInstallmentPayment(installment);
+                savingBatchProcessor.processInstallmentPayment(installmentId);
             } catch (Exception e) {
-                log.warn("적금 정기 납입 처리 실패 installmentId={}", installment.getId(), e);
+                log.warn("적금 정기 납입 처리 실패 installmentId={}", installmentId, e);
             }
         }
 
-        return installments.size();
+        return installmentIds.size();
     }
 
     @Transactional
     public int retryFailedInstallmentPayments() {
         LocalDate today = LocalDate.now(clock);
 
-        List<Installment> installments =
-                installmentRepository.findAllRetryTargets(
+        List<Long> installmentIds =
+                installmentRepository.findRetryTargetIds(
                         InstallmentStatus.PAYMENT_FAILED,
                         today
                 );
 
-        for (Installment installment : installments) {
+        for (Long installmentId : installmentIds) {
             try {
-                savingBatchProcessor.processInstallmentPayment(installment);
+                savingBatchProcessor.processInstallmentPayment(installmentId);
             } catch (Exception e) {
-                log.warn("적금 납입 재시도 처리 실패 installmentId={}", installment.getId(),
-                        e);
+                log.warn("적금 납입 재시도 처리 실패 installmentId={}", installmentId, e);
             }
         }
 
-        return installments.size();
-
+        return installmentIds.size();
     }
+
 }

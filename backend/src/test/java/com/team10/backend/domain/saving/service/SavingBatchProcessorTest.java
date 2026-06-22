@@ -8,6 +8,8 @@ import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.Installment;
 import com.team10.backend.domain.saving.entity.SavingProduct;
 import com.team10.backend.domain.saving.exception.SavingErrorCode;
+import com.team10.backend.domain.saving.repository.DepositRepository;
+import com.team10.backend.domain.saving.repository.InstallmentRepository;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
 import com.team10.backend.domain.saving.type.SavingProductType;
@@ -32,6 +34,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -39,6 +42,7 @@ import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class SavingBatchProcessorTest {
@@ -51,6 +55,12 @@ class SavingBatchProcessorTest {
 
     @Mock
     private TransactionHistoryRepository transactionHistoryRepository;
+
+    @Mock
+    private DepositRepository depositRepository;
+
+    @Mock
+    private InstallmentRepository installmentRepository;
 
     @Spy
     private Clock clock = FIXED_CLOCK;
@@ -77,7 +87,10 @@ class SavingBatchProcessorTest {
         Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
         ReflectionTestUtils.setField(deposit, "maturityDate", TODAY);
 
-        MaturityRes response = savingBatchProcessor.matureDeposit(deposit);
+        when(depositRepository.findByIdWithAccountForUpdate(1L))
+                .thenReturn(Optional.of(deposit));
+
+        MaturityRes response = savingBatchProcessor.matureDeposit(1L);
 
         assertThat(response.savingId()).isEqualTo(1L);
         assertThat(response.savingType()).isEqualTo(SavingProductType.DEPOSIT);
@@ -105,7 +118,10 @@ class SavingBatchProcessorTest {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
         ReflectionTestUtils.setField(installment, "maturityDate", TODAY);
 
-        MaturityRes response = savingBatchProcessor.matureInstallment(installment);
+        when(installmentRepository.findByIdWithAccountForUpdate(1L))
+                .thenReturn(Optional.of(installment));
+
+        MaturityRes response = savingBatchProcessor.matureInstallment(1L);
 
         assertThat(response.savingId()).isEqualTo(1L);
         assertThat(response.savingType()).isEqualTo(SavingProductType.INSTALLMENT);
@@ -132,7 +148,10 @@ class SavingBatchProcessorTest {
     void matureSavingWithNotActiveStatus() {
         Deposit deposit = createDeposit(1L, DepositStatus.MATURED);
 
-        assertThatThrownBy(() -> savingBatchProcessor.matureDeposit(deposit))
+        when(depositRepository.findByIdWithAccountForUpdate(1L))
+                .thenReturn(Optional.of(deposit));
+
+        assertThatThrownBy(() -> savingBatchProcessor.matureDeposit(1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED);
@@ -143,7 +162,10 @@ class SavingBatchProcessorTest {
     void matureSavingBeforeMaturityDate() {
         Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
 
-        assertThatThrownBy(() -> savingBatchProcessor.matureDeposit(deposit))
+        when(depositRepository.findByIdWithAccountForUpdate(1L))
+                .thenReturn(Optional.of(deposit));
+
+        assertThatThrownBy(() -> savingBatchProcessor.matureDeposit(1L))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(SavingErrorCode.SAVING_NOT_MATURED_YET);
@@ -155,7 +177,10 @@ class SavingBatchProcessorTest {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
         ReflectionTestUtils.setField(installment, "nextPaymentDate", TODAY);
 
-        savingBatchProcessor.processInstallmentPayment(installment);
+        when(installmentRepository.findByIdWithAccountForUpdate(1L))
+                .thenReturn(Optional.of(installment));
+
+        savingBatchProcessor.processInstallmentPayment(1L);
 
         assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
         assertThat(installment.getPaidAmount()).isEqualTo(200000L);
@@ -180,7 +205,10 @@ class SavingBatchProcessorTest {
         ReflectionTestUtils.setField(installment, "nextPaymentDate", TODAY);
         ReflectionTestUtils.setField(activeAccount, "balance", 50000L);
 
-        savingBatchProcessor.processInstallmentPayment(installment);
+        when(installmentRepository.findByIdWithAccountForUpdate(1L))
+                .thenReturn(Optional.of(installment));
+
+        savingBatchProcessor.processInstallmentPayment(1L);
 
         assertThat(activeAccount.getBalance()).isEqualTo(50000L);
         assertThat(installment.getPaidAmount()).isEqualTo(100000L);
@@ -199,7 +227,10 @@ class SavingBatchProcessorTest {
         ReflectionTestUtils.setField(installment, "nextPaymentDate", TODAY);
         ReflectionTestUtils.setField(activeAccount, "status", AccountStatus.CLOSED);
 
-        savingBatchProcessor.processInstallmentPayment(installment);
+        when(installmentRepository.findByIdWithAccountForUpdate(1L))
+                .thenReturn(Optional.of(installment));
+
+        savingBatchProcessor.processInstallmentPayment(1L);
 
         assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
         assertThat(installment.getPaidAmount()).isEqualTo(100000L);
