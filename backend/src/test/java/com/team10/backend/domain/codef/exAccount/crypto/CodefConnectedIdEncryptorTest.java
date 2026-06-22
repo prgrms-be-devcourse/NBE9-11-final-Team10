@@ -1,7 +1,7 @@
 package com.team10.backend.domain.codef.exAccount.crypto;
 
 import com.team10.backend.domain.codef.exAccount.config.CodefConnectedIdCryptoProperties;
-import com.team10.backend.domain.codef.exAccount.dto.internal.EncryptedConnectedId;
+import com.team10.backend.domain.exAccount.entity.value.EncryptedConnectedId;
 import com.team10.backend.domain.codef.exAccount.exception.CodefExAccountCryptoException;
 import org.junit.jupiter.api.Test;
 

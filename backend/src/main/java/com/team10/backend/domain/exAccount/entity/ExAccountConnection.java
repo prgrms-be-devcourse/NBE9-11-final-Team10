@@ -1,7 +1,7 @@
-package com.team10.backend.domain.codef.exAccount.entity;
+package com.team10.backend.domain.exAccount.entity;
 
-import com.team10.backend.domain.codef.exAccount.dto.internal.EncryptedConnectedId;
-import com.team10.backend.domain.codef.exAccount.type.CodefExAccountConnectionStatus;
+import com.team10.backend.domain.exAccount.Type.ExAccountConnectionStatus;
+import com.team10.backend.domain.exAccount.entity.value.EncryptedConnectedId;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.Column;
@@ -29,7 +29,7 @@ import java.time.LocalDateTime;
         )
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class CodefExAccountConnection extends BaseEntity {
+public class ExAccountConnection extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -49,17 +49,17 @@ public class CodefExAccountConnection extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private CodefExAccountConnectionStatus status;
+    private ExAccountConnectionStatus status;
 
     @Column(name = "last_synced_at")
     private LocalDateTime lastSyncedAt;
 
-    public static CodefExAccountConnection create(
+    public static ExAccountConnection create(
             User user,
             String organization,
             EncryptedConnectedId encryptedConnectedId
     ) {
-        CodefExAccountConnection connection = new CodefExAccountConnection();
+        ExAccountConnection connection = new ExAccountConnection();
         connection.user = user;
         connection.organization = organization;
         connection.replaceConnectedId(encryptedConnectedId);
@@ -70,7 +70,7 @@ public class CodefExAccountConnection extends BaseEntity {
         this.connectedIdCiphertext = encryptedConnectedId.ciphertext();
         this.connectedIdIv = encryptedConnectedId.iv();
         this.encryptionKeyVersion = encryptedConnectedId.keyVersion();
-        this.status = CodefExAccountConnectionStatus.ACTIVE;
+        this.status = ExAccountConnectionStatus.ACTIVE;
         this.lastSyncedAt = null;
     }
 
@@ -87,14 +87,14 @@ public class CodefExAccountConnection extends BaseEntity {
     }
 
     public void requireReauthentication() {
-        this.status = CodefExAccountConnectionStatus.REAUTH_REQUIRED;
+        this.status = ExAccountConnectionStatus.REAUTH_REQUIRED;
     }
 
     public void revoke() {
-        this.status = CodefExAccountConnectionStatus.REVOKED;
+        this.status = ExAccountConnectionStatus.REVOKED;
     }
 
     public boolean isActive() {
-        return status == CodefExAccountConnectionStatus.ACTIVE;
+        return status == ExAccountConnectionStatus.ACTIVE;
     }
 }

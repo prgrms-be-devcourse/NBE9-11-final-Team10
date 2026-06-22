@@ -1,7 +1,7 @@
-package com.team10.backend.domain.codef.exAccount.repository;
+package com.team10.backend.domain.exAccount.repository;
 
-import com.team10.backend.domain.codef.exAccount.dto.internal.EncryptedConnectedId;
-import com.team10.backend.domain.codef.exAccount.entity.CodefExAccountConnection;
+import com.team10.backend.domain.exAccount.entity.ExAccountConnection;
+import com.team10.backend.domain.exAccount.entity.value.EncryptedConnectedId;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.config.QuerydslConfig;
 import jakarta.persistence.EntityManager;
@@ -21,10 +21,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest
 @ActiveProfiles("test")
 @Import(QuerydslConfig.class)
-class CodefExAccountConnectionRepositoryTest {
+class ExAccountConnectionRepositoryTest {
 
     @Autowired
-    private CodefExAccountConnectionRepository connectionRepository;
+    private ExAccountConnectionRepository connectionRepository;
 
     @Autowired
     private EntityManager entityManager;
@@ -40,13 +40,13 @@ class CodefExAccountConnectionRepositoryTest {
 
     @Test
     void findsConnectionOnlyForItsOwner() {
-        CodefExAccountConnection connection = persistConnection(owner, "0004", "ciphertext-owner");
+        ExAccountConnection connection = persistConnection(owner, "0004", "ciphertext-owner");
         entityManager.flush();
         entityManager.clear();
 
         assertThat(connectionRepository.findByUserIdAndOrganization(owner.getId(), "0004"))
                 .get()
-                .extracting(CodefExAccountConnection::getId)
+                .extracting(ExAccountConnection::getId)
                 .isEqualTo(connection.getId());
         assertThat(connectionRepository.findByUserIdAndOrganization(other.getId(), "0004"))
                 .isEmpty();
@@ -59,7 +59,7 @@ class CodefExAccountConnectionRepositoryTest {
         persistConnection(owner, "0004", "ciphertext-first");
         entityManager.flush();
 
-        CodefExAccountConnection duplicate = CodefExAccountConnection.create(
+        ExAccountConnection duplicate = ExAccountConnection.create(
                 owner,
                 "0004",
                 encrypted("ciphertext-second")
@@ -72,7 +72,7 @@ class CodefExAccountConnectionRepositoryTest {
     @Test
     void storesOnlyEncryptedConnectedIdMaterial() {
         String plaintextConnectedId = "plain-connected-id-must-not-be-stored";
-        CodefExAccountConnection connection = persistConnection(owner, "0004", "encrypted-value");
+        ExAccountConnection connection = persistConnection(owner, "0004", "encrypted-value");
         entityManager.flush();
         entityManager.clear();
 
@@ -101,12 +101,12 @@ class CodefExAccountConnectionRepositoryTest {
         return user;
     }
 
-    private CodefExAccountConnection persistConnection(
+    private ExAccountConnection persistConnection(
             User user,
             String organization,
             String ciphertext
     ) {
-        CodefExAccountConnection connection = CodefExAccountConnection.create(
+        ExAccountConnection connection = ExAccountConnection.create(
                 user,
                 organization,
                 encrypted(ciphertext)

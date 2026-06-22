@@ -1,4 +1,4 @@
-package com.team10.backend.domain.codef.exAccount.dto.internal;
+package com.team10.backend.domain.exAccount.entity.value;
 
 public record EncryptedConnectedId(
         String ciphertext,

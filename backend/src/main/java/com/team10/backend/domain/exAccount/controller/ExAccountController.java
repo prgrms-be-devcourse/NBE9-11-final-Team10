@@ -1,12 +1,15 @@
 package com.team10.backend.domain.exAccount.controller;
 
+import com.team10.backend.domain.codef.exAccount.dto.req.CodefExAccountConnectionCreateReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountCandidateReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountTransactionRefreshReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
+import com.team10.backend.domain.exAccount.dto.res.ExAccountConnectionRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountDetailRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountTransactionRefreshRes;
+import com.team10.backend.domain.exAccount.service.ExAccountConnectionService;
 import com.team10.backend.domain.exAccount.service.ExAccountService;
 import com.team10.backend.domain.exAccount.service.ExAccountSyncService;
 import com.team10.backend.domain.exAccount.service.ExAccountTransactionService;
@@ -37,6 +40,45 @@ public class ExAccountController {
     private final ExAccountService exAccountService;
     private final ExAccountSyncService exAccountSyncService;
     private final ExAccountTransactionService exAccountTransactionService;
+    private final ExAccountConnectionService exAccountConnectionService;
+
+    @Operation(
+            summary = "외부계좌 기관 연결",
+            description = "CODEF에 기관 계정을 등록하고 connectedId를 암호화하여 사용자 연결정보로 저장합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "기관 연결 성공"),
+            @ApiResponse(responseCode = "400", description = "기관 인증정보 검증 실패"),
+            @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    @PostMapping("/connections")
+    public ResponseEntity<ExAccountConnectionRes> registerConnection(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody CodefExAccountConnectionCreateReq request
+    ) {
+        ExAccountConnectionRes response = exAccountConnectionService.register(userId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @Operation(
+            summary = "외부기관 보유계좌 후보 조회",
+            description = "사용자 소유의 기관 연결정보를 복호화해 CODEF 보유계좌를 조회하고, 계좌번호를 마스킹한 연동 후보를 반환합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "보유계좌 후보 조회 성공"),
+            @ApiResponse(responseCode = "404", description = "사용자 소유의 연결정보를 찾을 수 없음"),
+            @ApiResponse(responseCode = "409", description = "재인증이 필요한 연결정보")
+    })
+    @GetMapping("/connections/{organization}/candidates")
+    public ResponseEntity<List<ExAccountCandidateRes>> getProviderLinkCandidates(
+            @AuthenticationPrincipal Long userId,
+            @Parameter(description = "CODEF 기관 코드", example = "0004")
+            @PathVariable String organization
+    ) {
+        return ResponseEntity.ok(
+                exAccountConnectionService.getLinkCandidates(userId, organization)
+        );
+    }
 
     @Operation(
             summary = "연동된 외부 계좌 목록 조회",

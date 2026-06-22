@@ -12,13 +12,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.team10.backend.domain.exAccount.Type.ExAccountStatus;
 import com.team10.backend.domain.exAccount.Type.ExAccountTransactionDirection;
 import com.team10.backend.domain.exAccount.Type.ExAccountType;
+import com.team10.backend.domain.exAccount.Type.ExAccountConnectionStatus;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountTransactionSyncReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
+import com.team10.backend.domain.exAccount.dto.res.ExAccountConnectionRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountDetailRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountTransactionRefreshRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountTransactionRes;
+import com.team10.backend.domain.exAccount.service.ExAccountConnectionService;
 import com.team10.backend.domain.exAccount.service.ExAccountService;
 import com.team10.backend.domain.exAccount.service.ExAccountSyncService;
 import com.team10.backend.domain.exAccount.service.ExAccountTransactionService;
@@ -53,6 +56,56 @@ class ExAccountControllerTest {
 
     @MockitoBean
     private ExAccountTransactionService exAccountTransactionService;
+
+    @MockitoBean
+    private ExAccountConnectionService exAccountConnectionService;
+
+    @Test
+    @DisplayName("기관 연결 API는 CODEF 등록 후 암호화 연결 상태를 반환한다")
+    void registerConnection() throws Exception {
+        when(exAccountConnectionService.register(eq(1L), any()))
+                .thenReturn(new ExAccountConnectionRes(
+                        "0004", ExAccountConnectionStatus.ACTIVE
+                ));
+
+        mockMvc.perform(post("/api/v1/external-accounts/connections")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "organization": "0004",
+                                  "businessType": "BK",
+                                  "clientType": "P",
+                                  "loginType": "1",
+                                  "loginId": "internet-user",
+                                  "password": "bank-password",
+                                  "birthDate": "950101"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.organization").value("0004"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        verify(exAccountConnectionService).register(eq(1L), any());
+    }
+
+    @Test
+    @DisplayName("기관 후보 조회 API는 계좌번호가 마스킹된 후보만 반환한다")
+    void getProviderLinkCandidates() throws Exception {
+        ExAccountCandidateRes response = new ExAccountCandidateRes(
+                "0004", "123***7890", "입출금통장", "생활비",
+                ExAccountType.DEMAND, BigDecimal.valueOf(1000), BigDecimal.valueOf(900),
+                LocalDate.of(2024, 1, 1), null, LocalDate.of(2026, 6, 22), false
+        );
+        when(exAccountConnectionService.getLinkCandidates(1L, "0004"))
+                .thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/v1/external-accounts/connections/{organization}/candidates", "0004"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].organization").value("0004"))
+                .andExpect(jsonPath("$[0].accountNoMasked").value("123***7890"));
+
+        verify(exAccountConnectionService).getLinkCandidates(1L, "0004");
+    }
 
     @Test
     @DisplayName("연동된 외부 계좌 목록 조회 API는 인증 사용자의 외부 계좌 목록을 반환한다")
