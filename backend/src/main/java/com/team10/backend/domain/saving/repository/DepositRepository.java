@@ -2,7 +2,9 @@ package com.team10.backend.domain.saving.repository;
 
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.type.DepositStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -48,6 +50,7 @@ public interface DepositRepository extends JpaRepository<Deposit, Long> {
             @Param("userId") Long userId
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
       select d
       from Deposit d
@@ -61,4 +64,17 @@ public interface DepositRepository extends JpaRepository<Deposit, Long> {
             @Param("today") LocalDate today
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+      select d
+      from Deposit d
+      join fetch d.savingProduct
+      join fetch d.withdrawAccount
+      where d.id = :depositId
+      and d.user.id = :userId
+      """)
+    Optional<Deposit> findByIdAndUserIdWithProductForUpdate(
+            @Param("depositId") Long depositId,
+            @Param("userId") Long userId
+    );
 }
