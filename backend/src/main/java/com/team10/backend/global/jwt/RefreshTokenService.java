@@ -23,7 +23,8 @@ public class RefreshTokenService {
     private long refreshTokenExpirationSeconds;
 
     private final StringRedisTemplate redisTemplate;
-    // RedisScriptConfig 정의 — 일치 시에만 원자적 삭제(1=삭제, 0=불일치/없음), 불일치 시 기존 RT는 보존된다.
+    // RedisScriptConfig에서 정의 — 값 일치 시에만 원자적으로 삭제(1=일치 후 삭제, 0=불일치/키 없음).
+    // 불일치 시 키를 삭제하지 않으므로 잘못된 RT 제출이 올바른 RT를 무효화하지 않는다.
     private final RedisScript<Long> getAndDeleteIfMatchScript;
 
     /** 새 Refresh Token을 발급해 Redis에 저장한다(TTL 7일) — 기존 토큰은 덮어써 단일 세션을 보장한다. */
