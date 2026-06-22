@@ -12,6 +12,7 @@ public record CodefExAccountProperties(
         @NotBlank String clientSecret,
         @NotBlank String publicKey,
         @NotBlank String baseUrl,
+        @NotBlank String accountCreatePath,
         @NotBlank String accountListPath,
         @NotBlank String bankTransactionPath
 ) {
@@ -23,6 +24,7 @@ public record CodefExAccountProperties(
                 + ", clientSecret=<redacted>"
                 + ", publicKey=<redacted>"
                 + ", baseUrl=" + baseUrl
+                + ", accountCreatePath=" + accountCreatePath
                 + ", accountListPath=" + accountListPath
                 + ", bankTransactionPath=" + bankTransactionPath
                 + "]";

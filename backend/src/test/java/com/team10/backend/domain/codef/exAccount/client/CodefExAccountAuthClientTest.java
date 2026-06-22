@@ -97,6 +97,7 @@ class CodefExAccountAuthClientTest {
                 "account-client-secret",
                 "account-public-key",
                 "https://development.codef.io",
+                "/v1/account/create",
                 "/account-list",
                 "/transaction-list"
         );

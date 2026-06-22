@@ -17,8 +17,11 @@ class CodefExAccountPropertiesTest {
                     "codef.account-inquiry.client-secret=account-client-secret",
                     "codef.account-inquiry.public-key=account-public-key",
                     "codef.account-inquiry.base-url=https://development.codef.io",
+                    "codef.account-inquiry.account-create-path=/v1/account/create",
                     "codef.account-inquiry.account-list-path=/account-list",
                     "codef.account-inquiry.bank-transaction-path=/transaction-list",
+                    "codef.connected-id-crypto.secret-key=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+                    "codef.connected-id-crypto.key-version=test-v1",
                     "codef.one-won-transfer.client-id=transfer-client-id",
                     "codef.one-won-transfer.client-secret=transfer-client-secret",
                     "codef.one-won-transfer.public-key=transfer-public-key"
@@ -28,6 +31,7 @@ class CodefExAccountPropertiesTest {
     void bindsOnlyAccountInquiryProperties() {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(CodefExAccountProperties.class);
+            assertThat(context).hasSingleBean(CodefConnectedIdCryptoProperties.class);
             assertThat(context).hasBean(OAUTH_REST_CLIENT);
             assertThat(context).hasBean(API_REST_CLIENT);
 
@@ -37,12 +41,18 @@ class CodefExAccountPropertiesTest {
             assertThat(properties.clientSecret()).isEqualTo("account-client-secret");
             assertThat(properties.publicKey()).isEqualTo("account-public-key");
             assertThat(properties.baseUrl()).isEqualTo("https://development.codef.io");
+            assertThat(properties.accountCreatePath()).isEqualTo("/v1/account/create");
             assertThat(properties.accountListPath()).isEqualTo("/account-list");
             assertThat(properties.bankTransactionPath()).isEqualTo("/transaction-list");
             assertThat(properties.toString())
                     .doesNotContain("account-client-id")
                     .doesNotContain("account-client-secret")
                     .doesNotContain("account-public-key");
+            CodefConnectedIdCryptoProperties cryptoProperties =
+                    context.getBean(CodefConnectedIdCryptoProperties.class);
+            assertThat(cryptoProperties.keyVersion()).isEqualTo("test-v1");
+            assertThat(cryptoProperties.toString())
+                    .doesNotContain(cryptoProperties.secretKey());
         });
     }
 
@@ -52,6 +62,9 @@ class CodefExAccountPropertiesTest {
         assertMissingPropertyFails("client-secret");
         assertMissingPropertyFails("public-key");
         assertMissingPropertyFails("base-url");
+        contextRunner
+                .withPropertyValues("codef.connected-id-crypto.secret-key=")
+                .run(context -> assertThat(context).hasFailed());
     }
 
     private void assertMissingPropertyFails(String propertyName) {

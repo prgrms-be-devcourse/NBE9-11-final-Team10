@@ -77,6 +77,7 @@ class CodefExAccountPasswordEncryptorTest {
                 "account-client-secret",
                 publicKey,
                 "https://development.codef.io",
+                "/v1/account/create",
                 "/account-list",
                 "/transaction-list"
         );
