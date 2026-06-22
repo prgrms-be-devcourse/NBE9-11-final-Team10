@@ -273,6 +273,112 @@ class TransferFlowE2ETest {
         assertEquals(10_000L, retriedReceiverAccount.getBalance());
     }
 
+    @Test
+    @DisplayName("비소유 계좌 송금 E2E - 로그인 사용자가 소유하지 않은 출금 계좌는 송금 처리하지 않는다")
+    void transfer_senderAccountOwnedByAnotherUser_returnsAccountNotFoundWithoutPersistingTransfer() throws Exception {
+        // given 1. 계좌 소유자, 수취자, 공격자 역할의 사용자를 DB에 준비한다.
+        // - 실제 출금 계좌 소유자: owner
+        // - API 인증 사용자: attacker
+        // 공격자가 owner의 계좌 ID를 알고 있어도 송금에 사용할 수 없어야 한다.
+        User owner = saveUser("owner@example.com", "계좌주");
+        User receiver = saveUser("receiver-not-owned@example.com", "수취자");
+        User attacker = saveUser("attacker@example.com", "공격자");
+        Account ownerAccount = saveAccount(owner, "100200300031", 100_000L);
+        Account receiverAccount = saveAccount(receiver, "100200300032", 10_000L);
+        String idempotencyKey = "flow-not-owned-key";
+
+        TransferReq request = new TransferReq(
+                ownerAccount.getId(),
+                receiverAccount.getAccountNumber(),
+                50_000L,
+                "비소유 계좌 송금 시도"
+        );
+
+        // when. 공격자 인증으로 타인의 계좌를 출금 계좌로 지정해 송금 요청한다.
+        mockMvc.perform(post("/api/v1/transfers")
+                        .with(authentication(authenticatedUser(attacker.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. 권한/존재 정보를 노출하지 않도록 ACCOUNT_NOT_FOUND로 거부해야 한다.
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("계좌를 찾을 수 없습니다."));
+
+        entityManager.clear();
+
+        // then 2. 실패한 권한 검증 요청은 양쪽 계좌 잔액을 절대 변경하면 안 된다.
+        Account savedOwnerAccount = accountRepository.findById(ownerAccount.getId()).orElseThrow();
+        Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
+
+        assertEquals(100_000L, savedOwnerAccount.getBalance());
+        assertEquals(10_000L, savedReceiverAccount.getBalance());
+
+        // then 3. 권한 검증에서 실패했으므로 송금 원장과 거래내역은 생성되면 안 된다.
+        assertEquals(0, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+
+        // then 4. 멱등성 레코드는 실패로 완료되어 같은 키 재시도를 다시 처리하지 않도록 해야 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(attacker.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("비활성 계좌 송금 E2E - CLOSED 상태의 출금 또는 수취 계좌는 송금 처리하지 않는다")
+    void transfer_inactiveAccount_returnsAccountNotActiveWithoutPersistingTransfer() throws Exception {
+        // given 1. 송금자와 수취자 계좌를 준비하고, 수취자 계좌를 CLOSED 상태로 변경한다.
+        // 한쪽이라도 비활성 계좌라면 출금/입금/거래내역 저장이 일어나면 안 된다.
+        User sender = saveUser("sender-inactive@example.com", "송금자");
+        User receiver = saveUser("receiver-inactive@example.com", "수취자");
+        Account senderAccount = saveAccount(sender, "100200300041", 100_000L);
+        Account receiverAccount = saveAccount(receiver, "100200300042", 10_000L);
+        closeAccount(receiverAccount.getId());
+        String idempotencyKey = "flow-inactive-key";
+
+        TransferReq request = new TransferReq(
+                senderAccount.getId(),
+                receiverAccount.getAccountNumber(),
+                50_000L,
+                "비활성 계좌 송금 시도"
+        );
+
+        // when. CLOSED 상태의 수취 계좌로 송금을 요청한다.
+        mockMvc.perform(post("/api/v1/transfers")
+                        .with(authentication(authenticatedUser(sender.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. API는 비활성 계좌 에러를 반환해야 한다.
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_ACTIVE"))
+                .andExpect(jsonPath("$.message").value("활성 계좌가 아닙니다."));
+
+        entityManager.clear();
+
+        // then 2. 비활성 계좌 검증 실패는 양쪽 계좌 잔액을 절대 변경하면 안 된다.
+        Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
+        Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
+
+        assertEquals(100_000L, savedSenderAccount.getBalance());
+        assertEquals(10_000L, savedReceiverAccount.getBalance());
+
+        // then 3. 송금 원장과 거래내역은 생성되면 안 된다.
+        assertEquals(0, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+
+        // then 4. 멱등성 레코드는 FAILED로 완료되어 실패 요청의 재처리 가능성을 막아야 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(sender.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
     private UsernamePasswordAuthenticationToken authenticatedUser(Long userId) {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
     }
@@ -281,6 +387,13 @@ class TransferFlowE2ETest {
         Account account = Account.create(user, accountNumber, "테스트 계좌", AccountType.DEPOSIT);
         account.deposit(balance);
         return transactionTemplate.execute(status -> accountRepository.save(account));
+    }
+
+    private void closeAccount(Long accountId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Account account = accountRepository.findById(accountId).orElseThrow();
+            account.close();
+        });
     }
 
     private User saveUser(String email, String name) {
