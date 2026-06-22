@@ -1,6 +1,6 @@
 package com.team10.backend.domain.exAccount.entity;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountTransactionDirection;
+import com.team10.backend.domain.exAccount.type.ExAccountTransactionDirection;
 import com.team10.backend.global.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;

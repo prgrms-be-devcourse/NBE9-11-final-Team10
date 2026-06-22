@@ -2,7 +2,7 @@ package com.team10.backend.domain.exAccount.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountType;
+import com.team10.backend.domain.exAccount.type.ExAccountType;
 import com.team10.backend.domain.exAccount.entity.ExAccount;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.config.QuerydslConfig;

@@ -1,4 +1,4 @@
-package com.team10.backend.domain.exAccount.Type;
+package com.team10.backend.domain.exAccount.type;
 
 public enum ExAccountConnectionStatus {
     ACTIVE,

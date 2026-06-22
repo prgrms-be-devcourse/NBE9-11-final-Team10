@@ -13,6 +13,7 @@ import com.team10.backend.global.exception.GlobalErrorCode;
 import com.team10.backend.global.security.HmacSha256Hasher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -20,6 +21,7 @@ import static org.springframework.util.StringUtils.hasText;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ExAccountSyncService {
 
     private static final int MAX_VISIBLE_PREFIX_LENGTH = 6;
@@ -38,6 +40,7 @@ public class ExAccountSyncService {
                 .toList();
     }
 
+    @Transactional
     public ExAccountRes linkAccount(Long userId, ExAccountLinkReq request) {
         validateItem(request);
 

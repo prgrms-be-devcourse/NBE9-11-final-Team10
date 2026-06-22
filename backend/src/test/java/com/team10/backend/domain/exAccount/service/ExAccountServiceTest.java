@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountTransactionDirection;
-import com.team10.backend.domain.exAccount.Type.ExAccountType;
+import com.team10.backend.domain.exAccount.type.ExAccountTransactionDirection;
+import com.team10.backend.domain.exAccount.type.ExAccountType;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountDetailRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;

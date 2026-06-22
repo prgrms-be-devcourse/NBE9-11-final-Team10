@@ -7,8 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountTransactionDirection;
-import com.team10.backend.domain.exAccount.Type.ExAccountType;
+import com.team10.backend.domain.exAccount.type.ExAccountTransactionDirection;
+import com.team10.backend.domain.exAccount.type.ExAccountType;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountTransactionSyncReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountDetailRes;

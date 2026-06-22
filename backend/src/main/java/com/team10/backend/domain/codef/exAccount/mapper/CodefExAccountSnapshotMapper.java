@@ -3,7 +3,7 @@ package com.team10.backend.domain.codef.exAccount.mapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.team10.backend.domain.codef.exAccount.dto.internal.CodefExAccountSnapshot;
 import com.team10.backend.domain.codef.exAccount.exception.CodefExAccountClientException;
-import com.team10.backend.domain.exAccount.Type.ExAccountType;
+import com.team10.backend.domain.exAccount.type.ExAccountType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 

@@ -9,10 +9,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountStatus;
-import com.team10.backend.domain.exAccount.Type.ExAccountTransactionDirection;
-import com.team10.backend.domain.exAccount.Type.ExAccountType;
-import com.team10.backend.domain.exAccount.Type.ExAccountConnectionStatus;
+import com.team10.backend.domain.exAccount.type.ExAccountStatus;
+import com.team10.backend.domain.exAccount.type.ExAccountTransactionDirection;
+import com.team10.backend.domain.exAccount.type.ExAccountType;
+import com.team10.backend.domain.exAccount.type.ExAccountConnectionStatus;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountTransactionSyncReq;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;

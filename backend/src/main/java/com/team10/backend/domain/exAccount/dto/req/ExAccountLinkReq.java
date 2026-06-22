@@ -1,6 +1,6 @@
 package com.team10.backend.domain.exAccount.dto.req;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountType;
+import com.team10.backend.domain.exAccount.type.ExAccountType;
 import com.team10.backend.domain.exAccount.entity.ExAccount;
 import com.team10.backend.domain.user.entity.User;
 import io.swagger.v3.oas.annotations.media.Schema;

@@ -1,6 +1,6 @@
 package com.team10.backend.domain.exAccount.entity;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountConnectionStatus;
+import com.team10.backend.domain.exAccount.type.ExAccountConnectionStatus;
 import com.team10.backend.domain.exAccount.entity.value.EncryptedConnectedId;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.entity.BaseEntity;
