@@ -1,14 +1,17 @@
 package com.team10.backend.domain.codef.auth.ocr;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.codef.auth.client.CodefAuthClient;
+import com.team10.backend.domain.codef.auth.client.CodefAuthException;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.global.exception.BusinessException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -16,13 +19,9 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
-// CODEF EasyCodef SDK는 URL 인코딩 + Content-Type 누락으로 CF-00003 오류 발생
-// → Spring RestClient로 application/json 방식 직접 호출
-
 /** CODEF 신분증 OCR 클라이언트 (POST /v1/kr/etc/a/ocr/registration-card) */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class CodefOcrClient {
 
     private static final String OCR_URL = "https://development.codef.io/v1/kr/etc/a/ocr/registration-card";
@@ -31,45 +30,28 @@ public class CodefOcrClient {
     private final CodefAuthClient codefAuthClient;
     private final RestClient restClient;
 
+    // account-inquiry 용 자격증명으로 발급된 토큰을 사용 (CodefAuthClientConfig 참고).
+    public CodefOcrClient(
+            @Qualifier("accountInquiry") CodefAuthClient codefAuthClient,
+            RestClient restClient
+    ) {
+        this.codefAuthClient = codefAuthClient;
+        this.restClient = restClient;
+    }
+
     /**
      * 신분증 이미지 바이트를 CODEF OCR API로 전송하고 구조화된 정보를 반환한다.
      */
     public IdCardOcrResult extractIdCard(byte[] imageBytes) {
+        Map<?, ?> responseMap = requestOcr(imageBytes);
+
         try {
-            String token = codefAuthClient.getAccessToken();
-            String base64Image = Base64.getEncoder().encodeToString(imageBytes);
-
-            Map<String, String> body = new HashMap<>();
-            body.put("Type", "0");
-            body.put("secret_mode", "0");
-            body.put("IdCard_base64", base64Image);
-            body.put("image_return", "0");
-            body.put("image_save", "0");
-
-            String response = restClient.post()
-                    .uri(OCR_URL)
-                    .header("Authorization", "Bearer " + token)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .body(String.class);
-
-            String decoded = URLDecoder.decode(response != null ? response : "", StandardCharsets.UTF_8);
-
-            Map<?, ?> responseMap = OBJECT_MAPPER.readValue(decoded, Map.class);
-            if (responseMap == null) {
-                throw new BusinessException(UserErrorCode.OCR_FAILED);
-            }
-
-            Map<?, ?> result = (Map<?, ?>) responseMap.get("result");
-            if (result == null) {
-                throw new BusinessException(UserErrorCode.OCR_FAILED);
-            }
-
-            String code = (String) result.get("code");
+            Map<?, ?> result = (responseMap != null) ? (Map<?, ?>) responseMap.get("result") : null;
+            String code = (result != null) ? (String) result.get("code") : null;
             log.debug("[CODEF OCR] 응답 수신 — code={}", code);
+
             if (!"CF-00000".equals(code)) {
-                log.error("[CODEF OCR] 실패 — code={}, message={}", code, result.get("message"));
+                log.error("[CODEF OCR] 실패 — code={}, message={}", code, result != null ? result.get("message") : null);
                 throw new BusinessException(UserErrorCode.OCR_FAILED);
             }
 
@@ -94,9 +76,39 @@ public class CodefOcrClient {
             log.info("[CODEF OCR] 추출 완료 — name={}", name);
             return new IdCardOcrResult(name, residentNumber, issueDate);
 
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
+        } catch (ClassCastException e) {
+            // CODEF가 200 OK이지만 예상과 다른 모양(필드 타입 불일치 등)으로 응답한 경우.
+            // 캐스팅 실패를 그대로 흘리면 GlobalExceptionHandler의 일반 500으로 새어나간다.
+            log.error("[CODEF OCR] 응답 형식이 예상과 다름", e);
+            throw new BusinessException(UserErrorCode.OCR_FAILED);
+        }
+    }
+
+    /** OCR API 호출 + 응답 디코딩. 실패 시 전부 OCR_FAILED로 변환한다. */
+    private Map<?, ?> requestOcr(byte[] imageBytes) {
+        String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+        Map<String, String> body = new HashMap<>();
+        body.put("Type", "0");
+        body.put("secret_mode", "0");
+        body.put("IdCard_base64", base64Image);
+        body.put("image_return", "0");
+        body.put("image_save", "0");
+
+        try {
+            String token = codefAuthClient.getAccessToken();
+
+            String response = restClient.post()
+                    .uri(OCR_URL)
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(String.class);
+
+            String decoded = URLDecoder.decode(response != null ? response : "", StandardCharsets.UTF_8);
+            return OBJECT_MAPPER.readValue(decoded, Map.class);
+
+        } catch (CodefAuthException | RestClientException | IllegalArgumentException | JsonProcessingException e) {
             log.error("[CODEF OCR] 처리 오류", e);
             throw new BusinessException(UserErrorCode.OCR_FAILED);
         }

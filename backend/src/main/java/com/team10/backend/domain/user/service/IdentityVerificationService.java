@@ -2,41 +2,43 @@ package com.team10.backend.domain.user.service;
 
 import com.team10.backend.domain.user.dto.req.OneWonStartReq;
 import com.team10.backend.domain.user.dto.req.OneWonVerifyReq;
+import com.team10.backend.domain.user.dto.res.IdentityVerificationStatusRes;
 import com.team10.backend.domain.user.dto.res.OcrAcceptedRes;
 import com.team10.backend.domain.user.dto.res.OneWonStartRes;
 import com.team10.backend.domain.user.dto.res.OneWonVerifyRes;
 import com.team10.backend.domain.user.entity.IdentityVerification;
 import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.domain.user.event.OcrSubmittedEvent;
+import com.team10.backend.domain.user.event.OneWonTransferRequestedEvent;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.ocr.OcrService;
 import com.team10.backend.domain.user.repository.IdentityVerificationRepository;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.domain.user.type.VerificationStatus;
 import com.team10.backend.domain.user.verification.BankCode;
-import com.team10.backend.domain.user.verification.BankTransferService;
 import com.team10.backend.domain.user.verification.OneWonVerificationService;
-import com.team10.backend.domain.user.verification.VerificationSessionRecorder;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.concurrent.RejectedExecutionException;
 
 /** 신분증 본인인증 3단계(OCR → 행안부 → 1원 송금) 서비스 */
 @Slf4j
@@ -46,26 +48,23 @@ import java.util.concurrent.RejectedExecutionException;
 public class IdentityVerificationService {
 
     private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024L; // 10 MB
+    // Content-Type 헤더는 클라이언트가 임의로 지정 가능하므로, 실제 파일 시그니처(매직바이트)로 한 번 더 검증한다.
+    private static final byte[] JPEG_SIGNATURE = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+    private static final byte[] PNG_SIGNATURE =
+            {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
     private static final String OCR_DAILY_KEY_PREFIX = "identity:ocr:daily:";
     private static final int MAX_OCR_DAILY = 5;
     private static final Duration DAILY_TTL = Duration.ofDays(1);
 
-    // INCR 후 첫 생성 시에만 EXPIRE — TTL 덮어쓰기 방지
-    private static final RedisScript<Long> INCR_WITH_EXPIRE_IF_NEW = RedisScript.of(
-            "local v = redis.call('INCR', KEYS[1])\n" +
-            "if v == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end\n" +
-            "return v",
-            Long.class
-    );
-
     private final UserRepository userRepository;
     private final IdentityVerificationRepository identityVerificationRepository;
     private final OcrService ocrService;
-    private final BankTransferService bankTransferService;
     private final OneWonVerificationService oneWonVerificationService;
-    private final VerificationSessionRecorder verificationSessionRecorder;
+    private final ApplicationEventPublisher eventPublisher;
     private final PlatformTransactionManager txManager;
     private final StringRedisTemplate redisTemplate;
+    // RedisScriptConfig에서 공용으로 정의 — OneWonVerificationService의 daily 카운터와 동일한 스크립트
+    private final RedisScript<Long> incrWithExpireIfNewScript;
 
     @Transactional
     public OcrAcceptedRes submitIdCardOcr(Long userId, MultipartFile imageFile) {
@@ -82,30 +81,18 @@ public class IdentityVerificationService {
         IdentityVerification verification = IdentityVerification.startOcr(user);
         IdentityVerification saved = identityVerificationRepository.save(verification);
 
-        // afterCommit() 시점엔 Tomcat이 임시파일을 이미 삭제하므로 미리 바이트 읽기
-        byte[] imageBytes;
+        // 커밋 후(OcrSubmittedEventListener)에는 Tomcat이 멀티파트 임시파일을 이미 삭제하므로,
+        // 앱이 직접 관리하는 임시파일로 복사해 비동기 처리가 끝날 때까지 보존한다.
+        Path tempImagePath;
         try {
-            imageBytes = imageFile.getBytes();
+            tempImagePath = Files.createTempFile("ocr-", ".tmp");
+            imageFile.transferTo(tempImagePath);
         } catch (IOException e) {
             throw new BusinessException(UserErrorCode.OCR_IMAGE_REQUIRED);
         }
 
-        Long verificationId = saved.getId();
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                try {
-                    ocrService.processAsync(imageBytes, verificationId);
-                } catch (RejectedExecutionException e) {
-                    // 스레드풀+큐 포화로 작업 자체가 시작 못 함 — OCR_PENDING에 영구히 멈추지 않도록 별도 트랜잭션으로 FAILED 기록
-                    log.error("[OCR] 스레드풀 포화로 작업 거부 — verificationId={}", verificationId, e);
-                    verificationSessionRecorder.markFailedInNewTransaction(
-                            verificationId,
-                            "서버 처리량이 많아 요청을 처리하지 못했습니다. 잠시 후 다시 시도해주세요."
-                    );
-                }
-            }
-        });
+        // afterCommit() 콜백 직접 등록 대신 이벤트 발행 — 실제 처리는 OcrSubmittedEventListener(AFTER_COMMIT)가 담당
+        eventPublisher.publishEvent(new OcrSubmittedEvent(tempImagePath, saved.getId()));
 
         return new OcrAcceptedRes(
                 saved.getId(),
@@ -114,13 +101,20 @@ public class IdentityVerificationService {
         );
     }
 
-    // 외부 송금 API 포함 → 트랜잭션 밖에서 실행, DB 쓰기만 TransactionTemplate으로 분리
+    /**
+     * 1원 송금 요청 접수. 실제 은행 API 호출(최대 30초 블로킹, CodefBankRestClientConfig readTimeout)은
+     * 요청 스레드를 점유하지 않도록 트랜잭션 커밋 후 OneWonTransferRequestedEventListener가 비동기로 처리한다
+     * (OcrService와 동일한 accept-동기/처리-비동기 패턴). 동시 요청 방지 락은 비동기 처리가 끝날 때까지
+     * 유지해야 하므로, 정상적으로 비동기 처리에 넘긴 경우(kickedOff)에는 여기서 해제하지 않는다.
+     */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public OneWonStartRes startOneWonVerification(Long userId, OneWonStartReq request) {
         // 동시 요청 방지 — 같은 유저가 거의 동시에 두 번 호출하면 실제 송금이 중복 실행될 수 있음
         if (!oneWonVerificationService.tryAcquireStartLock(userId)) {
             throw new BusinessException(UserErrorCode.ONE_WON_REQUEST_IN_PROGRESS);
         }
+
+        boolean kickedOff = false;
         try {
             IdentityVerification verification = identityVerificationRepository
                     .findTopByUserIdOrderByCreatedAtDesc(userId)
@@ -132,30 +126,45 @@ public class IdentityVerificationService {
 
             validateBankAvailability(request.organization());
 
-            String code = oneWonVerificationService.generateAndStore(verificationId, userId);
-            try {
-                bankTransferService.sendOneWon(request.organization(), request.accountNumber(), code);
-            } catch (Exception e) {
-                // 송금 실패 시 Redis 코드 + daily 카운터 보상 롤백
-                oneWonVerificationService.deleteCode(verificationId);
-                oneWonVerificationService.decrementDailyCount(userId);
-                throw e;
-            }
-
-            return new TransactionTemplate(txManager).execute(status -> {
+            OneWonStartRes response = new TransactionTemplate(txManager).execute(status -> {
                 IdentityVerification managed = identityVerificationRepository
                         .findById(verificationId)
                         .orElseThrow(() -> new BusinessException(UserErrorCode.VERIFICATION_SESSION_NOT_FOUND));
-                managed.startOneWon();
+                managed.requestOneWonTransfer();
+
+                // afterCommit() 이후 OneWonTransferRequestedEventListener가 실제 송금을 비동기로 처리한다.
+                eventPublisher.publishEvent(new OneWonTransferRequestedEvent(
+                        verificationId, userId, request.organization(), request.accountNumber()
+                ));
+
                 return new OneWonStartRes(
                         managed.getId(),
                         managed.getStatus(),
-                        "1원이 송금되었습니다. 입금 메모의 4자리 코드를 입력해주세요. (유효시간 10분)"
+                        "1원 송금 요청이 접수되었습니다. 처리 결과는 상태 조회 API로 확인해주세요."
                 );
             });
+
+            kickedOff = true;
+            return response;
         } finally {
-            oneWonVerificationService.releaseStartLock(userId);
+            // 비동기 처리에 정상적으로 넘긴 경우엔 락 해제를 OneWonTransferProcessor의 finally로 위임한다.
+            if (!kickedOff) {
+                oneWonVerificationService.releaseStartLock(userId);
+            }
         }
+    }
+
+    /** 가장 최근 본인인증 세션의 진행 상태를 조회한다. OCR/1원송금이 비동기로 처리되므로 폴링용으로 사용한다. */
+    public IdentityVerificationStatusRes getMyVerificationStatus(Long userId) {
+        IdentityVerification verification = identityVerificationRepository
+                .findTopByUserIdOrderByCreatedAtDesc(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.VERIFICATION_SESSION_NOT_FOUND));
+
+        return new IdentityVerificationStatusRes(
+                verification.getId(),
+                verification.getStatus(),
+                verification.getFailureReason()
+        );
     }
 
     @Transactional
@@ -203,7 +212,7 @@ public class IdentityVerificationService {
     private void checkOcrDailyLimit(Long userId) {
         String key = OCR_DAILY_KEY_PREFIX + userId;
         Long count = redisTemplate.execute(
-                INCR_WITH_EXPIRE_IF_NEW,
+                incrWithExpireIfNewScript,
                 List.of(key),
                 String.valueOf(DAILY_TTL.toSeconds())
         );
@@ -229,5 +238,32 @@ public class IdentityVerificationService {
                 || (!contentType.equals("image/jpeg") && !contentType.equals("image/png"))) {
             throw new BusinessException(UserErrorCode.OCR_IMAGE_INVALID_TYPE);
         }
+        if (!hasValidImageSignature(imageFile)) {
+            throw new BusinessException(UserErrorCode.OCR_IMAGE_INVALID_TYPE);
+        }
+    }
+
+    /** Content-Type 헤더 조작 우회 방지 — 파일 앞부분의 실제 매직바이트가 JPEG/PNG 시그니처와 일치하는지 확인한다. */
+    private boolean hasValidImageSignature(MultipartFile imageFile) {
+        byte[] header = new byte[8];
+        int read;
+        try (InputStream in = imageFile.getInputStream()) {
+            read = in.read(header);
+        } catch (IOException e) {
+            return false;
+        }
+        if (read >= JPEG_SIGNATURE.length && matchesSignature(header, JPEG_SIGNATURE)) {
+            return true;
+        }
+        return read >= PNG_SIGNATURE.length && matchesSignature(header, PNG_SIGNATURE);
+    }
+
+    private boolean matchesSignature(byte[] header, byte[] signature) {
+        for (int i = 0; i < signature.length; i++) {
+            if (header[i] != signature[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 }

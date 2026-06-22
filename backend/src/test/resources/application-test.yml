@@ -7,6 +7,9 @@ spring:
     hikari:
       maximum-pool-size: 50
 
+  flyway:
+    enabled: false
+
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -66,6 +69,9 @@ codef:
     account-create-path: /v1/account/create
     account-list-path: /v1/kr/bank/p/account/account-list
     bank-transaction-path: /v1/kr/bank/p/account/transaction-list
+  one-won-transfer:
+    client-id: test-one-won-transfer-client-id
+    client-secret: test-one-won-transfer-client-secret
   connected-id-crypto:
     secret-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     key-version: test-v1
@@ -74,3 +80,7 @@ portone:
   api-secret: test-portone-secret
   store-id: test-store-id
   channel-key: test-channel-key
+
+app:
+  hmac:
+    key: +O0yIB/iZbAKeOPdw2Bf9fmvPxJLhpIB6SBNRxXeki4=

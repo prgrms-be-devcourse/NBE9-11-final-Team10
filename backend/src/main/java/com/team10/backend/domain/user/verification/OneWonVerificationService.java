@@ -32,23 +32,11 @@ public class OneWonVerificationService {
     private static final int MAX_DAILY         = 10;
     private static final SecureRandom RANDOM   = new SecureRandom();
 
-    // 첫 INCR 시에만 EXPIRE — 이후엔 TTL 덮어쓰지 않음 (daily 카운터용)
-    private static final RedisScript<Long> INCR_WITH_EXPIRE_IF_NEW = RedisScript.of(
-            "local v = redis.call('INCR', KEYS[1])\n" +
-            "if v == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end\n" +
-            "return v",
-            Long.class
-    );
-
-    // INCR + EXPIRE 원자적 실행 — 매번 TTL 갱신 (슬라이딩 윈도우, 시도 횟수 카운터용)
-    private static final RedisScript<Long> INCR_AND_EXPIRE = RedisScript.of(
-            "local v = redis.call('INCR', KEYS[1])\n" +
-            "redis.call('EXPIRE', KEYS[1], ARGV[1])\n" +
-            "return v",
-            Long.class
-    );
-
     private final StringRedisTemplate redisTemplate;
+    // RedisScriptConfig에서 공용으로 정의 — IdentityVerificationService의 OCR daily 카운터와 동일한 스크립트
+    private final RedisScript<Long> incrWithExpireIfNewScript;
+    // RedisScriptConfig에서 공용으로 정의 — LoginAttemptService의 실패 카운터와 동일한 스크립트
+    private final RedisScript<Long> incrAndExpireScript;
 
     /**
      * 1원 인증 시작 동시 요청 방지용 락 획득.
@@ -71,7 +59,7 @@ public class OneWonVerificationService {
     public String generateAndStore(Long verificationId, Long userId) {
         String dailyKey = DAILY_PREFIX + userId;
         Long daily = redisTemplate.execute(
-                INCR_WITH_EXPIRE_IF_NEW,
+                incrWithExpireIfNewScript,
                 List.of(dailyKey),
                 String.valueOf(DAILY_TTL.toSeconds())
         );
@@ -115,7 +103,7 @@ public class OneWonVerificationService {
 
         if (!stored.equals(inputCode)) {
             Long attempts = redisTemplate.execute(
-                    INCR_AND_EXPIRE,
+                    incrAndExpireScript,
                     List.of(attemptKey),
                     String.valueOf(TTL.toSeconds())
             );

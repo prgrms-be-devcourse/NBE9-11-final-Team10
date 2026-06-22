@@ -3,6 +3,7 @@ package com.team10.backend.domain.user.ocr;
 import com.team10.backend.domain.codef.auth.ocr.IdCardOcrResult;
 import com.team10.backend.domain.user.entity.IdentityVerification;
 import com.team10.backend.domain.user.repository.IdentityVerificationRepository;
+import com.team10.backend.global.crypto.HmacHasher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OcrPersistenceService {
 
     private final IdentityVerificationRepository identityVerificationRepository;
+    private final HmacHasher hmacHasher;
 
     @Transactional(readOnly = true)
     public IdentityVerification loadVerification(Long verificationId) {
@@ -27,8 +29,9 @@ public class OcrPersistenceService {
 
     @Transactional
     public void saveOcrSuccess(Long verificationId, IdCardOcrResult result) {
+        String residentNumberHash = hmacHasher.hash(result.residentNumber());
         identityVerificationRepository.findById(verificationId).ifPresent(v ->
-                v.completeOcr(result.name(), result.residentNumber(), result.issueDate())
+                v.completeOcr(result.name(), result.residentNumber(), result.issueDate(), residentNumberHash)
         );
     }
 
