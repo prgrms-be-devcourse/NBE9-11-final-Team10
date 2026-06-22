@@ -26,6 +26,9 @@ public final class RealtimeOrderbookRedisConstants {
     public static final String SUBSCRIPTION_CHANGED_CHANNEL = KEY_PREFIX + "subscription-changed";
     public static final String ORDERBOOK_UPDATED_CHANNEL = KEY_PREFIX + "orderbook-updated";
 
+    public static final String ORDERBOOK_SNAPSHOT_KEY_PREFIX = "investment:orderbook:snapshot:";
+    public static final Duration ORDERBOOK_SNAPSHOT_TTL = Duration.ofSeconds(5);
+
     private RealtimeOrderbookRedisConstants() {
     }
 }
