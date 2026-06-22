@@ -45,10 +45,9 @@ public class ExchangeRateService {
 
     // 지원 통화 목록 조회
     public List<CurrencyRes> getCurrencies() {
-        return SUPPORTED_FOREIGN_CURRENCIES.stream()
-                .sorted(Comparator.comparing(Enum::name)) // 통화코드 알파벳순 정렬
-                .map(currencyRepository::findByCurrencyCode)
-                .flatMap(Optional::stream)
+        return currencyRepository.findAllByCurrencyCodeIn(SUPPORTED_FOREIGN_CURRENCIES)
+                .stream()
+                .sorted(Comparator.comparing(currency -> currency.getCurrencyCode().name()))
                 .map(CurrencyRes::from)
                 .toList();
     }
