@@ -4,11 +4,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static com.team10.backend.domain.codef.exAccount.config.CodefExAccountRestClientConfig.API_REST_CLIENT;
+import static com.team10.backend.domain.codef.exAccount.config.CodefExAccountRestClientConfig.OAUTH_REST_CLIENT;
 
 class CodefExAccountPropertiesTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withUserConfiguration(CodefExAccountConfig.class)
+            .withUserConfiguration(CodefExAccountConfig.class, CodefExAccountRestClientConfig.class)
             .withPropertyValues(
                     "codef.account-inquiry.service-type=DEMO",
                     "codef.account-inquiry.client-id=account-client-id",
@@ -26,6 +28,8 @@ class CodefExAccountPropertiesTest {
     void bindsOnlyAccountInquiryProperties() {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(CodefExAccountProperties.class);
+            assertThat(context).hasBean(OAUTH_REST_CLIENT);
+            assertThat(context).hasBean(API_REST_CLIENT);
 
             CodefExAccountProperties properties = context.getBean(CodefExAccountProperties.class);
             assertThat(properties.serviceType()).isEqualTo("DEMO");
