@@ -18,6 +18,9 @@ import org.springframework.web.client.RestClientResponseException;
 
 import static com.team10.backend.domain.codef.exAccount.config.CodefExAccountRestClientConfig.API_REST_CLIENT;
 
+/**
+ * CODEF API와 실제 HTTP 통신을 수행하여 계정 등록 및 보유 계좌 정보를 연동하는 RestClient Wrapper 클래스입니다.
+ */
 @Component
 public class CodefExAccountClient {
 
@@ -40,6 +43,12 @@ public class CodefExAccountClient {
         this.restClient = restClient;
     }
 
+    /**
+     * CODEF API로부터 특정 기관 및 connectedId를 기준으로 보유 계좌 목록 정보를 요청합니다. (실패 시 2회 재시도 정책 적용)
+     *
+     * @param request CODEF 보유계좌 조회 요청 DTO
+     * @return 파싱된 JSON 형태의 응답 Node
+     */
     public JsonNode getAccountList(CodefExAccountListRequest request) {
         validateRequest(request);
 
@@ -67,6 +76,12 @@ public class CodefExAccountClient {
         throw new CodefExAccountClientException("CODEF 보유계좌 조회에 실패했습니다.");
     }
 
+    /**
+     * CODEF API에 금융기관 계정 인증 정보를 전송하여 새로운 계정을 생성(기관 연결)하고, 결과를 반환합니다.
+     *
+     * @param payload CODEF 계정생성 요청 페이로드
+     * @return 발급된 connectedId가 포함된 등록 결과 DTO
+     */
     public CodefExAccountConnectionResult createConnection(
             CodefExAccountConnectionPayload payload
     ) {
@@ -109,6 +124,9 @@ public class CodefExAccountClient {
         throw registrationSystemError("CODEF 계정등록에 실패했습니다.", null);
     }
 
+    /**
+     * 계좌 목록 조회 요청의 필수 인자들을 검증합니다.
+     */
     private void validateRequest(CodefExAccountListRequest request) {
         if (request == null
                 || request.organization() == null
@@ -119,6 +137,9 @@ public class CodefExAccountClient {
         }
     }
 
+    /**
+     * CODEF API 통신 중 발생한 오류를 비즈니스 예외 타입으로 래핑합니다.
+     */
     private CodefExAccountRegistrationException registrationSystemError(
             String message,
             Throwable cause
