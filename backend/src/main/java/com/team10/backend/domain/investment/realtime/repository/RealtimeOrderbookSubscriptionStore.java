@@ -1,5 +1,6 @@
 package com.team10.backend.domain.investment.realtime.repository;
 
+import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.ACTIVE_STOCKS_KEY;
 import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.LEASE_KEY_PREFIX;
 import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STOCK_STREAMS_KEY_PREFIX;
 import static com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRedisConstants.STREAMS_KEY_SUFFIX;
@@ -34,12 +35,36 @@ import org.springframework.util.StringUtils;
 public class RealtimeOrderbookSubscriptionStore {
 
     private static final RedisScript<Long> SAVE_SCRIPT = RedisScript.of(
-            "redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[5])\n" +
+            "local function pruneStock(stockCode)\n" +
+                    "  local stockStreamsKey = ARGV[8] .. stockCode .. ARGV[9]\n" +
+                    "  local streamIds = redis.call('SMEMBERS', stockStreamsKey)\n" +
+                    "  local activeCount = 0\n" +
+                    "  for _, streamId in ipairs(streamIds) do\n" +
+                    "    if redis.call('GET', ARGV[7] .. streamId) == stockCode then\n" +
+                    "      activeCount = activeCount + 1\n" +
+                    "    else\n" +
+                    "      redis.call('SREM', stockStreamsKey, streamId)\n" +
+                    "    end\n" +
+                    "  end\n" +
+                    "  if activeCount == 0 then\n" +
+                    "    redis.call('SREM', KEYS[7], stockCode)\n" +
+                    "  end\n" +
+                    "end\n" +
+                    "local activeStockCodes = redis.call('SMEMBERS', KEYS[7])\n" +
+                    "for _, activeStockCode in ipairs(activeStockCodes) do\n" +
+                    "  pruneStock(activeStockCode)\n" +
+                    "end\n" +
+                    "if redis.call('SISMEMBER', KEYS[7], ARGV[2]) == 0\n" +
+                    "    and redis.call('SCARD', KEYS[7]) >= tonumber(ARGV[6]) then\n" +
+                    "  return 0\n" +
+                    "end\n" +
+                    "redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[5])\n" +
                     "redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[5])\n" +
                     "redis.call('SET', KEYS[3], ARGV[3], 'EX', ARGV[5])\n" +
                     "redis.call('SET', KEYS[4], ARGV[2], 'EX', ARGV[5])\n" +
                     "redis.call('SADD', KEYS[5], ARGV[4])\n" +
                     "redis.call('SADD', KEYS[6], ARGV[4])\n" +
+                    "redis.call('SADD', KEYS[7], ARGV[2])\n" +
                     "return 1",
             Long.class
     );
@@ -53,7 +78,20 @@ public class RealtimeOrderbookSubscriptionStore {
                     "end\n" +
                     "redis.call('DEL', KEYS[1], KEYS[2], KEYS[3], KEYS[4])\n" +
                     "redis.call('SREM', ARGV[1] .. userId .. ARGV[3], ARGV[4])\n" +
-                    "redis.call('SREM', ARGV[2] .. stockCode .. ARGV[3], ARGV[4])\n" +
+                    "local stockStreamsKey = ARGV[2] .. stockCode .. ARGV[3]\n" +
+                    "redis.call('SREM', stockStreamsKey, ARGV[4])\n" +
+                    "local remainingStreamIds = redis.call('SMEMBERS', stockStreamsKey)\n" +
+                    "local hasActiveStream = false\n" +
+                    "for _, remainingStreamId in ipairs(remainingStreamIds) do\n" +
+                    "  if redis.call('GET', ARGV[5] .. remainingStreamId) == stockCode then\n" +
+                    "    hasActiveStream = true\n" +
+                    "  else\n" +
+                    "    redis.call('SREM', stockStreamsKey, remainingStreamId)\n" +
+                    "  end\n" +
+                    "end\n" +
+                    "if not hasActiveStream then\n" +
+                    "  redis.call('SREM', KEYS[5], stockCode)\n" +
+                    "end\n" +
                     "return {userId, stockCode, ownerInstanceId or ''}",
             List.class
     );
@@ -67,7 +105,20 @@ public class RealtimeOrderbookSubscriptionStore {
                     "end\n" +
                     "redis.call('DEL', KEYS[1], KEYS[2], KEYS[3], KEYS[4])\n" +
                     "redis.call('SREM', KEYS[5], ARGV[3])\n" +
-                    "redis.call('SREM', ARGV[2] .. stockCode .. ARGV[4], ARGV[3])\n" +
+                    "local stockStreamsKey = ARGV[2] .. stockCode .. ARGV[4]\n" +
+                    "redis.call('SREM', stockStreamsKey, ARGV[3])\n" +
+                    "local remainingStreamIds = redis.call('SMEMBERS', stockStreamsKey)\n" +
+                    "local hasActiveStream = false\n" +
+                    "for _, remainingStreamId in ipairs(remainingStreamIds) do\n" +
+                    "  if redis.call('GET', ARGV[5] .. remainingStreamId) == stockCode then\n" +
+                    "    hasActiveStream = true\n" +
+                    "  else\n" +
+                    "    redis.call('SREM', stockStreamsKey, remainingStreamId)\n" +
+                    "  end\n" +
+                    "end\n" +
+                    "if not hasActiveStream then\n" +
+                    "  redis.call('SREM', KEYS[6], stockCode)\n" +
+                    "end\n" +
                     "return {userId, stockCode, ownerInstanceId or ''}",
             List.class
     );
@@ -89,8 +140,14 @@ public class RealtimeOrderbookSubscriptionStore {
 
     private final StringRedisTemplate redisTemplate;
 
-    public void save(RealtimeOrderbookSubscription subscription) {
+    public boolean saveIfWithinActiveStockLimit(
+            RealtimeOrderbookSubscription subscription,
+            int maxActiveStockCount
+    ) {
         validateSubscription(subscription);
+        if (maxActiveStockCount < 1) {
+            throw new IllegalArgumentException("maxActiveStockCount must be greater than 0");
+        }
 
         Long result = redisTemplate.execute(
                 SAVE_SCRIPT,
@@ -100,18 +157,29 @@ public class RealtimeOrderbookSubscriptionStore {
                         streamOwnerKey(subscription.streamId()),
                         leaseKey(subscription.streamId()),
                         userStreamsKey(subscription.userId()),
-                        stockStreamsKey(subscription.stockCode())
+                        stockStreamsKey(subscription.stockCode()),
+                        ACTIVE_STOCKS_KEY
                 ),
                 String.valueOf(subscription.userId()),
                 subscription.stockCode(),
                 subscription.ownerInstanceId(),
                 subscription.streamId(),
-                String.valueOf(STREAM_LEASE_TTL.toSeconds())
+                String.valueOf(STREAM_LEASE_TTL.toSeconds()),
+                String.valueOf(maxActiveStockCount),
+                LEASE_KEY_PREFIX,
+                STOCK_STREAMS_KEY_PREFIX,
+                STREAMS_KEY_SUFFIX
         );
 
-        if (!Long.valueOf(1L).equals(result)) {
-            throw new IllegalStateException("실시간 호가 구독 상태 저장에 실패했습니다.");
+        if (Long.valueOf(0L).equals(result)) {
+            return false;
         }
+
+        if (Long.valueOf(1L).equals(result)) {
+            return true;
+        }
+
+        throw new IllegalStateException("실시간 호가 구독 상태 저장에 실패했습니다.");
     }
 
     public Optional<RealtimeOrderbookSubscription> findByStreamId(String streamId) {
@@ -145,11 +213,18 @@ public class RealtimeOrderbookSubscriptionStore {
 
         List<?> result = redisTemplate.execute(
                 DELETE_SCRIPT,
-                streamKeys(streamId),
+                List.of(
+                        streamUserKey(streamId),
+                        streamStockKey(streamId),
+                        streamOwnerKey(streamId),
+                        leaseKey(streamId),
+                        ACTIVE_STOCKS_KEY
+                ),
                 USER_STREAMS_KEY_PREFIX,
                 STOCK_STREAMS_KEY_PREFIX,
                 STREAMS_KEY_SUFFIX,
-                streamId
+                streamId,
+                LEASE_KEY_PREFIX
         );
 
         return toSubscription(streamId, result);
@@ -166,12 +241,14 @@ public class RealtimeOrderbookSubscriptionStore {
                         streamStockKey(streamId),
                         streamOwnerKey(streamId),
                         leaseKey(streamId),
-                        userStreamsKey(userId)
+                        userStreamsKey(userId),
+                        ACTIVE_STOCKS_KEY
                 ),
                 String.valueOf(userId),
                 STOCK_STREAMS_KEY_PREFIX,
                 streamId,
-                STREAMS_KEY_SUFFIX
+                STREAMS_KEY_SUFFIX,
+                LEASE_KEY_PREFIX
         );
 
         return toSubscription(streamId, result);
@@ -187,27 +264,6 @@ public class RealtimeOrderbookSubscriptionStore {
         );
 
         return Long.valueOf(1L).equals(result);
-    }
-
-    public Set<String> findActiveStreamIdsByStockCode(String stockCode) {
-        validateStockCode(stockCode);
-
-        Set<String> streamIds = redisTemplate.opsForSet().members(stockStreamsKey(stockCode));
-        if (streamIds == null || streamIds.isEmpty()) {
-            return Set.of();
-        }
-
-        Set<String> activeStreamIds = new HashSet<>();
-        for (String streamId : streamIds) {
-            String leasedStockCode = redisTemplate.opsForValue().get(leaseKey(streamId));
-            if (stockCode.equals(leasedStockCode)) {
-                activeStreamIds.add(streamId);
-            } else {
-                redisTemplate.opsForSet().remove(stockStreamsKey(stockCode), streamId);
-            }
-        }
-
-        return Set.copyOf(activeStreamIds);
     }
 
     public Set<String> findActiveStreamIdsByUserId(Long userId) {
@@ -232,11 +288,16 @@ public class RealtimeOrderbookSubscriptionStore {
     }
 
     public long countActiveStreamsByStockCode(String stockCode) {
-        return findActiveStreamIdsByStockCode(stockCode).size();
+        return refreshActiveStreamIdsByStockCode(stockCode).size();
     }
 
     public Set<String> findActiveStockCodes() {
-        Set<String> activeStockCodes = new HashSet<>();
+        Set<String> stockCodesToRefresh = new HashSet<>();
+        Set<String> indexedActiveStockCodes = redisTemplate.opsForSet().members(ACTIVE_STOCKS_KEY);
+        if (indexedActiveStockCodes != null) {
+            stockCodesToRefresh.addAll(indexedActiveStockCodes);
+        }
+
         ScanOptions options = ScanOptions.scanOptions()
                 .match(STOCK_STREAMS_KEY_PREFIX + "*" + STREAMS_KEY_SUFFIX)
                 .count(1000)
@@ -246,11 +307,16 @@ public class RealtimeOrderbookSubscriptionStore {
             while (cursor.hasNext()) {
                 String key = cursor.next();
                 parseStockCodeFromStockStreamsKey(key)
-                        .filter(stockCode -> !findActiveStreamIdsByStockCode(stockCode).isEmpty())
-                        .ifPresent(activeStockCodes::add);
+                        .ifPresent(stockCodesToRefresh::add);
             }
         }
 
+        stockCodesToRefresh.forEach(this::refreshActiveStreamIdsByStockCode);
+
+        Set<String> activeStockCodes = redisTemplate.opsForSet().members(ACTIVE_STOCKS_KEY);
+        if (activeStockCodes == null || activeStockCodes.isEmpty()) {
+            return Set.of();
+        }
         return Set.copyOf(activeStockCodes);
     }
 
@@ -277,6 +343,34 @@ public class RealtimeOrderbookSubscriptionStore {
                 stockCode,
                 ownerInstanceId
         ));
+    }
+
+    private Set<String> refreshActiveStreamIdsByStockCode(String stockCode) {
+        validateStockCode(stockCode);
+
+        Set<String> streamIds = redisTemplate.opsForSet().members(stockStreamsKey(stockCode));
+        if (streamIds == null || streamIds.isEmpty()) {
+            redisTemplate.opsForSet().remove(ACTIVE_STOCKS_KEY, stockCode);
+            return Set.of();
+        }
+
+        Set<String> activeStreamIds = new HashSet<>();
+        for (String streamId : streamIds) {
+            String leasedStockCode = redisTemplate.opsForValue().get(leaseKey(streamId));
+            if (stockCode.equals(leasedStockCode)) {
+                activeStreamIds.add(streamId);
+            } else {
+                redisTemplate.opsForSet().remove(stockStreamsKey(stockCode), streamId);
+            }
+        }
+
+        if (activeStreamIds.isEmpty()) {
+            redisTemplate.opsForSet().remove(ACTIVE_STOCKS_KEY, stockCode);
+        } else {
+            redisTemplate.opsForSet().add(ACTIVE_STOCKS_KEY, stockCode);
+        }
+
+        return Set.copyOf(activeStreamIds);
     }
 
     private Optional<String> parseStockCodeFromStockStreamsKey(String key) {

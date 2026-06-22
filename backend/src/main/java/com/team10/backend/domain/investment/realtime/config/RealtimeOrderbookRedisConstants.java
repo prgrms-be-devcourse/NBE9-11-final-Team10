@@ -21,6 +21,7 @@ public final class RealtimeOrderbookRedisConstants {
     public static final String STOCK_STREAMS_KEY_PREFIX = KEY_PREFIX + "stock:";
     public static final String USER_STREAMS_KEY_PREFIX = KEY_PREFIX + "user:";
     public static final String STREAMS_KEY_SUFFIX = ":streams";
+    public static final String ACTIVE_STOCKS_KEY = KEY_PREFIX + "active-stocks";
 
     public static final String SUBSCRIPTION_CHANGED_CHANNEL = KEY_PREFIX + "subscription-changed";
     public static final String ORDERBOOK_UPDATED_CHANNEL = KEY_PREFIX + "orderbook-updated";

@@ -3,6 +3,8 @@ package com.team10.backend.domain.investment.realtime.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,7 +23,6 @@ import com.team10.backend.domain.investment.type.CurrencyCode;
 import com.team10.backend.global.exception.BusinessException;
 import java.time.LocalDate;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,8 +74,8 @@ class RealtimeOrderbookStreamServiceTest {
     @DisplayName("거래 가능한 종목으로 SSE 스트림을 생성하고 Redis 구독 상태와 STARTED 이벤트를 저장한다")
     void openStream() {
         when(stockRepository.findByStockCode("005930")).thenReturn(Optional.of(stock(StockStatus.ACTIVE)));
-        when(subscriptionStore.findActiveStockCodes()).thenReturn(Set.of());
         when(instanceIdProvider.getInstanceId()).thenReturn("instance-a");
+        when(subscriptionStore.saveIfWithinActiveStockLimit(any(), eq(41))).thenReturn(true);
 
         RealtimeOrderbookSseConnection connection = streamService.openStream(1L, "005930");
 
@@ -87,7 +88,7 @@ class RealtimeOrderbookStreamServiceTest {
 
         ArgumentCaptor<RealtimeOrderbookSubscription> subscriptionCaptor =
                 ArgumentCaptor.forClass(RealtimeOrderbookSubscription.class);
-        verify(subscriptionStore).save(subscriptionCaptor.capture());
+        verify(subscriptionStore).saveIfWithinActiveStockLimit(subscriptionCaptor.capture(), eq(41));
         assertThat(subscriptionCaptor.getValue())
                 .isEqualTo(new RealtimeOrderbookSubscription(
                         connection.streamId(),
@@ -110,13 +111,13 @@ class RealtimeOrderbookStreamServiceTest {
     void openStreamWithAlreadyActiveStockWhenSubscriptionLimitReached() {
         streamService = streamService(1);
         when(stockRepository.findByStockCode("005930")).thenReturn(Optional.of(stock(StockStatus.ACTIVE)));
-        when(subscriptionStore.findActiveStockCodes()).thenReturn(Set.of("005930"));
         when(instanceIdProvider.getInstanceId()).thenReturn("instance-a");
+        when(subscriptionStore.saveIfWithinActiveStockLimit(any(), eq(1))).thenReturn(true);
 
         RealtimeOrderbookSseConnection connection = streamService.openStream(1L, "005930");
 
         assertThat(connection.stockCode()).isEqualTo("005930");
-        verify(subscriptionStore).save(any());
+        verify(subscriptionStore).saveIfWithinActiveStockLimit(any(), eq(1));
         verify(eventPublisher).publish(any());
     }
 
@@ -125,16 +126,16 @@ class RealtimeOrderbookStreamServiceTest {
     void openStreamWithSubscriptionLimitExceededForNewStock() {
         streamService = streamService(1);
         when(stockRepository.findByStockCode("005930")).thenReturn(Optional.of(stock(StockStatus.ACTIVE)));
-        when(subscriptionStore.findActiveStockCodes()).thenReturn(Set.of("000660"));
+        when(instanceIdProvider.getInstanceId()).thenReturn("instance-a");
+        when(subscriptionStore.saveIfWithinActiveStockLimit(any(), eq(1))).thenReturn(false);
 
         assertThatThrownBy(() -> streamService.openStream(1L, "005930"))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(InvestmentErrorCode.REALTIME_ORDERBOOK_SUBSCRIPTION_LIMIT_EXCEEDED);
 
-        verify(subscriptionStore, never()).save(any());
+        verify(subscriptionStore).saveIfWithinActiveStockLimit(any(), eq(1));
         verify(eventPublisher, never()).publish(any());
-        verify(instanceIdProvider, never()).getInstanceId();
         assertThat(emitterRegistry.streamCount()).isZero();
     }
 
@@ -148,7 +149,7 @@ class RealtimeOrderbookStreamServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(InvestmentErrorCode.STOCK_NOT_FOUND);
 
-        verify(subscriptionStore, never()).save(any());
+        verify(subscriptionStore, never()).saveIfWithinActiveStockLimit(any(), anyInt());
         verify(eventPublisher, never()).publish(any());
         assertThat(emitterRegistry.streamCount()).isZero();
     }
@@ -163,7 +164,7 @@ class RealtimeOrderbookStreamServiceTest {
                 .extracting("errorCode")
                 .isEqualTo(InvestmentErrorCode.STOCK_NOT_TRADABLE);
 
-        verify(subscriptionStore, never()).save(any());
+        verify(subscriptionStore, never()).saveIfWithinActiveStockLimit(any(), anyInt());
         verify(eventPublisher, never()).publish(any());
         assertThat(emitterRegistry.streamCount()).isZero();
     }
