@@ -24,6 +24,10 @@ import org.springframework.util.StringUtils;
 public class StockQueryService {
 
     private static final int MIN_SEARCH_KEYWORD_LENGTH = 2;
+    private static final StockMarket DEFAULT_MARKET = StockMarket.KOSPI;
+    private static final StockStatus DEFAULT_STATUS = StockStatus.ACTIVE;
+    private static final StockSortType DEFAULT_SORT = StockSortType.STOCK_NAME;
+    private static final Sort.Direction DEFAULT_DIRECTION = Sort.Direction.ASC;
 
     private final StockRepository stockRepository;
 
@@ -34,10 +38,13 @@ public class StockQueryService {
             return List.of();
         }
 
+        String escapedKeyword = escapeLikeWildcards(normalizedKeyword);
+        StockMarket targetMarket = market != null ? market : DEFAULT_MARKET;
+
         return stockRepository.search(
-                        normalizedKeyword,
-                        market,
-                        StockStatus.ACTIVE
+                        escapedKeyword,
+                        targetMarket,
+                        DEFAULT_STATUS
                 ).stream()
                 .map(StockSummaryRes::from)
                 .toList();
@@ -51,18 +58,28 @@ public class StockQueryService {
             int page,
             int size
     ) {
+        StockMarket targetMarket = market != null ? market : DEFAULT_MARKET;
+        StockStatus targetStatus = status != null ? status : DEFAULT_STATUS;
+        StockSortType targetSort = sort != null ? sort : DEFAULT_SORT;
+        Sort.Direction targetDirection = direction != null ? direction : DEFAULT_DIRECTION;
+
         PageRequest pageRequest = PageRequest.of(
                 page,
                 size,
-                getSort(sort, direction)
+                getSort(targetSort, targetDirection)
         );
 
-        return stockRepository.findAllByMarketAndStatus(market, status, pageRequest)
+        return stockRepository.findAllByMarketAndStatus(targetMarket, targetStatus, pageRequest)
                 .map(StockSummaryRes::from);
     }
 
     public StockDetailRes getStock(String stockCode) {
-        Stock stock = stockRepository.findByStockCodeAndStatus(stockCode, StockStatus.ACTIVE)
+        String normalizedStockCode = normalizeKeyword(stockCode);
+        if (!StringUtils.hasText(normalizedStockCode)) {
+            throw new BusinessException(InvestmentErrorCode.STOCK_NOT_FOUND);
+        }
+
+        Stock stock = stockRepository.findByStockCodeAndStatus(normalizedStockCode, DEFAULT_STATUS)
                 .orElseThrow(() -> new BusinessException(InvestmentErrorCode.STOCK_NOT_FOUND));
 
         return StockDetailRes.from(stock);
@@ -70,6 +87,12 @@ public class StockQueryService {
 
     private String normalizeKeyword(String keyword) {
         return keyword == null ? "" : keyword.trim();
+    }
+
+    private String escapeLikeWildcards(String keyword) {
+        return keyword.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     private Sort getSort(StockSortType sort, Sort.Direction direction) {

@@ -34,6 +34,8 @@ class StockRepositoryTest {
         persistStock("005930", "삼성전자", StockMarket.KOSPI, StockStatus.ACTIVE);
         persistStock("000001", "005테스트", StockMarket.KOSPI, StockStatus.ACTIVE);
         persistStock("000002", "삼성중공업", StockMarket.KOSPI, StockStatus.SUSPENDED);
+        persistStock("000003", "삼%전자", StockMarket.KOSPI, StockStatus.ACTIVE);
+        persistStock("000004", "삼_전자", StockMarket.KOSPI, StockStatus.ACTIVE);
 
         entityManager.flush();
         entityManager.clear();
@@ -57,6 +59,26 @@ class StockRepositoryTest {
         assertThat(result)
                 .extracting(Stock::getStockName)
                 .containsExactly("005테스트");
+    }
+
+    @Test
+    @DisplayName("검색어에 포함된 퍼센트 문자는 LIKE 와일드카드가 아닌 일반 문자로 처리한다")
+    void searchTreatsPercentAsLiteral() {
+        List<Stock> result = stockRepository.search("삼\\%", StockMarket.KOSPI, StockStatus.ACTIVE);
+
+        assertThat(result)
+                .extracting(Stock::getStockName)
+                .containsExactly("삼%전자");
+    }
+
+    @Test
+    @DisplayName("검색어에 포함된 언더스코어 문자는 LIKE 와일드카드가 아닌 일반 문자로 처리한다")
+    void searchTreatsUnderscoreAsLiteral() {
+        List<Stock> result = stockRepository.search("삼\\_", StockMarket.KOSPI, StockStatus.ACTIVE);
+
+        assertThat(result)
+                .extracting(Stock::getStockName)
+                .containsExactly("삼_전자");
     }
 
     private void persistStock(

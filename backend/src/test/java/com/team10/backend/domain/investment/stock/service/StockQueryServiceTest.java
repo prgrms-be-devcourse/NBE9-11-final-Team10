@@ -68,6 +68,21 @@ class StockQueryServiceTest {
     }
 
     @Test
+    @DisplayName("검색어 LIKE 와일드카드를 이스케이프하고 시장 기본값을 적용한다")
+    void searchEscapesLikeWildcardsAndUsesDefaultMarket() {
+        Stock samsung = stock("005930", "삼성%전자", 1_000_000L, 10_000L);
+        when(stockRepository.search("삼성\\%\\_", StockMarket.KOSPI, StockStatus.ACTIVE))
+                .thenReturn(List.of(samsung));
+
+        List<StockSummaryRes> result = stockQueryService.search(" 삼성%_ ", null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().stockName()).isEqualTo("삼성%전자");
+
+        verify(stockRepository).search("삼성\\%\\_", StockMarket.KOSPI, StockStatus.ACTIVE);
+    }
+
+    @Test
     @DisplayName("시장과 상태 기준으로 종목 목록을 페이지 조회한다")
     void getStocks() {
         Stock samsung = stock("005930", "삼성전자", 1_000_000L, 10_000L);
@@ -91,6 +106,23 @@ class StockQueryServiceTest {
         Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getPageNumber()).isZero();
         assertThat(pageable.getPageSize()).isEqualTo(20);
+        assertThat(pageable.getSort().getOrderFor("stockName").getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    @DisplayName("목록 조회 입력값이 null이면 기본 시장, 상태, 정렬을 적용한다")
+    void getStocksWithNullInputs() {
+        Stock samsung = stock("005930", "삼성전자", 1_000_000L, 10_000L);
+        when(stockRepository.findAllByMarketAndStatus(eq(StockMarket.KOSPI), eq(StockStatus.ACTIVE), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(samsung)));
+
+        Page<StockSummaryRes> result = stockQueryService.getStocks(null, null, null, null, 0, 20);
+
+        assertThat(result.getContent()).hasSize(1);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(stockRepository).findAllByMarketAndStatus(eq(StockMarket.KOSPI), eq(StockStatus.ACTIVE), pageableCaptor.capture());
+        Pageable pageable = pageableCaptor.getValue();
         assertThat(pageable.getSort().getOrderFor("stockName").getDirection()).isEqualTo(Sort.Direction.ASC);
     }
 
@@ -142,6 +174,17 @@ class StockQueryServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(InvestmentErrorCode.STOCK_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("상세 조회 종목코드가 비어 있으면 DB를 조회하지 않고 예외가 발생한다")
+    void getStockWithBlankStockCode() {
+        assertThatThrownBy(() -> stockQueryService.getStock(" "))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(InvestmentErrorCode.STOCK_NOT_FOUND);
+
+        verifyNoInteractions(stockRepository);
     }
 
     private Stock stock(String stockCode, String stockName, Long marketCap, Long previousVolume) {

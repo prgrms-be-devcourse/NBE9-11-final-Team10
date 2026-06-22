@@ -31,7 +31,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             from Stock s
             where s.market = :market
               and s.status = :status
-              and s.stockName like concat('%', :keyword, '%')
+              and s.stockName like concat('%', :keyword, '%') escape '\\'
             order by s.stockName asc, s.stockCode asc
             """)
     List<Stock> search(
