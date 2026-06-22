@@ -12,10 +12,13 @@ import com.team10.backend.domain.investment.stock.entity.Stock;
 import com.team10.backend.domain.investment.stock.repository.StockRepository;
 import com.team10.backend.global.exception.BusinessException;
 import java.io.IOException;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RealtimeOrderbookStreamService {
@@ -66,6 +69,31 @@ public class RealtimeOrderbookStreamService {
 
         eventPublisher.publish(RealtimeOrderbookSubscriptionChangedEvent.ended(subscription));
         emitterRegistry.complete(streamId);
+    }
+
+    void closeLocalStreamsOnShutdown() {
+        Set<String> streamIds = emitterRegistry.findAllStreamIds();
+        if (streamIds.isEmpty()) {
+            return;
+        }
+
+        int closedCount = 0;
+        int failedCount = 0;
+        for (String streamId : streamIds) {
+            try {
+                if (emitterRegistry.complete(streamId)) {
+                    closedCount++;
+                }
+            } catch (RuntimeException e) {
+                failedCount++;
+                log.warn("Failed to close realtime orderbook SSE stream on shutdown. streamId={}", streamId, e);
+            }
+        }
+
+        log.info("Realtime orderbook local SSE streams closed on shutdown. total={}, closed={}, failed={}",
+                streamIds.size(),
+                closedCount,
+                failedCount);
     }
 
     private void closeStreamByEmitterTermination(String streamId) {

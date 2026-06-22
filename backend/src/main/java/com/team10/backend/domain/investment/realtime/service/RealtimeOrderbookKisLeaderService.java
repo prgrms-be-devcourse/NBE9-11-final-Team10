@@ -2,6 +2,8 @@ package com.team10.backend.domain.investment.realtime.service;
 
 import com.team10.backend.domain.investment.client.realtime.KisOrderbookWebSocketClient;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookLeaderLockRepository;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ public class RealtimeOrderbookKisLeaderService {
     private final RealtimeOrderbookInstanceIdProvider instanceIdProvider;
     private final RealtimeOrderbookKisSubscriptionCoordinator kisSubscriptionCoordinator;
     private final KisOrderbookWebSocketClient kisOrderbookWebSocketClient;
+    private final AtomicBoolean leadershipHeld = new AtomicBoolean(false);
 
     public void reconcileStockIfLeader(String stockCode) {
         LeadershipStatus leadershipStatus = ensureLeadership();
@@ -45,10 +48,12 @@ public class RealtimeOrderbookKisLeaderService {
 
         try {
             if (leaderLockRepository.renew(instanceId)) {
+                leadershipHeld.set(true);
                 return LeadershipStatus.ALREADY_LEADER;
             }
 
             if (leaderLockRepository.tryAcquire(instanceId)) {
+                leadershipHeld.set(true);
                 log.info("Realtime orderbook KIS WebSocket leader acquired. instanceId={}", instanceId);
                 return LeadershipStatus.ACQUIRED;
             }
@@ -58,22 +63,40 @@ public class RealtimeOrderbookKisLeaderService {
             throw e;
         }
 
+        leadershipHeld.set(false);
         disconnectLocalKisClientIfNecessary();
         return LeadershipStatus.NOT_LEADER;
     }
 
     public void releaseLeadership() {
         String instanceId = instanceIdProvider.getInstanceId();
-        if (leaderLockRepository.release(instanceId)) {
+        if (!leadershipHeld.get()) {
             disconnectLocalKisClientIfNecessary();
-            log.info("Realtime orderbook KIS WebSocket leader released. instanceId={}", instanceId);
+            return;
+        }
+
+        try {
+            if (leaderLockRepository.release(instanceId)) {
+                log.info("Realtime orderbook KIS WebSocket leader released. instanceId={}", instanceId);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Failed to release realtime orderbook KIS WebSocket leader. instanceId={}", instanceId, e);
+        } finally {
+            leadershipHeld.set(false);
+            disconnectLocalKisClientIfNecessary();
         }
     }
 
     private void disconnectLocalKisClientIfNecessary() {
-        if (kisOrderbookWebSocketClient.isConnected()
-                || !kisOrderbookWebSocketClient.subscribedStockCodes().isEmpty()) {
-            kisOrderbookWebSocketClient.disconnect();
+        try {
+            boolean connected = kisOrderbookWebSocketClient.isConnected();
+            Set<String> subscribedStockCodes = connected ? Set.of() : kisOrderbookWebSocketClient.subscribedStockCodes();
+
+            if (connected || (subscribedStockCodes != null && !subscribedStockCodes.isEmpty())) {
+                kisOrderbookWebSocketClient.disconnect();
+            }
+        } catch (RuntimeException e) {
+            log.warn("Failed to disconnect local KIS orderbook WebSocket client.", e);
         }
     }
 

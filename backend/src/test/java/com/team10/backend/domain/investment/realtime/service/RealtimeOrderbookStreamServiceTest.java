@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -198,6 +199,45 @@ class RealtimeOrderbookStreamServiceTest {
                 .isEqualTo(InvestmentErrorCode.REALTIME_ORDERBOOK_STREAM_NOT_FOUND);
 
         verify(eventPublisher, never()).publish(any());
+    }
+
+    @Test
+    @DisplayName("서버 종료 시 현재 인스턴스의 모든 로컬 SSE stream을 종료하고 Redis 구독 상태를 삭제한다")
+    void closeLocalStreamsOnShutdown() {
+        when(stockRepository.findByStockCode("005930")).thenReturn(Optional.of(stock(StockStatus.ACTIVE)));
+        when(instanceIdProvider.getInstanceId()).thenReturn("instance-a");
+        when(subscriptionStore.saveIfWithinActiveStockLimit(any(), eq(41))).thenReturn(true);
+
+        RealtimeOrderbookSseConnection first = streamService.openStream(1L, "005930");
+        RealtimeOrderbookSseConnection second = streamService.openStream(2L, "005930");
+        RealtimeOrderbookSubscription firstSubscription = new RealtimeOrderbookSubscription(
+                first.streamId(),
+                1L,
+                "005930",
+                "instance-a"
+        );
+        RealtimeOrderbookSubscription secondSubscription = new RealtimeOrderbookSubscription(
+                second.streamId(),
+                2L,
+                "005930",
+                "instance-a"
+        );
+        when(subscriptionStore.deleteByStreamId(first.streamId())).thenReturn(Optional.of(firstSubscription));
+        when(subscriptionStore.deleteByStreamId(second.streamId())).thenReturn(Optional.of(secondSubscription));
+
+        streamService.closeLocalStreamsOnShutdown();
+
+        assertThat(emitterRegistry.streamCount()).isZero();
+        verify(subscriptionStore).deleteByStreamId(first.streamId());
+        verify(subscriptionStore).deleteByStreamId(second.streamId());
+
+        ArgumentCaptor<RealtimeOrderbookSubscriptionChangedEvent> eventCaptor =
+                ArgumentCaptor.forClass(RealtimeOrderbookSubscriptionChangedEvent.class);
+        verify(eventPublisher, times(4)).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getAllValues())
+                .filteredOn(event -> event.eventType() == RealtimeOrderbookSubscriptionChangedEvent.EventType.ENDED)
+                .extracting(RealtimeOrderbookSubscriptionChangedEvent::streamId)
+                .containsExactlyInAnyOrder(first.streamId(), second.streamId());
     }
 
     private Stock stock(StockStatus status) {
