@@ -447,11 +447,11 @@ public class SavingDepositService {
             MaturityReq request
     ) {
         if (request.savingType() == SavingProductType.DEPOSIT) {
-            return savingBatchProcessor.matureDeposit(savingId);
+            return savingBatchProcessor.matureDeposit(savingId, userId);
         }
 
         if (request.savingType() == SavingProductType.INSTALLMENT) {
-            return savingBatchProcessor.matureInstallment(savingId);
+            return savingBatchProcessor.matureInstallment(savingId, userId);
         }
 
         throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
