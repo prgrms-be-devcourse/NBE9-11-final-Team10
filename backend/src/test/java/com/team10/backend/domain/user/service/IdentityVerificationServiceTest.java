@@ -2,45 +2,49 @@ package com.team10.backend.domain.user.service;
 
 import com.team10.backend.domain.user.dto.req.OneWonStartReq;
 import com.team10.backend.domain.user.dto.req.OneWonVerifyReq;
+import com.team10.backend.domain.user.dto.res.IdentityVerificationStatusRes;
 import com.team10.backend.domain.user.dto.res.OcrAcceptedRes;
 import com.team10.backend.domain.user.dto.res.OneWonStartRes;
 import com.team10.backend.domain.user.dto.res.OneWonVerifyRes;
 import com.team10.backend.domain.user.entity.IdentityVerification;
 import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.domain.user.event.OcrSubmittedEvent;
+import com.team10.backend.domain.user.event.OneWonTransferRequestedEvent;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.ocr.OcrService;
 import com.team10.backend.domain.user.repository.IdentityVerificationRepository;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.domain.user.type.VerificationStatus;
-import com.team10.backend.domain.user.verification.BankTransferService;
 import com.team10.backend.domain.user.verification.OneWonVerificationService;
 import com.team10.backend.domain.user.verification.OneWonVerificationService.VerifyResult;
-import com.team10.backend.domain.user.verification.VerificationSessionRecorder;
 import com.team10.backend.global.exception.BusinessException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Optional;
-import java.util.concurrent.RejectedExecutionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,20 +58,28 @@ class IdentityVerificationServiceTest {
     @Mock UserRepository userRepository;
     @Mock IdentityVerificationRepository identityVerificationRepository;
     @Mock OcrService ocrService;
-    @Mock BankTransferService bankTransferService;
     @Mock OneWonVerificationService oneWonVerificationService;
-    @Mock VerificationSessionRecorder verificationSessionRecorder;
+    @Mock ApplicationEventPublisher eventPublisher;
     @Mock PlatformTransactionManager txManager;
     @Mock StringRedisTemplate redisTemplate;
+    @Mock RedisScript<Long> incrWithExpireIfNewScript;
 
     @InjectMocks
     IdentityVerificationService service;
 
     private User user;
+    private Path createdTempPath;
 
     @BeforeEach
     void setUp() {
         user = createUser(1L, false);
+    }
+
+    @AfterEach
+    void cleanUpTempFile() throws IOException {
+        if (createdTempPath != null) {
+            Files.deleteIfExists(createdTempPath);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -79,11 +91,11 @@ class IdentityVerificationServiceTest {
     class SubmitIdCardOcr {
 
         @Test
-        @DisplayName("정상 접수 — OCR_PENDING 상태와 세션 ID 반환")
+        @DisplayName("정상 접수 — OCR_PENDING 상태와 세션 ID 반환, OcrSubmittedEvent 발행")
         void success() {
             MockMultipartFile image = jpegFile(1024);
 
-            when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+            when(redisTemplate.execute(any(RedisScript.class), anyList(), any()))
                     .thenReturn(1L);
             when(userRepository.findById(1L)).thenReturn(Optional.of(user));
             when(identityVerificationRepository.save(any())).thenAnswer(inv -> {
@@ -92,16 +104,19 @@ class IdentityVerificationServiceTest {
                 return v;
             });
 
-            try (MockedStatic<TransactionSynchronizationManager> tsm =
-                         mockStatic(TransactionSynchronizationManager.class)) {
-                tsm.when(() -> TransactionSynchronizationManager.registerSynchronization(any()))
-                        .then(inv -> null);
+            OcrAcceptedRes res = service.submitIdCardOcr(1L, image);
 
-                OcrAcceptedRes res = service.submitIdCardOcr(1L, image);
+            assertThat(res.verificationId()).isEqualTo(10L);
+            assertThat(res.status()).isEqualTo(VerificationStatus.OCR_PENDING);
 
-                assertThat(res.verificationId()).isEqualTo(10L);
-                assertThat(res.status()).isEqualTo(VerificationStatus.OCR_PENDING);
-            }
+            ArgumentCaptor<OcrSubmittedEvent> eventCaptor = ArgumentCaptor.forClass(OcrSubmittedEvent.class);
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            OcrSubmittedEvent event = eventCaptor.getValue();
+            assertThat(event.verificationId()).isEqualTo(10L);
+            assertThat(event.tempImagePath()).exists();
+
+            // 어설션 실패 여부와 무관하게 항상 정리되도록 outer cleanUpTempFile()에 위임
+            createdTempPath = event.tempImagePath();
         }
 
         @Test
@@ -141,7 +156,7 @@ class IdentityVerificationServiceTest {
         void dailyLimitExceeded() {
             MockMultipartFile image = jpegFile(1024);
 
-            when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+            when(redisTemplate.execute(any(RedisScript.class), anyList(), any()))
                     .thenReturn(6L);
 
             assertThatThrownBy(() -> service.submitIdCardOcr(1L, image))
@@ -154,7 +169,7 @@ class IdentityVerificationServiceTest {
         void userNotFound() {
             MockMultipartFile image = jpegFile(1024);
 
-            when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+            when(redisTemplate.execute(any(RedisScript.class), anyList(), any()))
                     .thenReturn(1L);
             when(userRepository.findById(1L)).thenReturn(Optional.empty());
 
@@ -169,7 +184,7 @@ class IdentityVerificationServiceTest {
             MockMultipartFile image = jpegFile(1024);
             User alreadyVerified = createUser(1L, true);
 
-            when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
+            when(redisTemplate.execute(any(RedisScript.class), anyList(), any()))
                     .thenReturn(1L);
             when(userRepository.findById(1L)).thenReturn(Optional.of(alreadyVerified));
 
@@ -178,39 +193,6 @@ class IdentityVerificationServiceTest {
                     .extracting("errorCode").isEqualTo(UserErrorCode.IDENTITY_ALREADY_VERIFIED);
         }
 
-        @Test
-        @DisplayName("스레드풀 포화로 OCR 작업 거부 → FAILED로 별도 트랜잭션 기록")
-        void ocrRejectedDueToPoolSaturation() {
-            MockMultipartFile image = jpegFile(1024);
-
-            when(redisTemplate.execute(any(RedisScript.class), anyList(), any(Object[].class)))
-                    .thenReturn(1L);
-            when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-            when(identityVerificationRepository.save(any())).thenAnswer(inv -> {
-                IdentityVerification v = inv.getArgument(0);
-                ReflectionTestUtils.setField(v, "id", 10L);
-                return v;
-            });
-            doThrow(new RejectedExecutionException("queue full"))
-                    .when(ocrService).processAsync(any(), eq(10L));
-
-            try (MockedStatic<TransactionSynchronizationManager> tsm =
-                         mockStatic(TransactionSynchronizationManager.class)) {
-                tsm.when(() -> TransactionSynchronizationManager.registerSynchronization(any()))
-                        .then(inv -> {
-                            TransactionSynchronization sync = inv.getArgument(0);
-                            sync.afterCommit(); // 실제 커밋 후 콜백을 즉시 실행하여 거부 처리 분기 검증
-                            return null;
-                        });
-
-                OcrAcceptedRes res = service.submitIdCardOcr(1L, image);
-
-                // 응답 자체는 접수 시점 상태(OCR_PENDING) 그대로 반환 — 거부는 비동기 처리 단계에서 발생
-                assertThat(res.status()).isEqualTo(VerificationStatus.OCR_PENDING);
-            }
-
-            verify(verificationSessionRecorder).markFailedInNewTransaction(eq(10L), anyString());
-        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -222,7 +204,7 @@ class IdentityVerificationServiceTest {
     class StartOneWonVerification {
 
         @Test
-        @DisplayName("정상 흐름 — 1원 송금 후 ONE_WON_PENDING 반환")
+        @DisplayName("정상 접수 — ONE_WON_IN_PROGRESS 반환, 이벤트 발행, 락은 비동기 처리에 넘겨 유지된다")
         void success() {
             IdentityVerification verification =
                     createVerification(10L, user, VerificationStatus.GOVERNMENT_VERIFIED);
@@ -231,20 +213,29 @@ class IdentityVerificationServiceTest {
             when(oneWonVerificationService.tryAcquireStartLock(1L)).thenReturn(true);
             when(identityVerificationRepository.findTopByUserIdOrderByCreatedAtDesc(1L))
                     .thenReturn(Optional.of(verification));
-            when(oneWonVerificationService.generateAndStore(10L, 1L)).thenReturn("1234");
             when(identityVerificationRepository.findById(10L)).thenReturn(Optional.of(verification));
             TransactionStatus txStatus = mock(TransactionStatus.class);
             when(txManager.getTransaction(any())).thenReturn(txStatus);
 
             OneWonStartRes res = service.startOneWonVerification(1L, req);
 
-            assertThat(res.status()).isEqualTo(VerificationStatus.ONE_WON_PENDING);
-            verify(bankTransferService).sendOneWon("090", "12345678901", "1234");
-            verify(oneWonVerificationService).releaseStartLock(1L);
+            assertThat(res.status()).isEqualTo(VerificationStatus.ONE_WON_IN_PROGRESS);
+
+            ArgumentCaptor<OneWonTransferRequestedEvent> eventCaptor =
+                    ArgumentCaptor.forClass(OneWonTransferRequestedEvent.class);
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            OneWonTransferRequestedEvent event = eventCaptor.getValue();
+            assertThat(event.verificationId()).isEqualTo(10L);
+            assertThat(event.userId()).isEqualTo(1L);
+            assertThat(event.organization()).isEqualTo("090");
+            assertThat(event.accountNumber()).isEqualTo("12345678901");
+
+            // 실제 송금은 비동기로 처리되므로, 중복 방지 락은 여기서 해제하지 않고 비동기 처리 쪽(OneWonTransferProcessor)에 넘긴다
+            verify(oneWonVerificationService, never()).releaseStartLock(1L);
         }
 
         @Test
-        @DisplayName("행안부 인증 미완료 상태 → VERIFICATION_NOT_READY_FOR_ONE_WON")
+        @DisplayName("행안부 인증 미완료 상태 → VERIFICATION_NOT_READY_FOR_ONE_WON, 락 해제")
         void notReady() {
             IdentityVerification verification =
                     createVerification(10L, user, VerificationStatus.OCR_PENDING);
@@ -257,10 +248,12 @@ class IdentityVerificationServiceTest {
             assertThatThrownBy(() -> service.startOneWonVerification(1L, req))
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode").isEqualTo(UserErrorCode.VERIFICATION_NOT_READY_FOR_ONE_WON);
+
+            verify(oneWonVerificationService).releaseStartLock(1L);
         }
 
         @Test
-        @DisplayName("세션 없음 → VERIFICATION_NOT_READY_FOR_ONE_WON")
+        @DisplayName("세션 없음 → VERIFICATION_NOT_READY_FOR_ONE_WON, 락 해제")
         void sessionNotFound() {
             OneWonStartReq req = new OneWonStartReq("12345678901", "004");
 
@@ -271,10 +264,12 @@ class IdentityVerificationServiceTest {
             assertThatThrownBy(() -> service.startOneWonVerification(1L, req))
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode").isEqualTo(UserErrorCode.VERIFICATION_NOT_READY_FOR_ONE_WON);
+
+            verify(oneWonVerificationService).releaseStartLock(1L);
         }
 
         @Test
-        @DisplayName("지원하지 않는 기관코드 → UNSUPPORTED_BANK")
+        @DisplayName("지원하지 않는 기관코드 → UNSUPPORTED_BANK, 락 해제")
         void unsupportedBank() {
             IdentityVerification verification =
                     createVerification(10L, user, VerificationStatus.GOVERNMENT_VERIFIED);
@@ -287,10 +282,12 @@ class IdentityVerificationServiceTest {
             assertThatThrownBy(() -> service.startOneWonVerification(1L, req))
                     .isInstanceOf(BusinessException.class)
                     .extracting("errorCode").isEqualTo(UserErrorCode.UNSUPPORTED_BANK);
+
+            verify(oneWonVerificationService).releaseStartLock(1L);
         }
 
         @Test
-        @DisplayName("은행 점검 시간대 → BANK_MAINTENANCE")
+        @DisplayName("은행 점검 시간대 → BANK_MAINTENANCE, 락 해제")
         void bankMaintenance() {
             IdentityVerification verification =
                     createVerification(10L, user, VerificationStatus.GOVERNMENT_VERIFIED);
@@ -308,28 +305,44 @@ class IdentityVerificationServiceTest {
                         .isInstanceOf(BusinessException.class)
                         .extracting("errorCode").isEqualTo(UserErrorCode.BANK_MAINTENANCE);
             }
+
+            verify(oneWonVerificationService).releaseStartLock(1L);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // getMyVerificationStatus
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getMyVerificationStatus")
+    class GetMyVerificationStatus {
+
+        @Test
+        @DisplayName("세션 존재 → 상태와 실패 사유 반환")
+        void found_returnsStatus() {
+            IdentityVerification verification =
+                    createVerification(10L, user, VerificationStatus.ONE_WON_IN_PROGRESS);
+
+            when(identityVerificationRepository.findTopByUserIdOrderByCreatedAtDesc(1L))
+                    .thenReturn(Optional.of(verification));
+
+            IdentityVerificationStatusRes res = service.getMyVerificationStatus(1L);
+
+            assertThat(res.verificationId()).isEqualTo(10L);
+            assertThat(res.status()).isEqualTo(VerificationStatus.ONE_WON_IN_PROGRESS);
+            assertThat(res.failureReason()).isNull();
         }
 
         @Test
-        @DisplayName("송금 실패 시 Redis 코드 + 카운터 롤백")
-        void transferFailed_rollback() {
-            IdentityVerification verification =
-                    createVerification(10L, user, VerificationStatus.GOVERNMENT_VERIFIED);
-            OneWonStartReq req = new OneWonStartReq("12345678901", "090");
-
-            when(oneWonVerificationService.tryAcquireStartLock(1L)).thenReturn(true);
+        @DisplayName("세션 없음 → VERIFICATION_SESSION_NOT_FOUND")
+        void notFound_throws() {
             when(identityVerificationRepository.findTopByUserIdOrderByCreatedAtDesc(1L))
-                    .thenReturn(Optional.of(verification));
-            when(oneWonVerificationService.generateAndStore(10L, 1L)).thenReturn("1234");
-            doThrow(new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED))
-                    .when(bankTransferService).sendOneWon(any(), any(), any());
+                    .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.startOneWonVerification(1L, req))
+            assertThatThrownBy(() -> service.getMyVerificationStatus(1L))
                     .isInstanceOf(BusinessException.class)
-                    .extracting("errorCode").isEqualTo(UserErrorCode.ONE_WON_TRANSFER_FAILED);
-
-            verify(oneWonVerificationService).deleteCode(10L);
-            verify(oneWonVerificationService).decrementDailyCount(1L);
+                    .extracting("errorCode").isEqualTo(UserErrorCode.VERIFICATION_SESSION_NOT_FOUND);
         }
     }
 
@@ -430,7 +443,12 @@ class IdentityVerificationServiceTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     private MockMultipartFile jpegFile(int size) {
-        return new MockMultipartFile("image", "test.jpg", "image/jpeg", new byte[size]);
+        byte[] content = new byte[size];
+        // 매직바이트 검증(hasValidImageSignature)을 통과하도록 JPEG 시그니처(FF D8 FF)를 선두에 채운다.
+        content[0] = (byte) 0xFF;
+        content[1] = (byte) 0xD8;
+        content[2] = (byte) 0xFF;
+        return new MockMultipartFile("image", "test.jpg", "image/jpeg", content);
     }
 
     private User createUser(Long id, boolean identityVerified) {

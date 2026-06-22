@@ -5,7 +5,10 @@ import lombok.RequiredArgsConstructor;
 
 import java.time.LocalTime;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * CODEF 기관코드 및 은행별 점검 시간 매핑.
@@ -65,6 +68,10 @@ public enum BankCode {
     /** 점검 종료 시각. null이면 점검 없음. */
     private final LocalTime maintenanceEnd;
 
+    // 코드 → BankCode 조회용 캐시. 호출마다 enum 전체를 선형 스캔하지 않도록 한 번만 구성해 둔다.
+    private static final Map<String, BankCode> CODE_INDEX =
+            Arrays.stream(values()).collect(Collectors.toMap(BankCode::getCode, Function.identity()));
+
     /**
      * CODEF 기관코드로 BankCode를 조회한다.
      *
@@ -72,9 +79,7 @@ public enum BankCode {
      * @return 매핑된 BankCode, 없으면 empty
      */
     public static Optional<BankCode> fromCode(String code) {
-        return Arrays.stream(values())
-                .filter(b -> b.code.equals(code))
-                .findFirst();
+        return Optional.ofNullable(CODE_INDEX.get(code));
     }
 
     /**

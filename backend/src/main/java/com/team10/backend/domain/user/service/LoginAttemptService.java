@@ -21,15 +21,9 @@ public class LoginAttemptService {
     private static final int MAX_FAIL_COUNT = 5;
     private static final Duration LOCK_DURATION = Duration.ofMinutes(30);
 
-    // INCR + EXPIRE 원자적 실행 — 중간에 서버가 죽어도 TTL 보장
-    private static final RedisScript<Long> INCR_AND_EXPIRE = RedisScript.of(
-            "local v = redis.call('INCR', KEYS[1])\n" +
-            "redis.call('EXPIRE', KEYS[1], ARGV[1])\n" +
-            "return v",
-            Long.class
-    );
-
     private final StringRedisTemplate redisTemplate;
+    // RedisScriptConfig에서 공용으로 정의 — OneWonVerificationService의 시도 횟수 카운터와 동일한 스크립트
+    private final RedisScript<Long> incrAndExpireScript;
 
     public void checkAndThrowIfLocked(String email) {
         String value = redisTemplate.opsForValue().get(FAIL_KEY_PREFIX + email);
@@ -42,7 +36,7 @@ public class LoginAttemptService {
     public void recordFailure(String email) {
         String key = FAIL_KEY_PREFIX + email;
         Long count = redisTemplate.execute(
-                INCR_AND_EXPIRE,
+                incrAndExpireScript,
                 List.of(key),
                 String.valueOf(LOCK_DURATION.toSeconds())
         );
