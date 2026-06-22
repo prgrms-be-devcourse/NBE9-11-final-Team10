@@ -379,6 +379,177 @@ class TransferFlowE2ETest {
         assertNotNull(idempotency.getCompletedAt());
     }
 
+    @Test
+    @DisplayName("수취 계좌번호 미존재 E2E - 존재하지 않는 수취 계좌번호는 송금 처리하지 않는다")
+    void transfer_receiverAccountNumberNotFound_returnsAccountNotFoundWithoutChangingState() throws Exception {
+        // given. 송금자 계좌만 존재하고, 요청의 수취 계좌번호는 DB에 존재하지 않는다.
+        User sender = saveUser("sender-missing-receiver@example.com", "송금자");
+        Account senderAccount = saveAccount(sender, "100200300071", 100_000L);
+        String idempotencyKey = "flow-missing-receiver-key";
+
+        TransferReq request = new TransferReq(
+                senderAccount.getId(),
+                "999999999999",
+                50_000L,
+                "없는 수취 계좌"
+        );
+
+        // when. 존재하지 않는 수취 계좌번호로 송금을 요청한다.
+        mockMvc.perform(post("/api/v1/transfers")
+                        .with(authentication(authenticatedUser(sender.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. 계좌를 찾을 수 없다는 에러를 반환해야 한다.
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("계좌를 찾을 수 없습니다."));
+
+        entityManager.clear();
+
+        // then 2. 수취 계좌 조회 단계에서 실패했으므로 송금자 잔액과 원장 데이터는 그대로여야 한다.
+        Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
+        assertEquals(100_000L, savedSenderAccount.getBalance());
+        assertEquals(0, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+
+        // then 3. 멱등성 레코드는 FAILED로 완료되어 같은 실패 요청이 재처리되지 않도록 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(sender.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("출금 계좌 ID 미존재 E2E - 존재하지 않는 출금 계좌 ID는 송금 처리하지 않는다")
+    void transfer_senderAccountIdNotFound_returnsAccountNotFoundWithoutPersistingTransfer() throws Exception {
+        // given. 수취 계좌는 존재하지만 요청의 출금 계좌 ID는 DB에 존재하지 않는다.
+        User sender = saveUser("sender-missing-account@example.com", "송금자");
+        User receiver = saveUser("receiver-missing-account@example.com", "수취자");
+        Account receiverAccount = saveAccount(receiver, "100200300082", 10_000L);
+        Long missingSenderAccountId = 999_999L;
+        String idempotencyKey = "flow-missing-sender-key";
+
+        TransferReq request = new TransferReq(
+                missingSenderAccountId,
+                receiverAccount.getAccountNumber(),
+                50_000L,
+                "없는 출금 계좌"
+        );
+
+        // when. 존재하지 않는 출금 계좌 ID로 송금을 요청한다.
+        mockMvc.perform(post("/api/v1/transfers")
+                        .with(authentication(authenticatedUser(sender.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. 계좌를 찾을 수 없다는 에러를 반환해야 한다.
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"))
+                .andExpect(jsonPath("$.message").value("계좌를 찾을 수 없습니다."));
+
+        entityManager.clear();
+
+        // then 2. 출금 계좌 락 획득 단계에서 실패했으므로 수취 계좌와 원장 데이터는 그대로여야 한다.
+        Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
+        assertEquals(10_000L, savedReceiverAccount.getBalance());
+        assertEquals(0, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+
+        // then 3. 멱등성 레코드는 FAILED로 완료되어 같은 실패 요청이 재처리되지 않도록 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(sender.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("자기 자신 계좌 송금 E2E - 같은 계좌로 송금하면 송금 처리하지 않는다")
+    void transfer_sameAccount_returnsInvalidInputWithoutChangingState() throws Exception {
+        // given. 송금자가 소유한 하나의 계좌를 준비한다.
+        User sender = saveUser("sender-same-account@example.com", "송금자");
+        Account senderAccount = saveAccount(sender, "100200300091", 100_000L);
+        String idempotencyKey = "flow-same-account-key";
+
+        TransferReq request = new TransferReq(
+                senderAccount.getId(),
+                senderAccount.getAccountNumber(),
+                50_000L,
+                "자기 자신 송금"
+        );
+
+        // when. 출금 계좌와 수취 계좌가 같은 송금을 요청한다.
+        mockMvc.perform(post("/api/v1/transfers")
+                        .with(authentication(authenticatedUser(sender.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. 자기 자신 송금은 잘못된 입력으로 거부되어야 한다.
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"))
+                .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."));
+
+        entityManager.clear();
+
+        // then 2. 같은 계좌 검증 단계에서 실패했으므로 잔액과 원장 데이터는 그대로여야 한다.
+        Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
+        assertEquals(100_000L, savedSenderAccount.getBalance());
+        assertEquals(0, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+
+        // then 3. 멱등성 레코드는 FAILED로 완료되어 같은 실패 요청이 재처리되지 않도록 한다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(sender.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    @Test
+    @DisplayName("멱등성 키 형식 오류 E2E - 유효하지 않은 Idempotency-Key는 송금 로직에 진입하지 않는다")
+    void transfer_invalidIdempotencyKey_returnsInvalidKeyWithoutChangingState() throws Exception {
+        // given. 정상 송금이 가능한 계좌를 준비하되, 멱등성 키는 허용되지 않는 공백 포함 문자열로 보낸다.
+        User sender = saveUser("sender-invalid-key@example.com", "송금자");
+        User receiver = saveUser("receiver-invalid-key@example.com", "수취자");
+        Account senderAccount = saveAccount(sender, "100200300101", 100_000L);
+        Account receiverAccount = saveAccount(receiver, "100200300102", 10_000L);
+
+        TransferReq request = new TransferReq(
+                senderAccount.getId(),
+                receiverAccount.getAccountNumber(),
+                50_000L,
+                "잘못된 멱등성 키"
+        );
+
+        // when. 형식이 잘못된 Idempotency-Key로 송금을 요청한다.
+        mockMvc.perform(post("/api/v1/transfers")
+                        .with(authentication(authenticatedUser(sender.getId())))
+                        .header("Idempotency-Key", "invalid key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. 멱등성 키 형식 오류를 반환해야 한다.
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_INVALID"))
+                .andExpect(jsonPath("$.message").value("유효하지 않은 키 형식입니다."));
+
+        entityManager.clear();
+
+        // then 2. 멱등성 예약 전에 실패했으므로 잔액, 송금, 거래내역, 멱등성 레코드가 모두 없어야 한다.
+        Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
+        Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
+
+        assertEquals(100_000L, savedSenderAccount.getBalance());
+        assertEquals(10_000L, savedReceiverAccount.getBalance());
+        assertEquals(0, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+        assertEquals(0, idempotencyRepository.count());
+    }
+
     private UsernamePasswordAuthenticationToken authenticatedUser(Long userId) {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
     }
