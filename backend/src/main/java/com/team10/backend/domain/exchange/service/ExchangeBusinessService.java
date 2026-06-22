@@ -7,12 +7,15 @@ import com.team10.backend.domain.exchange.dto.res.ExchangeOrderRes;
 import com.team10.backend.domain.exchange.entity.ExchangeOrder;
 import com.team10.backend.domain.exchange.entity.ExchangeQuote;
 import com.team10.backend.domain.exchange.entity.FxWallet;
+import com.team10.backend.domain.exchange.entity.FxWalletLedger;
 import com.team10.backend.domain.exchange.exception.ExchangeErrorCode;
 import com.team10.backend.domain.exchange.repository.ExchangeOrderRepository;
 import com.team10.backend.domain.exchange.repository.ExchangeQuoteRepository;
+import com.team10.backend.domain.exchange.repository.FxWalletLedgerRepository;
 import com.team10.backend.domain.exchange.repository.FxWalletRepository;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
 import com.team10.backend.domain.exchange.type.ExchangeDirection;
+import com.team10.backend.domain.transaction.type.TransactionDirection;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
@@ -30,6 +33,7 @@ public class ExchangeBusinessService {
 
     private final AccountRepository accountRepository;
     private final FxWalletRepository fxWalletRepository;
+    private final FxWalletLedgerRepository fxWalletLedgerRepository;
     private final ExchangeOrderRepository exchangeOrderRepository;
     private final ExchangeQuoteRepository exchangeQuoteRepository;
     private final UserRepository userRepository;
@@ -55,12 +59,14 @@ public class ExchangeBusinessService {
 
         Account krwAccount = exchangeResources.krwAccount;
         FxWallet fxWallet = exchangeResources.fxWallet;
+        BigDecimal fxBalanceBefore = fxWallet.getBalance(); // 이전 잔액 캡쳐
 
         // 잔액 반영
         applyExchange(direction, quote, krwAccount, fxWallet);
 
         // 완료한 주문 저장
         ExchangeOrder order = saveCompletedOrder(user, quote, krwAccount, fxWallet, direction);
+        saveFxWalletLedger(direction, quote, fxWallet, order, fxBalanceBefore);
 
         return ExchangeOrderRes.from(order);
     }
@@ -170,6 +176,37 @@ public class ExchangeBusinessService {
             throw new BusinessException(ExchangeErrorCode.EXCHANGE_QUOTE_ALREADY_USED);
         }
 
+    }
+
+    private void saveFxWalletLedger(
+            ExchangeDirection direction,
+            ExchangeQuote quote,
+            FxWallet fxWallet,
+            ExchangeOrder order,
+            BigDecimal balanceBefore
+    ) {
+        fxWalletLedgerRepository.save(FxWalletLedger.create(
+                fxWallet,
+                order,
+                fxWallet.getCurrency(),
+                resolveLedgerDirection(direction),
+                resolveLedgerAmount(direction, quote),
+                balanceBefore,
+                fxWallet.getBalance(),
+                order.getCompletedAt()
+        ));
+    }
+
+    private TransactionDirection resolveLedgerDirection(ExchangeDirection direction) {
+        return direction == ExchangeDirection.KRW_TO_FOREIGN
+                ? TransactionDirection.IN
+                : TransactionDirection.OUT;
+    }
+
+    private BigDecimal resolveLedgerAmount(ExchangeDirection direction, ExchangeQuote quote) {
+        return direction == ExchangeDirection.KRW_TO_FOREIGN
+                ? quote.getExpectedToAmount()
+                : quote.getFromAmount();
     }
 
     private Long toKrwLong(BigDecimal amount) {
