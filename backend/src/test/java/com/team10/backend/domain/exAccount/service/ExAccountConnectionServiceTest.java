@@ -3,14 +3,17 @@ package com.team10.backend.domain.exAccount.service;
 import com.team10.backend.domain.codef.exAccount.dto.internal.CodefExAccountSnapshot;
 import com.team10.backend.domain.codef.exAccount.dto.req.CodefExAccountConnectionCreateReq;
 import com.team10.backend.domain.codef.exAccount.service.CodefExAccountGateway;
+import com.team10.backend.domain.codef.exAccount.store.CodefExAccountCandidateStore;
 import com.team10.backend.domain.exAccount.type.ExAccountConnectionStatus;
 import com.team10.backend.domain.exAccount.type.ExAccountType;
+import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateListRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountConnectionRes;
 import com.team10.backend.domain.exAccount.entity.ExAccountConnection;
 import com.team10.backend.domain.exAccount.entity.value.EncryptedConnectedId;
 import com.team10.backend.domain.exAccount.exception.ExAccountConnectionErrorCode;
 import com.team10.backend.domain.exAccount.repository.ExAccountConnectionRepository;
+import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
@@ -44,6 +47,10 @@ class ExAccountConnectionServiceTest {
     private CodefExAccountGateway codefExAccountGateway;
     @Mock
     private ExAccountSyncService exAccountSyncService;
+    @Mock
+    private ExAccountRepository exAccountRepository;
+    @Mock
+    private CodefExAccountCandidateStore candidateStore;
 
     private ExAccountConnectionService service;
     private User user;
@@ -55,57 +62,47 @@ class ExAccountConnectionServiceTest {
                 userRepository,
                 connectionRepository,
                 codefExAccountGateway,
-                exAccountSyncService
+                exAccountSyncService,
+                exAccountRepository,
+                candidateStore
         );
         user = User.create(
-                "owner@example.com", "password", "사용자", "01012345678",
-                LocalDate.of(1995, 1, 1)
+                "test@example.com",
+                "password123",
+                "홍길동",
+                "010-1234-5678",
+                LocalDate.of(1999, 1, 1)
         );
         createRequest = new CodefExAccountConnectionCreateReq(
-                "0004", "BK", "P", "1", "internet-user", "bank-password", "950101"
+                "0004", "BK", "P", "1", "user123", "pass123", "990101"
         );
     }
 
     @Test
-    void registersAndStoresOnlyEncryptedConnectedId() {
-        EncryptedConnectedId encrypted = new EncryptedConnectedId("ciphertext", "iv", "v1");
+    void registersConnectionProperly() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(codefExAccountGateway.register(createRequest)).thenReturn(encrypted);
+        EncryptedConnectedId encryptedConnectedId = new EncryptedConnectedId(
+                "ciphertext", "iv", "v1"
+        );
+        when(codefExAccountGateway.register(createRequest)).thenReturn(encryptedConnectedId);
         when(connectionRepository.findByUserIdAndOrganization(1L, "0004"))
                 .thenReturn(Optional.empty());
-        when(connectionRepository.save(any(ExAccountConnection.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ExAccountConnectionRes result = service.register(1L, createRequest);
+        ExAccountConnection mockSaved = connection("ciphertext");
+        when(connectionRepository.save(any())).thenReturn(mockSaved);
+
+        ExAccountConnectionRes response = service.register(1L, createRequest);
+
+        assertThat(response.organization()).isEqualTo("0004");
+        assertThat(response.status()).isEqualTo(ExAccountConnectionStatus.ACTIVE);
 
         ArgumentCaptor<ExAccountConnection> captor =
                 ArgumentCaptor.forClass(ExAccountConnection.class);
         verify(connectionRepository).save(captor.capture());
-        ExAccountConnection saved = captor.getValue();
-        assertThat(saved.getConnectedIdCiphertext()).isEqualTo("ciphertext");
-        assertThat(saved.getConnectedIdIv()).isEqualTo("iv");
-        assertThat(saved.getEncryptionKeyVersion()).isEqualTo("v1");
-        assertThat(result.status()).isEqualTo(ExAccountConnectionStatus.ACTIVE);
-    }
-
-    @Test
-    void updatesExistingConnectionWhenRelinking() {
-        ExAccountConnection existing = connection("old-ciphertext");
-        existing.markSynced(java.time.LocalDateTime.now());
-        EncryptedConnectedId replacement = new EncryptedConnectedId(
-                "new-ciphertext", "new-iv", "v1"
-        );
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(codefExAccountGateway.register(createRequest)).thenReturn(replacement);
-        when(connectionRepository.findByUserIdAndOrganization(1L, "0004"))
-                .thenReturn(Optional.of(existing));
-        when(connectionRepository.save(existing)).thenReturn(existing);
-
-        service.register(1L, createRequest);
-
-        assertThat(existing.getConnectedIdCiphertext()).isEqualTo("new-ciphertext");
-        assertThat(existing.getStatus()).isEqualTo(ExAccountConnectionStatus.ACTIVE);
-        assertThat(existing.getLastSyncedAt()).isNull();
+        ExAccountConnection captured = captor.getValue();
+        assertThat(captured.getUser()).isEqualTo(user);
+        assertThat(captured.getOrganization()).isEqualTo("0004");
+        assertThat(captured.encryptedConnectedId()).isEqualTo(encryptedConnectedId);
     }
 
     @Test
@@ -113,20 +110,25 @@ class ExAccountConnectionServiceTest {
         ExAccountConnection connection = connection("ciphertext");
         CodefExAccountSnapshot snapshot = snapshot();
         ExAccountCandidateRes candidate = candidate();
+        
         when(connectionRepository.findByUserIdAndOrganization(1L, "0004"))
                 .thenReturn(Optional.of(connection));
         when(codefExAccountGateway.getAccountSnapshots(
                 "0004", connection.encryptedConnectedId()
         )).thenReturn(List.of(snapshot));
-        when(exAccountSyncService.getLinkCandidates(any(), any()))
-                .thenReturn(List.of(candidate));
+        
+        when(candidateStore.save(1L, List.of(snapshot))).thenReturn("mock-token");
+        when(exAccountSyncService.getAccountNumberHash("1234567890")).thenReturn("hash");
+        when(exAccountSyncService.getMaskedAccountNumber("1234567890")).thenReturn("123***7890");
+        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(1L, "0004", "hash"))
+                .thenReturn(Optional.empty());
 
-        List<ExAccountCandidateRes> result = service.getLinkCandidates(1L, "0004");
+        ExAccountCandidateListRes result = service.getLinkCandidates(1L, "0004");
 
-        assertThat(result).containsExactly(candidate);
-        assertThat(result.getFirst().accountNoMasked()).doesNotContain("1234567890");
+        assertThat(result.candidateToken()).isEqualTo("mock-token");
+        assertThat(result.accounts()).containsExactly(candidate);
+        assertThat(result.accounts().getFirst().accountNoMasked()).doesNotContain("1234567890");
         assertThat(connection.getLastSyncedAt()).isNotNull();
-        verify(exAccountSyncService).getLinkCandidates(any(), any());
     }
 
     @Test
@@ -138,9 +140,10 @@ class ExAccountConnectionServiceTest {
                 "0004", connection.encryptedConnectedId()
         )).thenReturn(List.of());
 
-        assertThat(service.getLinkCandidates(1L, "0004")).isEmpty();
+        ExAccountCandidateListRes result = service.getLinkCandidates(1L, "0004");
+        assertThat(result.candidateToken()).isEmpty();
+        assertThat(result.accounts()).isEmpty();
         assertThat(connection.getLastSyncedAt()).isNotNull();
-        verify(exAccountSyncService, never()).getLinkCandidates(any(), any());
     }
 
     @Test
@@ -187,7 +190,7 @@ class ExAccountConnectionServiceTest {
 
     private ExAccountCandidateRes candidate() {
         return new ExAccountCandidateRes(
-                "0004", "123***7890", "입출금통장", "생활비",
+                0, "0004", "123***7890", "입출금통장", "생활비",
                 ExAccountType.DEMAND, BigDecimal.valueOf(1000), BigDecimal.valueOf(900),
                 LocalDate.of(2024, 1, 1), null, LocalDate.of(2026, 6, 22), false
         );

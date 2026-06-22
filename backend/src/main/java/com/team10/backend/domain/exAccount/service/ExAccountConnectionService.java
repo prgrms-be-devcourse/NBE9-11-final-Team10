@@ -3,13 +3,15 @@ package com.team10.backend.domain.exAccount.service;
 import com.team10.backend.domain.codef.exAccount.dto.internal.CodefExAccountSnapshot;
 import com.team10.backend.domain.codef.exAccount.dto.req.CodefExAccountConnectionCreateReq;
 import com.team10.backend.domain.codef.exAccount.service.CodefExAccountGateway;
-import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
+import com.team10.backend.domain.codef.exAccount.store.CodefExAccountCandidateStore;
+import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateListRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountConnectionRes;
 import com.team10.backend.domain.exAccount.entity.ExAccountConnection;
 import com.team10.backend.domain.exAccount.entity.value.EncryptedConnectedId;
 import com.team10.backend.domain.exAccount.exception.ExAccountConnectionErrorCode;
 import com.team10.backend.domain.exAccount.repository.ExAccountConnectionRepository;
+import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.repository.UserRepository;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -31,6 +34,8 @@ public class ExAccountConnectionService {
     private final ExAccountConnectionRepository connectionRepository;
     private final CodefExAccountGateway codefExAccountGateway;
     private final ExAccountSyncService exAccountSyncService;
+    private final ExAccountRepository exAccountRepository;
+    private final CodefExAccountCandidateStore candidateStore;
 
     @Transactional
     public ExAccountConnectionRes register(
@@ -54,19 +59,34 @@ public class ExAccountConnectionService {
     }
 
     @Transactional
-    public List<ExAccountCandidateRes> getLinkCandidates(Long userId, String organization) {
+    public ExAccountCandidateListRes getLinkCandidates(Long userId, String organization) {
         ExAccountConnection connection = getActiveConnection(userId, organization);
-        List<ExAccountLinkReq> accounts = codefExAccountGateway
-                .getAccountSnapshots(organization, connection.encryptedConnectedId())
-                .stream()
-                .map(this::toLinkRequest)
-                .toList();
+        List<CodefExAccountSnapshot> snapshots = codefExAccountGateway
+                .getAccountSnapshots(organization, connection.encryptedConnectedId());
 
         connection.markSynced(LocalDateTime.now(ZoneOffset.UTC));
-        if (accounts.isEmpty()) {
-            return List.of();
+        if (snapshots.isEmpty()) {
+            return new ExAccountCandidateListRes("", 300, List.of());
         }
-        return exAccountSyncService.getLinkCandidates(userId, accounts);
+
+        // Redis 저장 및 토큰 발급
+        String candidateToken = candidateStore.save(userId, snapshots);
+
+        // 후보 응답 리스트 빌드
+        List<ExAccountCandidateRes> accounts = new ArrayList<>();
+        for (int i = 0; i < snapshots.size(); i++) {
+            CodefExAccountSnapshot snapshot = snapshots.get(i);
+            String hash = exAccountSyncService.getAccountNumberHash(snapshot.accountNumber());
+            String masked = exAccountSyncService.getMaskedAccountNumber(snapshot.accountNumber());
+
+            boolean linked = exAccountRepository
+                    .findByUserIdAndOrganizationAndAccountNumberHash(userId, organization, hash)
+                    .isPresent();
+
+            accounts.add(ExAccountCandidateRes.from(i, snapshot, masked, linked));
+        }
+
+        return new ExAccountCandidateListRes(candidateToken, 300, accounts);
     }
 
     private ExAccountConnection getActiveConnection(Long userId, String organization) {
@@ -87,20 +107,5 @@ public class ExAccountConnectionService {
     ) {
         existing.replaceConnectedId(encryptedConnectedId);
         return existing;
-    }
-
-    private ExAccountLinkReq toLinkRequest(CodefExAccountSnapshot snapshot) {
-        return new ExAccountLinkReq(
-                snapshot.organization(),
-                snapshot.accountNumber(),
-                snapshot.accountName(),
-                snapshot.accountAlias(),
-                snapshot.assetType(),
-                snapshot.balance(),
-                snapshot.withdrawableAmount(),
-                snapshot.openedAt(),
-                snapshot.maturityAt(),
-                snapshot.lastTransactionAt()
-        );
     }
 }

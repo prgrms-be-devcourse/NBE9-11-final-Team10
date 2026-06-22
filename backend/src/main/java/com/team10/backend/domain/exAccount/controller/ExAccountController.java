@@ -1,10 +1,9 @@
 package com.team10.backend.domain.exAccount.controller;
 
 import com.team10.backend.domain.codef.exAccount.dto.req.CodefExAccountConnectionCreateReq;
-import com.team10.backend.domain.exAccount.dto.req.ExAccountCandidateReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountTransactionRefreshReq;
-import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
+import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateListRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountConnectionRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountDetailRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
@@ -62,7 +61,7 @@ public class ExAccountController {
 
     @Operation(
             summary = "외부기관 보유계좌 후보 조회",
-            description = "사용자 소유의 기관 연결정보를 복호화해 CODEF 보유계좌를 조회하고, 계좌번호를 마스킹한 연동 후보를 반환합니다."
+            description = "사용자 소유의 기관 연결정보를 복호화해 CODEF 보유계좌를 조회하고, 계좌번호를 마스킹한 연동 후보와 일회용 연동 토큰을 반환합니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "보유계좌 후보 조회 성공"),
@@ -70,7 +69,7 @@ public class ExAccountController {
             @ApiResponse(responseCode = "409", description = "재인증이 필요한 연결정보")
     })
     @GetMapping("/connections/{organization}/candidates")
-    public ResponseEntity<List<ExAccountCandidateRes>> getProviderLinkCandidates(
+    public ResponseEntity<ExAccountCandidateListRes> getProviderLinkCandidates(
             @AuthenticationPrincipal Long userId,
             @Parameter(description = "CODEF 기관 코드", example = "0004")
             @PathVariable String organization
@@ -127,24 +126,8 @@ public class ExAccountController {
     }
 
     @Operation(
-            summary = "외부 계좌 후보 조회",
-            description = "외부기관에서 조회된 계좌 목록을 요청 본문으로 받아 DB에 저장하지 않고 연동 후보로 반환합니다. 이미 연동된 계좌는 linked=true로 표시합니다."
-    )
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "외부 계좌 후보 조회 성공"),
-            @ApiResponse(responseCode = "400", description = "외부 계좌 후보 요청값 검증 실패")
-    })
-    @PostMapping("/candidates")
-    public ResponseEntity<List<ExAccountCandidateRes>> getLinkCandidates(
-            @AuthenticationPrincipal Long userId,
-            @Valid @RequestBody ExAccountCandidateReq request
-    ) {
-        return ResponseEntity.ok(exAccountSyncService.getLinkCandidates(userId, request.accounts()));
-    }
-
-    @Operation(
             summary = "외부 계좌 연동",
-            description = "사용자가 연동 버튼을 누른 단일 외부 계좌만 DB에 저장합니다. 같은 사용자, 기관, 계좌번호의 계좌가 이미 있으면 신규 저장하지 않고 최신 스냅샷만 갱신합니다."
+            description = "사용자가 연동 대기 세션(토큰)과 선택한 계좌 인덱스 목록을 제출하여, 해당 외부 계좌들을 연동하여 DB에 저장합니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "외부 계좌 연동 성공"),
@@ -152,11 +135,11 @@ public class ExAccountController {
             @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     })
     @PostMapping("/link")
-    public ResponseEntity<ExAccountRes> linkAccount(
+    public ResponseEntity<List<ExAccountRes>> linkAccount(
             @AuthenticationPrincipal Long userId,
             @Valid @RequestBody ExAccountLinkReq request
     ) {
-        ExAccountRes response = exAccountSyncService.linkAccount(userId, request);
+        List<ExAccountRes> response = exAccountSyncService.linkAccounts(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

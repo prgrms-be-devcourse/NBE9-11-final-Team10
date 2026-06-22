@@ -166,9 +166,11 @@ class ExAccountTransactionServiceTest {
     }
 
     private ExAccount createExAccount(Long id) {
-        ExAccountLinkReq request = new ExAccountLinkReq(
+        ExAccount account = ExAccount.create(
+                user,
                 "국민은행",
-                "12345678901234",
+                "account-number-hash",
+                "123456****1234",
                 "KB Star 입출금통장",
                 "생활비 통장",
                 ExAccountType.DEMAND,
@@ -177,11 +179,6 @@ class ExAccountTransactionServiceTest {
                 LocalDate.of(2024, 1, 15),
                 null,
                 LocalDate.of(2026, 6, 1)
-        );
-        ExAccount account = request.toEntity(
-                user,
-                "account-number-hash",
-                "123456****1234"
         );
         ReflectionTestUtils.setField(account, "id", id);
         return account;

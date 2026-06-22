@@ -1,9 +1,11 @@
 package com.team10.backend.domain.exAccount.service;
 
+import com.team10.backend.domain.codef.exAccount.dto.internal.CodefExAccountSnapshot;
+import com.team10.backend.domain.codef.exAccount.store.CodefExAccountCandidateStore;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
-import com.team10.backend.domain.exAccount.dto.res.ExAccountCandidateRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
 import com.team10.backend.domain.exAccount.entity.ExAccount;
+import com.team10.backend.domain.exAccount.exception.ExAccountErrorCode;
 import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.exception.UserErrorCode;
@@ -15,9 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
-
-import static org.springframework.util.StringUtils.hasText;
 
 @Service
 @RequiredArgsConstructor
@@ -31,76 +32,83 @@ public class ExAccountSyncService {
     private final ExAccountRepository exAccountRepository;
     private final UserRepository userRepository;
     private final HmacSha256Hasher hmacSha256Hasher;
-
-    public List<ExAccountCandidateRes> getLinkCandidates(Long userId, List<ExAccountLinkReq> requests) {
-        validateItems(requests);
-
-        return requests.stream()
-                .map(request -> toCandidate(userId, request))
-                .toList();
-    }
+    private final CodefExAccountCandidateStore candidateStore;
 
     @Transactional
-    public ExAccountRes linkAccount(Long userId, ExAccountLinkReq request) {
-        validateItem(request);
+    public List<ExAccountRes> linkAccounts(Long userId, ExAccountLinkReq request) {
+        if (request == null || request.candidateToken() == null || request.candidateToken().isBlank()) {
+            throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
+        }
 
+        List<CodefExAccountSnapshot> snapshots = candidateStore.get(userId, request.candidateToken());
+        if (snapshots.isEmpty()) {
+            throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_CANDIDATE_NOT_FOUND);
+        }
+
+        List<ExAccountRes> results = new ArrayList<>();
+        for (int index : request.selectedIndexes()) {
+            if (index < 0 || index >= snapshots.size()) {
+                throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_CANDIDATE_INVALID_INDEX);
+            }
+            CodefExAccountSnapshot snapshot = snapshots.get(index);
+            ExAccount account = upsertAccount(userId, snapshot);
+            results.add(ExAccountRes.from(account));
+        }
+
+        // 연동 성공 후 토큰 즉시 파기
+        candidateStore.remove(userId, request.candidateToken());
+
+        return results;
+    }
+
+    public String getMaskedAccountNumber(String accountNumber) {
+        return maskAccountNumber(normalizeAccountNumber(accountNumber));
+    }
+
+    public String getAccountNumberHash(String accountNumber) {
+        return hmacSha256Hasher.hash(normalizeAccountNumber(accountNumber));
+    }
+
+    private ExAccount upsertAccount(Long userId, CodefExAccountSnapshot snapshot) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
-        ExAccount account = upsertAccount(user, request);
-        return ExAccountRes.from(account);
-    }
-
-    private void validateItems(List<ExAccountLinkReq> requests) {
-        if (requests == null || requests.isEmpty()) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
-        }
-
-        requests.forEach(this::validateItem);
-    }
-
-    private void validateItem(ExAccountLinkReq request) {
-        if (request == null
-                || !hasText(request.organization())
-                || !hasText(request.accountNumber())
-                || !hasText(normalizeAccountNumber(request.accountNumber()))
-                || !hasText(request.accountName())
-                || request.assetType() == null) {
-            throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
-        }
-    }
-
-    private ExAccountCandidateRes toCandidate(Long userId, ExAccountLinkReq request) {
-        ProtectedAccountNumber accountNumber = protectAccountNumber(request.accountNumber());
-        boolean linked = exAccountRepository
-                .findByUserIdAndOrganizationAndAccountNumberHash(
-                        userId,
-                        request.organization(),
-                        accountNumber.hash()
-                )
-                .isPresent();
-
-        return ExAccountCandidateRes.from(request, accountNumber.masked(), linked);
-    }
-
-    private ExAccount upsertAccount(User user, ExAccountLinkReq request) {
-        ProtectedAccountNumber accountNumber = protectAccountNumber(request.accountNumber());
+        ProtectedAccountNumber accountNumber = protectAccountNumber(snapshot.accountNumber());
 
         ExAccount exAccount = exAccountRepository
                 .findByUserIdAndOrganizationAndAccountNumberHash(
-                        user.getId(),
-                        request.organization(),
+                        userId,
+                        snapshot.organization(),
                         accountNumber.hash()
                 )
                 .orElse(null);
 
         if (exAccount == null) {
-            return exAccountRepository.save(
-                    request.toEntity(user, accountNumber.hash(), accountNumber.masked())
+            ExAccount newAccount = ExAccount.create(
+                    user,
+                    snapshot.organization(),
+                    accountNumber.hash(),
+                    accountNumber.masked(),
+                    snapshot.accountName(),
+                    snapshot.accountAlias(),
+                    snapshot.assetType(),
+                    snapshot.balance(),
+                    snapshot.withdrawableAmount(),
+                    snapshot.openedAt(),
+                    snapshot.maturityAt(),
+                    snapshot.lastTransactionAt()
             );
+            return exAccountRepository.save(newAccount);
         }
 
-        request.applyTo(exAccount);
+        exAccount.updateSnapshot(
+                snapshot.accountName(),
+                snapshot.accountAlias(),
+                snapshot.balance(),
+                snapshot.withdrawableAmount(),
+                snapshot.maturityAt(),
+                snapshot.lastTransactionAt()
+        );
         return exAccount;
     }
 
