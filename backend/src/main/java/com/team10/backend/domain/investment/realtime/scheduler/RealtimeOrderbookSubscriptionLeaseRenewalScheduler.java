@@ -1,7 +1,7 @@
 package com.team10.backend.domain.investment.realtime.scheduler;
 
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseEmitterRegistry;
+import com.team10.backend.domain.investment.realtime.service.stream.RealtimeOrderbookSseEmitterRegistry;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

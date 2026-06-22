@@ -1,7 +1,7 @@
 package com.team10.backend.domain.investment.realtime.controller;
 
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseConnection;
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookStreamService;
+import com.team10.backend.domain.investment.realtime.service.stream.RealtimeOrderbookSseConnection;
+import com.team10.backend.domain.investment.realtime.service.stream.RealtimeOrderbookStreamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;

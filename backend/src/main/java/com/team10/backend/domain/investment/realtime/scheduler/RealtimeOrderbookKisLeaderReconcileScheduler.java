@@ -1,6 +1,6 @@
 package com.team10.backend.domain.investment.realtime.scheduler;
 
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookKisLeaderService;
+import com.team10.backend.domain.investment.realtime.service.kis.RealtimeOrderbookKisLeaderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

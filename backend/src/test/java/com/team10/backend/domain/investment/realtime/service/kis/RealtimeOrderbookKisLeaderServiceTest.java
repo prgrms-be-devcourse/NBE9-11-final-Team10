@@ -1,4 +1,4 @@
-package com.team10.backend.domain.investment.realtime.service;
+package com.team10.backend.domain.investment.realtime.service.kis;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.team10.backend.domain.investment.client.realtime.KisOrderbookWebSocketClient;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookLeaderLockRepository;
+import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookInstanceIdProvider;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

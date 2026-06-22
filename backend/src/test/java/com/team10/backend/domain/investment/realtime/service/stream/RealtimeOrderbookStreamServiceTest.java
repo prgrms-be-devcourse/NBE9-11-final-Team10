@@ -1,4 +1,4 @@
-package com.team10.backend.domain.investment.realtime.service;
+package com.team10.backend.domain.investment.realtime.service.stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -16,6 +16,7 @@ import com.team10.backend.domain.investment.realtime.event.subcriptionchange.Rea
 import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEventPublisher;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscription;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;
+import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookInstanceIdProvider;
 import com.team10.backend.domain.investment.stock.entity.Stock;
 import com.team10.backend.domain.investment.stock.repository.StockRepository;
 import com.team10.backend.domain.investment.stock.type.StockMarket;

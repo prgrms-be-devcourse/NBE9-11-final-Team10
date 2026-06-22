@@ -1,4 +1,4 @@
-package com.team10.backend.domain.investment.realtime.service;
+package com.team10.backend.domain.investment.realtime.service.kis;
 
 import com.team10.backend.domain.investment.client.realtime.KisOrderbookWebSocketClient;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;

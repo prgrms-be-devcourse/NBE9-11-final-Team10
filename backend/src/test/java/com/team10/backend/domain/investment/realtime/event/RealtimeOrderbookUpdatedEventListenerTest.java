@@ -9,7 +9,7 @@ import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookSse
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookLevel;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
 import com.team10.backend.domain.investment.realtime.event.orderbookupdate.RealtimeOrderbookUpdatedEventListener;
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseEmitterRegistry;
+import com.team10.backend.domain.investment.realtime.service.stream.RealtimeOrderbookSseEmitterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;

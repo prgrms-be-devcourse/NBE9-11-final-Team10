@@ -7,8 +7,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseConnection;
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseEmitterRegistry;
+import com.team10.backend.domain.investment.realtime.service.stream.RealtimeOrderbookSseConnection;
+import com.team10.backend.domain.investment.realtime.service.stream.RealtimeOrderbookSseEmitterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

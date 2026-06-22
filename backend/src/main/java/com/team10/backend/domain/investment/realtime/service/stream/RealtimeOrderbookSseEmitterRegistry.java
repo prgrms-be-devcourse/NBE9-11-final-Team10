@@ -1,4 +1,4 @@
-package com.team10.backend.domain.investment.realtime.service;
+package com.team10.backend.domain.investment.realtime.service.stream;
 
 import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookSseConstants;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;

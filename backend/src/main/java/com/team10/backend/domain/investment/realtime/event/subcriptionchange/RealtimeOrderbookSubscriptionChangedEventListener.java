@@ -1,8 +1,8 @@
 package com.team10.backend.domain.investment.realtime.event.subcriptionchange;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookKisLeaderService;
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookSseEmitterRegistry;
+import com.team10.backend.domain.investment.realtime.service.kis.RealtimeOrderbookKisLeaderService;
+import com.team10.backend.domain.investment.realtime.service.stream.RealtimeOrderbookSseEmitterRegistry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;

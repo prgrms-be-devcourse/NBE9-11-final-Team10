@@ -1,4 +1,4 @@
-package com.team10.backend.domain.investment.realtime.service;
+package com.team10.backend.domain.investment.realtime.service.stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

@@ -2,7 +2,7 @@ package com.team10.backend.domain.investment.realtime.scheduler;
 
 import static org.mockito.Mockito.verify;
 
-import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookKisLeaderService;
+import com.team10.backend.domain.investment.realtime.service.kis.RealtimeOrderbookKisLeaderService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;

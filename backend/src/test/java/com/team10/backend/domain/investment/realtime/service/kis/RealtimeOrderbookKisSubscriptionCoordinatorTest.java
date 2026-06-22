@@ -1,4 +1,4 @@
-package com.team10.backend.domain.investment.realtime.service;
+package com.team10.backend.domain.investment.realtime.service.kis;
 
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;

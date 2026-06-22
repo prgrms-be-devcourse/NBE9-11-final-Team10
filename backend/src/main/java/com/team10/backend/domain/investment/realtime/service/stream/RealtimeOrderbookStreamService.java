@@ -1,4 +1,4 @@
-package com.team10.backend.domain.investment.realtime.service;
+package com.team10.backend.domain.investment.realtime.service.stream;
 
 import com.team10.backend.domain.investment.config.KisProperties;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
@@ -8,6 +8,7 @@ import com.team10.backend.domain.investment.realtime.event.subcriptionchange.Rea
 import com.team10.backend.domain.investment.realtime.event.subcriptionchange.RealtimeOrderbookSubscriptionChangedEventPublisher;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscription;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;
+import com.team10.backend.domain.investment.realtime.service.RealtimeOrderbookInstanceIdProvider;
 import com.team10.backend.domain.investment.stock.entity.Stock;
 import com.team10.backend.domain.investment.stock.repository.StockRepository;
 import com.team10.backend.global.exception.BusinessException;
@@ -71,7 +72,7 @@ public class RealtimeOrderbookStreamService {
         emitterRegistry.complete(streamId);
     }
 
-    void closeLocalStreamsOnShutdown() {
+    public void closeLocalStreamsOnShutdown() {
         Set<String> streamIds = emitterRegistry.findAllStreamIds();
         if (streamIds.isEmpty()) {
             return;
