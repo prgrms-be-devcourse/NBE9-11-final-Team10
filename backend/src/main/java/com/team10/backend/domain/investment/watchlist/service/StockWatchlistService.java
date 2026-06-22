@@ -4,7 +4,6 @@ import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
 import com.team10.backend.domain.investment.stock.dto.res.StockSummaryRes;
 import com.team10.backend.domain.investment.stock.entity.Stock;
 import com.team10.backend.domain.investment.stock.repository.StockRepository;
-import com.team10.backend.domain.investment.stock.type.StockStatus;
 import com.team10.backend.domain.investment.watchlist.entity.StockWatchlist;
 import com.team10.backend.domain.investment.watchlist.repository.StockWatchlistRepository;
 import com.team10.backend.domain.user.entity.User;
@@ -74,7 +73,7 @@ public class StockWatchlistService {
         }
 
         return stockRepository.findById(stockId)
-                .filter(stock -> stock.getStatus() == StockStatus.ACTIVE)
+                .filter(Stock::isTradable)
                 .orElseThrow(() -> new BusinessException(InvestmentErrorCode.STOCK_NOT_FOUND));
     }
 }
