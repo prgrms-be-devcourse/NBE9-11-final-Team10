@@ -1,5 +1,6 @@
 package com.team10.backend.domain.transfer.e2e;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.repository.AccountRepository;
@@ -28,10 +29,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.lang.reflect.Constructor;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -245,6 +253,125 @@ class TransferIdempotencyE2ETest {
         assertNotNull(idempotency.getCompletedAt());
     }
 
+    @Test
+    @DisplayName("동시 동일 멱등성 키 E2E - 같은 키의 병렬 요청은 실제 송금을 1회만 처리한다")
+    void transfer_sameIdempotencyKeyConcurrently_processesTransferOnlyOnce() throws Exception {
+        // given 1. 실제 사용자와 계좌를 DB에 준비한다.
+        // - 송금자 계좌: 100,000원
+        // - 수취자 계좌: 10,000원
+        User sender = saveUser("sender-same-key@example.com", "송금자");
+        User receiver = saveUser("receiver-same-key@example.com", "수취자");
+        Account senderAccount = saveAccount(sender, "100200300061", 100_000L);
+        Account receiverAccount = saveAccount(receiver, "100200300062", 10_000L);
+
+        String sameKey = "idempotency-concurrent-same-key";
+        TransferReq request = new TransferReq(
+                senderAccount.getId(),
+                receiverAccount.getAccountNumber(),
+                50_000L,
+                "동시 동일 키 송금"
+        );
+
+        // when. 같은 멱등성 키와 같은 payload를 가진 요청 2개를 동시에 발사한다.
+        // 먼저 도착한 요청은 PROCESSING 레코드를 선점하고 실제 송금을 수행한다.
+        // 나중 요청은 타이밍에 따라 PROCESSING 충돌을 받거나, 선행 요청 완료 후 저장 응답을 replay 받을 수 있다.
+        List<ConcurrentResponse> responses = runTwoRequestsConcurrently(() ->
+                performTransfer(sender.getId(), sameKey, request)
+        );
+
+        entityManager.clear();
+
+        // then 1. 두 요청 중 적어도 하나는 실제 송금 성공 응답을 받아야 한다.
+        long successCount = responses.stream()
+                .filter(response -> response.status() == 200)
+                .count();
+        long processingConflictCount = responses.stream()
+                .filter(response -> response.status() == 409)
+                .filter(response -> errorCode(response).equals("IDEMPOTENCY_REQUEST_PROCESSING"))
+                .count();
+
+        assertTrue(successCount >= 1);
+        assertEquals(2, successCount + processingConflictCount);
+
+        // then 2. 성공 응답이 2개라면 두 번째 성공은 replay이므로 응답 본문이 동일해야 한다.
+        List<String> successBodies = responses.stream()
+                .filter(response -> response.status() == 200)
+                .map(ConcurrentResponse::body)
+                .toList();
+
+        if (successBodies.size() == 2) {
+            assertEquals(successBodies.get(0), successBodies.get(1));
+        }
+
+        // then 3. 실제 DB 반영은 어떤 응답 타이밍에서도 송금 1회만 허용되어야 한다.
+        Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
+        Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
+
+        assertEquals(50_000L, savedSenderAccount.getBalance());
+        assertEquals(60_000L, savedReceiverAccount.getBalance());
+        assertEquals(1, transferRepository.count());
+        assertEquals(2, transactionHistoryRepository.count());
+
+        // then 4. 같은 사용자와 같은 키의 멱등성 레코드는 1건만 존재하고, 최종 상태는 SUCCESS여야 한다.
+        assertEquals(1, idempotencyRepository.count());
+
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(sender.getId(), sameKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.SUCCESS, idempotency.getStatus());
+        assertNotNull(idempotency.getResponseBody());
+        assertNotNull(idempotency.getCompletedAt());
+    }
+
+    private ConcurrentResponse performTransfer(Long userId, String idempotencyKey, TransferReq request) throws Exception {
+        var result = mockMvc.perform(post("/api/v1/transfers")
+                        .with(authentication(authenticatedUser(userId)))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andReturn()
+                .getResponse();
+
+        return new ConcurrentResponse(result.getStatus(), result.getContentAsString());
+    }
+
+    private List<ConcurrentResponse> runTwoRequestsConcurrently(ThrowingSupplier<ConcurrentResponse> task) throws Exception {
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<ConcurrentResponse>> futures = new ArrayList<>();
+
+        for (int i = 0; i < 2; i++) {
+            futures.add(executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                return task.get();
+            }));
+        }
+
+        assertTrue(ready.await(5, TimeUnit.SECONDS));
+        start.countDown();
+        executor.shutdown();
+        assertTrue(executor.awaitTermination(30, TimeUnit.SECONDS));
+
+        List<ConcurrentResponse> responses = new ArrayList<>();
+        for (Future<ConcurrentResponse> future : futures) {
+            responses.add(future.get());
+        }
+        return responses;
+    }
+
+    private String errorCode(ConcurrentResponse response) {
+        try {
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode code = root.get("code");
+            return code == null ? "" : code.asText();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private UsernamePasswordAuthenticationToken authenticatedUser(Long userId) {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
     }
@@ -290,5 +417,13 @@ class TransferIdempotencyE2ETest {
             entityManager.createNativeQuery("SET REFERENTIAL_INTEGRITY TRUE").executeUpdate();
             entityManager.clear();
         });
+    }
+
+    private record ConcurrentResponse(int status, String body) {
+    }
+
+    @FunctionalInterface
+    private interface ThrowingSupplier<T> {
+        T get() throws Exception;
     }
 }
