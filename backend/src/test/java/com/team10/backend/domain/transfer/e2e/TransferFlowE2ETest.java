@@ -183,6 +183,96 @@ class TransferFlowE2ETest {
         assertNotNull(idempotency.getCompletedAt());
     }
 
+    @Test
+    @DisplayName("잔액 부족 E2E - 잔액과 거래내역은 롤백하고 실패 송금 기록과 멱등성 실패 상태를 남긴다")
+    void transfer_insufficientBalance_rollsBackBalancesAndHistoriesThenRecordsFailure() throws Exception {
+        // given 1. 실제 사용자와 계좌를 DB에 준비한다.
+        // - 송금자 계좌: 10,000원
+        // - 수취자 계좌: 10,000원
+        // 송금 요청 금액은 50,000원이므로 출금 단계에서 잔액 부족이 발생해야 한다.
+        User sender = saveUser("sender-insufficient@example.com", "송금자");
+        User receiver = saveUser("receiver-insufficient@example.com", "수취자");
+        Account senderAccount = saveAccount(sender, "100200300021", 10_000L);
+        Account receiverAccount = saveAccount(receiver, "100200300022", 10_000L);
+        String idempotencyKey = "flow-insufficient-key";
+
+        TransferReq request = new TransferReq(
+                senderAccount.getId(),
+                receiverAccount.getAccountNumber(),
+                50_000L,
+                "잔액 부족"
+        );
+
+        // when 1. 인증된 송금자 관점에서 보유 잔액보다 큰 금액을 송금 요청한다.
+        // 출금 실패로 비즈니스 트랜잭션은 롤백되고, 실패 이벤트가 별도 트랜잭션으로 기록되어야 한다.
+        mockMvc.perform(post("/api/v1/transfers")
+                        .with(authentication(authenticatedUser(sender.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 1. API는 잔액 부족 에러를 명확히 반환해야 한다.
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INSUFFICIENT_BALANCE"))
+                .andExpect(jsonPath("$.message").value("잔액이 부족합니다."));
+
+        entityManager.clear();
+
+        // then 2. 실패한 송금은 양쪽 계좌 잔액을 절대 변경하면 안 된다.
+        Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
+        Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
+
+        assertEquals(10_000L, savedSenderAccount.getBalance());
+        assertEquals(10_000L, savedReceiverAccount.getBalance());
+
+        // then 3. 성공 거래내역은 생성되면 안 된다.
+        // 출금도 입금도 확정되지 않았으므로 transaction_histories는 비어 있어야 한다.
+        assertEquals(0, transactionHistoryRepository.count());
+
+        // then 4. 감사/추적 목적의 실패 송금 원장은 FAILED 상태로 1건 저장되어야 한다.
+        List<Transfer> transfers = transferRepository.findAll();
+        assertEquals(1, transfers.size());
+
+        Transfer failedTransfer = transfers.getFirst();
+        assertEquals(TransferStatus.FAILED, failedTransfer.getStatus());
+        assertEquals(savedSenderAccount.getId(), failedTransfer.getSenderAccount().getId());
+        assertEquals(savedReceiverAccount.getId(), failedTransfer.getReceiverAccount().getId());
+        assertEquals(50_000L, failedTransfer.getAmount());
+        assertEquals("잔액 부족", failedTransfer.getMemo());
+
+        // then 5. 멱등성 레코드는 FAILED로 완료되어야 한다.
+        // 같은 키의 실패 요청은 이후 다시 실제 송금 로직으로 진입하면 안 된다.
+        Idempotency idempotency = idempotencyRepository
+                .findByUser_IdAndIdempotencyKey(sender.getId(), idempotencyKey)
+                .orElseThrow();
+
+        assertEquals(IdempotencyStatus.FAILED, idempotency.getStatus());
+        assertNotNull(idempotency.getCompletedAt());
+
+        // when 2. 같은 멱등성 키와 같은 payload로 재시도한다.
+        // 이미 실패 처리된 키이므로 도메인 송금을 다시 수행하지 않고 멱등성 실패 응답을 반환해야 한다.
+        mockMvc.perform(post("/api/v1/transfers")
+                        .with(authentication(authenticatedUser(sender.getId())))
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                // then 6. 재시도는 기존 실패 상태 때문에 409로 거부되어야 한다.
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_REQUEST_FAILED"))
+                .andExpect(jsonPath("$.message").value("같은 키 요청은 이미 실패 처리되었습니다."));
+
+        entityManager.clear();
+
+        // then 7. 실패 요청 재시도는 실패 송금 기록이나 거래내역을 추가로 만들면 안 된다.
+        assertEquals(1, transferRepository.count());
+        assertEquals(0, transactionHistoryRepository.count());
+
+        Account retriedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
+        Account retriedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
+
+        assertEquals(10_000L, retriedSenderAccount.getBalance());
+        assertEquals(10_000L, retriedReceiverAccount.getBalance());
+    }
+
     private UsernamePasswordAuthenticationToken authenticatedUser(Long userId) {
         return new UsernamePasswordAuthenticationToken(userId, null, List.of());
     }
