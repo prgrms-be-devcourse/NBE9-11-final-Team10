@@ -1,7 +1,7 @@
-package com.team10.backend.domain.codef.ocr;
+package com.team10.backend.domain.codef.auth.ocr;
 
-import com.team10.backend.domain.codef.client.CodefAuthClient;
-import com.team10.backend.domain.codef.client.CodefAuthException;
+import com.team10.backend.domain.codef.auth.client.CodefAuthClient;
+import com.team10.backend.domain.codef.auth.client.CodefAuthException;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.global.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;

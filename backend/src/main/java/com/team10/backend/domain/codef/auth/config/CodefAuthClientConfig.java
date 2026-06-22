@@ -1,7 +1,7 @@
-package com.team10.backend.domain.codef.config;
+package com.team10.backend.domain.codef.auth.config;
 
-import com.team10.backend.domain.codef.client.CodefAuthClient;
-import com.team10.backend.domain.codef.client.CodefOAuthExchange;
+import com.team10.backend.domain.codef.auth.client.CodefAuthClient;
+import com.team10.backend.domain.codef.auth.client.CodefOAuthExchange;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

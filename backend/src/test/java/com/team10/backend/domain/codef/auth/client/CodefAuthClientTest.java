@@ -1,4 +1,4 @@
-package com.team10.backend.domain.codef.client;
+package com.team10.backend.domain.codef.auth.client;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

@@ -1,4 +1,4 @@
-package com.team10.backend.domain.codef.client;
+package com.team10.backend.domain.codef.auth.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.http.MediaType;

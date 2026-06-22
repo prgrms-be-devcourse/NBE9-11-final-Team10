@@ -1,6 +1,6 @@
-package com.team10.backend.domain.codef.config;
+package com.team10.backend.domain.codef.auth.config;
 
-import com.team10.backend.domain.codef.client.CodefOAuthExchange;
+import com.team10.backend.domain.codef.auth.client.CodefOAuthExchange;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
