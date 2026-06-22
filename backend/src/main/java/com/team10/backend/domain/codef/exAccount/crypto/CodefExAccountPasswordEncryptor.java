@@ -19,14 +19,28 @@ public class CodefExAccountPasswordEncryptor {
     private static final String CIPHER_TRANSFORMATION = "RSA/ECB/PKCS1Padding";
 
     private final PublicKey publicKey;
+    private final boolean isValid;
 
     public CodefExAccountPasswordEncryptor(CodefExAccountProperties properties) {
-        this.publicKey = parsePublicKey(properties.publicKey());
+        PublicKey parsedKey = null;
+        boolean valid = false;
+        try {
+            parsedKey = parsePublicKey(properties.publicKey());
+            valid = true;
+        } catch (Exception exception) {
+            // JVM/Application initialization should not crash on invalid/mock keys in test/dev envs.
+            // Functionality will fail gracefully during encryption.
+        }
+        this.publicKey = parsedKey;
+        this.isValid = valid;
     }
 
     public String encrypt(String password) {
         if (password == null || password.isBlank()) {
             throw new CodefExAccountCryptoException("암호화할 은행 비밀번호가 없습니다.");
+        }
+        if (!isValid || publicKey == null) {
+            throw new CodefExAccountCryptoException("CODEF 외부계좌 공개키가 올바르지 않습니다.");
         }
 
         try {

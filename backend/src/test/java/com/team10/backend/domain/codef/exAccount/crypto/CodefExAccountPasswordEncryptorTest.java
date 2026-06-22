@@ -57,7 +57,9 @@ class CodefExAccountPasswordEncryptorTest {
 
     @Test
     void rejectsInvalidPublicKeyWithoutExposingIt() {
-        assertThatThrownBy(() -> new CodefExAccountPasswordEncryptor(properties("invalid-public-key")))
+        CodefExAccountPasswordEncryptor invalidEncryptor =
+                new CodefExAccountPasswordEncryptor(properties("invalid-public-key"));
+        assertThatThrownBy(() -> invalidEncryptor.encrypt("bank-password"))
                 .isInstanceOf(CodefExAccountCryptoException.class)
                 .hasMessage("CODEF 외부계좌 공개키가 올바르지 않습니다.")
                 .hasMessageNotContaining("invalid-public-key");
