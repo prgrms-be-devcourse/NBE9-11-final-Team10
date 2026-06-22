@@ -154,11 +154,19 @@ backend/src/main/resources/db/migration/V1__baseline_schema.sql
 확인 명령:
 
 ```bash
-rg -n "CREATE TABLE|DROP TABLE|ALTER TABLE|CREATE DATABASE|USE |INSERT INTO|flyway_schema_history|team10_baseline" \
+grep -nE "CREATE TABLE|ALTER TABLE|CREATE DATABASE|USE |INSERT INTO|flyway_schema_history|team10_baseline" \
   src/main/resources/db/migration/V1__baseline_schema.sql
 ```
 
-`DROP TABLE IF EXISTS`는 dump에 포함되어 있다. 빈 DB에 최초 적용하는 V1 용도라면 문제 없지만, 데이터가 들어있는 기존 DB에 직접 실행하면 위험하다.
+`mysqldump`로 생성한 원본에는 `DROP TABLE IF EXISTS`가 포함될 수 있다. 이 구문은 기존 데이터가 있는 DB에서 잘못 실행될 경우 데이터 유실 위험이 있으므로, `V1__baseline_schema.sql`에서는 모두 제거했다.
+
+제거 여부 확인:
+
+```bash
+grep -n "DROP TABLE IF EXISTS" src/main/resources/db/migration/V1__baseline_schema.sql
+```
+
+위 명령에서 결과가 출력되지 않아야 한다. 이미 테이블이 존재하는 DB에서 V1이 실행되면 테이블을 삭제하지 않고 실패하도록 두는 것이 더 안전하다.
 
 ## 6. V1 SQL을 빈 DB에 직접 적용해 검증
 
