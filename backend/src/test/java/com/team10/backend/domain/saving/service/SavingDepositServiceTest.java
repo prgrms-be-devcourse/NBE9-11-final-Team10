@@ -563,7 +563,6 @@ class SavingDepositServiceTest {
     @Test
     @DisplayName("만기일이 지난 가입중 예금을 만기 처리한다")
     void matureDeposit() {
-        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
         MaturityRes maturityRes = new MaturityRes(
                 1L,
@@ -574,22 +573,18 @@ class SavingDepositServiceTest {
                 "MATURED"
         );
 
-        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
-                .thenReturn(Optional.of(deposit));
-        when(savingBatchProcessor.matureDeposit(deposit))
+        when(savingBatchProcessor.matureDeposit(1L))
                 .thenReturn(maturityRes);
 
         MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
 
         assertThat(response).isEqualTo(maturityRes);
-        verify(depositRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
-        verify(savingBatchProcessor).matureDeposit(deposit);
+        verify(savingBatchProcessor).matureDeposit(1L);
     }
 
     @Test
     @DisplayName("만기일이 지난 가입중 적금을 만기 처리한다")
     void matureInstallment() {
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
         MaturityReq request = new MaturityReq(SavingProductType.INSTALLMENT);
         MaturityRes maturityRes = new MaturityRes(
                 1L,
@@ -600,27 +595,21 @@ class SavingDepositServiceTest {
                 "MATURED"
         );
 
-        when(installmentRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
-                .thenReturn(Optional.of(installment));
-        when(savingBatchProcessor.matureInstallment(installment))
+        when(savingBatchProcessor.matureInstallment(1L))
                 .thenReturn(maturityRes);
 
         MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
 
         assertThat(response).isEqualTo(maturityRes);
-        verify(installmentRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
-        verify(savingBatchProcessor).matureInstallment(installment);
+        verify(savingBatchProcessor).matureInstallment(1L);
     }
 
     @Test
     @DisplayName("가입중 상태가 아니면 만기 처리에 실패한다")
     void matureSavingWithNotActiveStatus() {
-        Deposit deposit = createDeposit(1L, DepositStatus.MATURED);
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
-                .thenReturn(Optional.of(deposit));
-        when(savingBatchProcessor.matureDeposit(deposit))
+        when(savingBatchProcessor.matureDeposit(1L))
                 .thenThrow(new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED));
 
         assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))
@@ -632,12 +621,9 @@ class SavingDepositServiceTest {
     @Test
     @DisplayName("만기일이 아직 지나지 않으면 만기 처리에 실패한다")
     void matureSavingBeforeMaturityDate() {
-        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
-                .thenReturn(Optional.of(deposit));
-        when(savingBatchProcessor.matureDeposit(deposit))
+        when(savingBatchProcessor.matureDeposit(1L))
                 .thenThrow(new BusinessException(SavingErrorCode.SAVING_NOT_MATURED_YET));
 
         assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))
@@ -649,135 +635,118 @@ class SavingDepositServiceTest {
     @Test
     @DisplayName("만기 대상 예금과 적금을 일괄 만기 처리한다")
     void matureDueSavings() {
-        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-
-        when(depositRepository.findAllByStatusAndMaturityDateLessThanEqualWithAccount(
+        when(depositRepository.findIdsByStatusAndMaturityDateLessThanEqual(
                 DepositStatus.ACTIVE,
                 TODAY
-        )).thenReturn(List.of(deposit));
-        when(installmentRepository.findAllByStatusAndMaturityDateLessThanEqualWithAccount(
+        )).thenReturn(List.of(1L));
+        when(installmentRepository.findIdsByStatusAndMaturityDateLessThanEqual(
                 InstallmentStatus.ACTIVE,
                 TODAY
-        )).thenReturn(List.of(installment));
+        )).thenReturn(List.of(1L));
 
         int maturedCount = savingDepositService.matureDueSavings();
 
         assertThat(maturedCount).isEqualTo(2);
-        verify(savingBatchProcessor).matureDeposit(deposit);
-        verify(savingBatchProcessor).matureInstallment(installment);
+        verify(savingBatchProcessor).matureDeposit(1L);
+        verify(savingBatchProcessor).matureInstallment(1L);
     }
 
     @Test
     @DisplayName("정기 납입 대상 적금의 자동이체에 성공한다")
     void processDueInstallmentPayments() {
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-
-        when(installmentRepository.findAllPaymentTargets(
+        when(installmentRepository.findPaymentTargetIds(
                 InstallmentStatus.ACTIVE,
                 TODAY
-        )).thenReturn(List.of(installment));
+        )).thenReturn(List.of(1L));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        verify(savingBatchProcessor).processInstallmentPayment(installment);
+        verify(savingBatchProcessor).processInstallmentPayment(1L);
     }
 
     @Test
     @DisplayName("정기 납입 자동이체 잔액이 부족하면 납입 실패 상태로 변경한다")
     void processDueInstallmentPaymentsWithInsufficientBalance() {
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-
-        when(installmentRepository.findAllPaymentTargets(
+        when(installmentRepository.findPaymentTargetIds(
                 InstallmentStatus.ACTIVE,
                 TODAY
-        )).thenReturn(List.of(installment));
+        )).thenReturn(List.of(1L));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        verify(savingBatchProcessor).processInstallmentPayment(installment);
+        verify(savingBatchProcessor).processInstallmentPayment(1L);
     }
 
     @Test
     @DisplayName("목표 금액을 이미 채운 적금은 자동이체하지 않는다")
     void processDueInstallmentPaymentsWithReachedTargetAmount() {
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-
-        when(installmentRepository.findAllPaymentTargets(
+        when(installmentRepository.findPaymentTargetIds(
                 InstallmentStatus.ACTIVE,
                 TODAY
-        )).thenReturn(List.of(installment));
+        )).thenReturn(List.of(1L));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        verify(savingBatchProcessor).processInstallmentPayment(installment);
+        verify(savingBatchProcessor).processInstallmentPayment(1L);
     }
 
     @Test
     @DisplayName("다음 납입일이 만기일 이상이면 자동이체하지 않는다")
     void processDueInstallmentPaymentsOnOrAfterMaturityDate() {
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-
-        when(installmentRepository.findAllPaymentTargets(
+        when(installmentRepository.findPaymentTargetIds(
                 InstallmentStatus.ACTIVE,
                 TODAY
-        )).thenReturn(List.of(installment));
+        )).thenReturn(List.of(1L));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        verify(savingBatchProcessor).processInstallmentPayment(installment);
+        verify(savingBatchProcessor).processInstallmentPayment(1L);
     }
 
     @Test
     @DisplayName("출금 계좌가 비활성이면 자동이체하지 않고 납입 실패 상태로 변경한다")
     void processDueInstallmentPaymentsWithInactiveAccount() {
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-
-        when(installmentRepository.findAllPaymentTargets(
+        when(installmentRepository.findPaymentTargetIds(
                 InstallmentStatus.ACTIVE,
                 TODAY
-        )).thenReturn(List.of(installment));
+        )).thenReturn(List.of(1L));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        verify(savingBatchProcessor).processInstallmentPayment(installment);
+        verify(savingBatchProcessor).processInstallmentPayment(1L);
     }
 
     @Test
     @DisplayName("실패한 적금 납입 재시도에 성공하면 ACTIVE 상태로 복구한다")
     void retryFailedInstallmentPayments() {
-        Installment installment = createInstallment(1L, InstallmentStatus.PAYMENT_FAILED);
-
-        when(installmentRepository.findAllRetryTargets(
+        when(installmentRepository.findRetryTargetIds(
                 InstallmentStatus.PAYMENT_FAILED,
                 TODAY
-        )).thenReturn(List.of(installment));
+        )).thenReturn(List.of(1L));
 
         int retryCount = savingDepositService.retryFailedInstallmentPayments();
 
         assertThat(retryCount).isEqualTo(1);
-        verify(savingBatchProcessor).processInstallmentPayment(installment);
+        verify(savingBatchProcessor).processInstallmentPayment(1L);
     }
 
     @Test
     @DisplayName("실패한 적금 납입 재시도가 최대 횟수에 도달하면 다음 재시도일을 비운다")
     void retryFailedInstallmentPaymentsWithMaxRetryCount() {
-        Installment installment = createInstallment(1L, InstallmentStatus.PAYMENT_FAILED);
-
-        when(installmentRepository.findAllRetryTargets(
+        when(installmentRepository.findRetryTargetIds(
                 InstallmentStatus.PAYMENT_FAILED,
                 TODAY
-        )).thenReturn(List.of(installment));
+        )).thenReturn(List.of(1L));
 
         int retryCount = savingDepositService.retryFailedInstallmentPayments();
 
         assertThat(retryCount).isEqualTo(1);
-        verify(savingBatchProcessor).processInstallmentPayment(installment);
+        verify(savingBatchProcessor).processInstallmentPayment(1L);
     }
 
     @Test

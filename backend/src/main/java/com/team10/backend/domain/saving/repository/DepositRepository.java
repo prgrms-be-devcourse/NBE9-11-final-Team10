@@ -63,6 +63,28 @@ public interface DepositRepository extends JpaRepository<Deposit, Long> {
             @Param("today") LocalDate today
     );
 
+    @Query("""
+      select d.id
+      from Deposit d
+      where d.status = :status
+      and d.maturityDate <= :today
+      """)
+    List<Long> findIdsByStatusAndMaturityDateLessThanEqual(
+            @Param("status") DepositStatus status,
+            @Param("today") LocalDate today
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        select d
+        from Deposit d
+        join fetch d.withdrawAccount
+        where d.id = :depositId
+        """)
+    Optional<Deposit> findByIdWithAccountForUpdate(
+            @Param("depositId") Long depositId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
       select d

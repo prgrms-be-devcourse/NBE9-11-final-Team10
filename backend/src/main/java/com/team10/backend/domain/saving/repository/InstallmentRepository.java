@@ -63,6 +63,53 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
             @Param("today") LocalDate today
     );
 
+    @Query("""
+        select i.id
+        from Installment i
+        where i.status = :status
+        and i.maturityDate <= :today
+        """)
+    List<Long> findIdsByStatusAndMaturityDateLessThanEqual(
+            @Param("status") InstallmentStatus status,
+            @Param("today") LocalDate today
+    );
+
+    @Query("""
+        select i.id
+        from Installment i
+        where i.status = :status
+        and i.nextPaymentRetryDate <= :today
+        """)
+    List<Long> findRetryTargetIds(
+            @Param("status") InstallmentStatus status,
+            @Param("today") LocalDate today
+    );
+
+    @Query("""
+        select i.id
+        from Installment i
+        where i.status = :status
+        and i.autoTransferYn = true
+        and i.nextPaymentDate <= :today
+        and i.paidAmount < i.targetAmount
+        and i.nextPaymentDate < i.maturityDate
+        """)
+    List<Long> findPaymentTargetIds(
+            @Param("status") InstallmentStatus status,
+            @Param("today") LocalDate today
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        select i
+        from Installment i
+        join fetch i.withdrawAccount
+        where i.id = :installmentId
+        """)
+    Optional<Installment> findByIdWithAccountForUpdate(
+            @Param("installmentId") Long installmentId
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
           select i

@@ -5,6 +5,8 @@ import com.team10.backend.domain.saving.dto.res.MaturityRes;
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.Installment;
 import com.team10.backend.domain.saving.exception.SavingErrorCode;
+import com.team10.backend.domain.saving.repository.DepositRepository;
+import com.team10.backend.domain.saving.repository.InstallmentRepository;
 import com.team10.backend.domain.saving.type.DepositStatus;
 import com.team10.backend.domain.saving.type.InstallmentStatus;
 import com.team10.backend.domain.transaction.entity.TransactionHistory;
@@ -29,10 +31,21 @@ public class SavingBatchProcessor {
     private static final String INSTALLMENT_PAYMENT_MEMO = "적금 월 납입 자동이체";
 
     private final TransactionHistoryRepository transactionHistoryRepository;
+    private final DepositRepository depositRepository;
+    private final InstallmentRepository installmentRepository;
     private final Clock clock;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void processInstallmentPayment(Installment installment) {
+    public void processInstallmentPayment(Long installmentId) {
+        Installment installment =
+                installmentRepository.findByIdWithAccountForUpdate(installmentId)
+                        .orElseThrow(() -> new
+                                BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
+
+        processInstallmentPayment(installment);
+    }
+
+    private void processInstallmentPayment(Installment installment) {
         Account withdrawAccount = installment.getWithdrawAccount();
 
         if (installment.getPaidAmount() >= installment.getTargetAmount()
@@ -74,7 +87,15 @@ public class SavingBatchProcessor {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public MaturityRes matureDeposit(Deposit deposit) {
+    public MaturityRes matureDeposit(Long depositId) {
+        Deposit deposit = depositRepository.findByIdWithAccountForUpdate(depositId)
+                .orElseThrow(() -> new
+                        BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
+
+        return matureDeposit(deposit);
+    }
+
+    private MaturityRes matureDeposit(Deposit deposit) {
         // 기존 matureSaving 안에 있던 예금 만기 처리 코드
 
         if (deposit.getStatus() != DepositStatus.ACTIVE) {
@@ -115,9 +136,17 @@ public class SavingBatchProcessor {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public MaturityRes matureInstallment(Installment installment) {
-        // 기존 matureSaving 안에 있던 적금 만기 처리 코드
+    public MaturityRes matureInstallment(Long installmentId) {
+        Installment installment =
+                installmentRepository.findByIdWithAccountForUpdate(installmentId)
+                        .orElseThrow(() -> new
+                                BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
 
+        return matureInstallment(installment);
+    }
+
+    private MaturityRes matureInstallment(Installment installment) {
+        // 기존 적금 만기 처리 코드
         if (installment.getStatus() != InstallmentStatus.ACTIVE) {
             throw new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED);
         }
