@@ -9,7 +9,6 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-DROP TABLE IF EXISTS `accounts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `accounts` (
@@ -28,7 +27,6 @@ CREATE TABLE `accounts` (
   CONSTRAINT `FKnjuop33mo69pd79ctplkck40n` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `currencies`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `currencies` (
@@ -44,7 +42,6 @@ CREATE TABLE `currencies` (
   UNIQUE KEY `UKjekn45c17p62ja9i4g7xj1st8` (`currency_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `deposits`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `deposits` (
@@ -68,7 +65,6 @@ CREATE TABLE `deposits` (
   CONSTRAINT `FKgntjio3cywdax7nalisi21ilb` FOREIGN KEY (`withdraw_account_id`) REFERENCES `accounts` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `exchange_orders`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `exchange_orders` (
@@ -101,7 +97,6 @@ CREATE TABLE `exchange_orders` (
   CONSTRAINT `FKsqtecl0139yau9d2koowns8v2` FOREIGN KEY (`exchange_quote_id`) REFERENCES `exchange_quotes` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `exchange_quotes`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `exchange_quotes` (
@@ -126,7 +121,6 @@ CREATE TABLE `exchange_quotes` (
   CONSTRAINT `FK7edj0h6emri8taw5j8bthk11l` FOREIGN KEY (`from_currency_code`) REFERENCES `currencies` (`currency_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `exchange_rates`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `exchange_rates` (
@@ -142,7 +136,6 @@ CREATE TABLE `exchange_rates` (
   CONSTRAINT `FKt4ojang9xj79cqmed7rc0gqri` FOREIGN KEY (`currency_code`) REFERENCES `currencies` (`currency_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `external_account`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `external_account` (
@@ -167,7 +160,6 @@ CREATE TABLE `external_account` (
   CONSTRAINT `FK537ioadmr8gxmc5wsdug55w3k` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `external_asset_transactions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `external_asset_transactions` (
@@ -188,7 +180,6 @@ CREATE TABLE `external_asset_transactions` (
   CONSTRAINT `FKjn8k1qg869dxc59i6c19ntffp` FOREIGN KEY (`external_account_id`) REFERENCES `external_account` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `fx_wallet_ledgers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `fx_wallet_ledgers` (
@@ -212,7 +203,6 @@ CREATE TABLE `fx_wallet_ledgers` (
   CONSTRAINT `FKqa0fa4sutqxudkp1pkx7sxu80` FOREIGN KEY (`fx_wallet_id`) REFERENCES `fx_wallets` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `fx_wallets`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `fx_wallets` (
@@ -230,7 +220,6 @@ CREATE TABLE `fx_wallets` (
   CONSTRAINT `FKk2o8lst5cv32l64jwvumjato6` FOREIGN KEY (`currency_code`) REFERENCES `currencies` (`currency_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `idempotency_keys`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `idempotency_keys` (
@@ -249,7 +238,6 @@ CREATE TABLE `idempotency_keys` (
   CONSTRAINT `FK7rrvy13e8y772c77g5f2yw35c` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `identity_verifications`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `identity_verifications` (
@@ -267,7 +255,6 @@ CREATE TABLE `identity_verifications` (
   CONSTRAINT `FKdvhkqf3v3puvymyb9iec8dv30` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `installments`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `installments` (
@@ -293,7 +280,6 @@ CREATE TABLE `installments` (
   CONSTRAINT `FKp7h23vlblmafihutd8e5yekqp` FOREIGN KEY (`withdraw_account_id`) REFERENCES `accounts` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `investment_accounts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `investment_accounts` (
@@ -313,7 +299,6 @@ CREATE TABLE `investment_accounts` (
   CONSTRAINT `FK20ctdbm1t8knhyk5aikdyfeg0` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `investment_holdings`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `investment_holdings` (
@@ -331,7 +316,6 @@ CREATE TABLE `investment_holdings` (
   CONSTRAINT `FKcf9xmm2fxtgdi4wk7aq5iwkfu` FOREIGN KEY (`investment_account_id`) REFERENCES `investment_accounts` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `investment_order_executions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `investment_order_executions` (
@@ -346,7 +330,6 @@ CREATE TABLE `investment_order_executions` (
   CONSTRAINT `FK6pkek74ii3bp99rkpwd47xkhx` FOREIGN KEY (`investment_order_id`) REFERENCES `investment_orders` (`investment_order_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `investment_orders`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `investment_orders` (
@@ -369,7 +352,6 @@ CREATE TABLE `investment_orders` (
   CONSTRAINT `FKi5gd376ofn9dqat8os4o7w3v7` FOREIGN KEY (`investment_account_id`) REFERENCES `investment_accounts` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `market_holidays`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `market_holidays` (
@@ -382,7 +364,6 @@ CREATE TABLE `market_holidays` (
   UNIQUE KEY `uk_market_holidays_market_date` (`market_type`,`holiday_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `saving_product`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `saving_product` (
@@ -403,7 +384,6 @@ CREATE TABLE `saving_product` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `stock_watchlists`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `stock_watchlists` (
@@ -419,7 +399,6 @@ CREATE TABLE `stock_watchlists` (
   CONSTRAINT `FKl52biya285s74q1k941l85fv6` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `stocks`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `stocks` (
@@ -442,7 +421,6 @@ CREATE TABLE `stocks` (
   UNIQUE KEY `uk_stocks_stock_code` (`stock_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `transaction_histories`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `transaction_histories` (
@@ -467,7 +445,6 @@ CREATE TABLE `transaction_histories` (
   CONSTRAINT `FKfjfxklgpl39wt2j6vggu6dtv2` FOREIGN KEY (`transfer_id`) REFERENCES `transfers` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `transfers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `transfers` (
@@ -486,7 +463,6 @@ CREATE TABLE `transfers` (
   CONSTRAINT `FKnbxbdmgd7uwg0t1kn4tdnwdk7` FOREIGN KEY (`receiver_account_id`) REFERENCES `accounts` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `user_consents`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_consents` (
@@ -502,7 +478,6 @@ CREATE TABLE `user_consents` (
   CONSTRAINT `FK2jrdhofjcd44quyuq5x9wlb8b` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `user_profile_interests`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_profile_interests` (
@@ -512,7 +487,6 @@ CREATE TABLE `user_profile_interests` (
   CONSTRAINT `FKpod6mnoyyi03c49v3v5u8q3ho` FOREIGN KEY (`profile_id`) REFERENCES `user_profiles` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `user_profiles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_profiles` (
@@ -528,7 +502,6 @@ CREATE TABLE `user_profiles` (
   CONSTRAINT `FKjcad5nfve11khsnpwj1mv8frj` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `users`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `users` (
@@ -546,7 +519,6 @@ CREATE TABLE `users` (
   UNIQUE KEY `UK6dotkott2kjsp8vw4d0m25fb7` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-DROP TABLE IF EXISTS `young_policy`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `young_policy` (
