@@ -97,6 +97,54 @@ class ExchangeServiceTest {
     }
 
     @Test
+    @DisplayName("원화 금액에 소수점이 있으면 환전 견적을 생성할 수 없다")
+    void createQuoteWithInvalidKrwAmountScale() {
+        User user = createUser(1L);
+        Currency krw = Currency.create(CurrencyCode.KRW, "한국 원", "대한민국", 0);
+        Currency usd = Currency.create(CurrencyCode.USD, "미국 달러", "미국", 2);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(currencyRepository.findByCurrencyCode(CurrencyCode.KRW)).thenReturn(Optional.of(krw));
+        when(currencyRepository.findByCurrencyCode(CurrencyCode.USD)).thenReturn(Optional.of(usd));
+
+        assertThatThrownBy(() -> exchangeService.createQuote(
+                1L,
+                CurrencyCode.KRW,
+                CurrencyCode.USD,
+                new BigDecimal("100000.1")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ExchangeErrorCode.INVALID_EXCHANGE_AMOUNT);
+
+        verify(exchangeRateRepository, never()).findByCurrencyCurrencyCode(CurrencyCode.USD);
+        verify(exchangeQuoteRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("출금 외화의 소수 자리수를 초과하면 환전 견적을 생성할 수 없다")
+    void createQuoteWithInvalidForeignAmountScale() {
+        User user = createUser(1L);
+        Currency krw = Currency.create(CurrencyCode.KRW, "한국 원", "대한민국", 0);
+        Currency usd = Currency.create(CurrencyCode.USD, "미국 달러", "미국", 2);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(currencyRepository.findByCurrencyCode(CurrencyCode.USD)).thenReturn(Optional.of(usd));
+        when(currencyRepository.findByCurrencyCode(CurrencyCode.KRW)).thenReturn(Optional.of(krw));
+
+        assertThatThrownBy(() -> exchangeService.createQuote(
+                1L,
+                CurrencyCode.USD,
+                CurrencyCode.KRW,
+                new BigDecimal("10.123")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ExchangeErrorCode.INVALID_EXCHANGE_AMOUNT);
+
+        verify(exchangeRateRepository, never()).findByCurrencyCurrencyCode(CurrencyCode.USD);
+        verify(exchangeQuoteRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("환전 주문은 멱등성 오케스트레이터에서 비즈니스 서비스로 위임한다")
     void createExchangeOrderDelegatesToBusinessService() {
         ExchangeOrderRes expected = new ExchangeOrderRes(
