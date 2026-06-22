@@ -32,11 +32,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,6 +51,12 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SavingDepositServiceTest {
+
+    private static final Clock FIXED_CLOCK = Clock.fixed(
+            LocalDateTime.of(2026, 6, 23, 0, 0).atZone(ZoneId.of("Asia/Seoul")).toInstant(),
+            ZoneId.of("Asia/Seoul")
+    );
+    private static final LocalDate TODAY = LocalDate.now(FIXED_CLOCK);
 
     @Mock
     private DepositRepository depositRepository;
@@ -66,6 +75,12 @@ class SavingDepositServiceTest {
 
     @Mock
     private TransactionHistoryRepository transactionHistoryRepository;
+
+    @Mock
+    private SavingBatchProcessor savingBatchProcessor;
+
+    @Spy
+    private Clock clock = FIXED_CLOCK;
 
     @InjectMocks
     private SavingDepositService savingDepositService;
@@ -103,7 +118,7 @@ class SavingDepositServiceTest {
         assertThat(response.depositId()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(DepositStatus.ACTIVE);
         assertThat(response.principal()).isEqualTo(1000000L);
-        assertThat(response.maturityDate()).isEqualTo(LocalDate.now().plusMonths(12));
+        assertThat(response.maturityDate()).isEqualTo(TODAY.plusMonths(12));
         assertThat(response.expectedInterest()).isEqualTo(35000L);
         assertThat(activeAccount.getBalance()).isEqualTo(1000000L);
         verify(depositRepository).save(any(Deposit.class));
@@ -270,7 +285,7 @@ class SavingDepositServiceTest {
         assertThat(response.principal()).isEqualTo(1000000L);
         assertThat(response.interestRate()).isEqualTo(3.5);
         assertThat(response.expectedInterest()).isEqualTo(35000L);
-        assertThat(response.maturityDate()).isEqualTo(LocalDate.now().plusMonths(12));
+        assertThat(response.maturityDate()).isEqualTo(TODAY.plusMonths(12));
         assertThat(response.status()).isEqualTo(DepositStatus.ACTIVE);
         verify(depositRepository).findByIdAndUserIdWithProduct(1L, 1L);
     }
@@ -342,7 +357,7 @@ class SavingDepositServiceTest {
         assertThat(response.paidAmount()).isEqualTo(100000L);
         assertThat(response.targetAmount()).isEqualTo(1200000L);
         assertThat(response.progressRate()).isEqualTo(8L);
-        assertThat(response.maturityDate()).isEqualTo(LocalDate.now().plusMonths(12));
+        assertThat(response.maturityDate()).isEqualTo(TODAY.plusMonths(12));
         assertThat(response.status()).isEqualTo(InstallmentStatus.ACTIVE);
         verify(installmentRepository).findByIdAndUserIdWithProduct(1L, 1L);
     }
@@ -468,6 +483,7 @@ class SavingDepositServiceTest {
     @DisplayName("가입중 예금을 중도 해지한다")
     void cancelDeposit() {
         Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
+        ReflectionTestUtils.setField(deposit, "createdAt", LocalDateTime.of(2025, 12, 23, 0, 0));
         EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
 
         when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
@@ -478,10 +494,10 @@ class SavingDepositServiceTest {
         assertThat(response.savingId()).isEqualTo(1L);
         assertThat(response.savingType()).isEqualTo(SavingProductType.DEPOSIT);
         assertThat(response.principalAmount()).isEqualTo(1000000L);
-        assertThat(response.interestAmount()).isEqualTo(17500L);
-        assertThat(response.refundAmount()).isEqualTo(1017500L);
+        assertThat(response.interestAmount()).isEqualTo(8750L);
+        assertThat(response.refundAmount()).isEqualTo(1008750L);
         assertThat(response.status()).isEqualTo("CANCELLED");
-        assertThat(activeAccount.getBalance()).isEqualTo(3017500L);
+        assertThat(activeAccount.getBalance()).isEqualTo(3008750L);
         assertThat(deposit.getStatus()).isEqualTo(DepositStatus.CANCELLED);
 
         ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
@@ -489,9 +505,9 @@ class SavingDepositServiceTest {
         TransactionHistory history = captor.getValue();
         assertThat(history.getType()).isEqualTo(TransactionType.SAVING_CANCEL_REFUND);
         assertThat(history.getDirection()).isEqualTo(TransactionDirection.IN);
-        assertThat(history.getAmount()).isEqualTo(1017500L);
+        assertThat(history.getAmount()).isEqualTo(1008750L);
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
-        assertThat(history.getBalanceAfter()).isEqualTo(3017500L);
+        assertThat(history.getBalanceAfter()).isEqualTo(3008750L);
         assertThat(history.getMemo()).isEqualTo("예금 중도 해지 반환");
         verify(depositRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
     }
@@ -500,7 +516,7 @@ class SavingDepositServiceTest {
     @DisplayName("가입중 적금을 중도 해지한다")
     void cancelInstallment() {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        ReflectionTestUtils.setField(installment, "createdAt", LocalDateTime.now().minusMonths(6));
+        ReflectionTestUtils.setField(installment, "createdAt", LocalDateTime.of(2025, 12, 23, 0, 0));
         EarlyCancelReq request = new EarlyCancelReq(SavingProductType.INSTALLMENT);
 
         when(installmentRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
@@ -548,66 +564,52 @@ class SavingDepositServiceTest {
     @DisplayName("만기일이 지난 가입중 예금을 만기 처리한다")
     void matureDeposit() {
         Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
-        ReflectionTestUtils.setField(deposit, "maturityDate", LocalDate.now());
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
+        MaturityRes maturityRes = new MaturityRes(
+                1L,
+                SavingProductType.DEPOSIT,
+                1000000L,
+                35000L,
+                1035000L,
+                "MATURED"
+        );
 
         when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
+        when(savingBatchProcessor.matureDeposit(deposit))
+                .thenReturn(maturityRes);
 
         MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
 
-        assertThat(response.savingId()).isEqualTo(1L);
-        assertThat(response.savingType()).isEqualTo(SavingProductType.DEPOSIT);
-        assertThat(response.principalAmount()).isEqualTo(1000000L);
-        assertThat(response.interestAmount()).isEqualTo(35000L);
-        assertThat(response.payoutAmount()).isEqualTo(1035000L);
-        assertThat(response.status()).isEqualTo("MATURED");
-        assertThat(activeAccount.getBalance()).isEqualTo(3035000L);
-        assertThat(deposit.getStatus()).isEqualTo(DepositStatus.MATURED);
-
-        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
-        verify(transactionHistoryRepository).save(captor.capture());
-        TransactionHistory history = captor.getValue();
-        assertThat(history.getType()).isEqualTo(TransactionType.SAVING_MATURITY);
-        assertThat(history.getDirection()).isEqualTo(TransactionDirection.IN);
-        assertThat(history.getAmount()).isEqualTo(1035000L);
-        assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
-        assertThat(history.getBalanceAfter()).isEqualTo(3035000L);
-        assertThat(history.getMemo()).isEqualTo("예금 만기 지급");
+        assertThat(response).isEqualTo(maturityRes);
         verify(depositRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
+        verify(savingBatchProcessor).matureDeposit(deposit);
     }
 
     @Test
     @DisplayName("만기일이 지난 가입중 적금을 만기 처리한다")
     void matureInstallment() {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        ReflectionTestUtils.setField(installment, "maturityDate", LocalDate.now());
         MaturityReq request = new MaturityReq(SavingProductType.INSTALLMENT);
+        MaturityRes maturityRes = new MaturityRes(
+                1L,
+                SavingProductType.INSTALLMENT,
+                100000L,
+                19500L,
+                119500L,
+                "MATURED"
+        );
 
         when(installmentRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(installment));
+        when(savingBatchProcessor.matureInstallment(installment))
+                .thenReturn(maturityRes);
 
         MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
 
-        assertThat(response.savingId()).isEqualTo(1L);
-        assertThat(response.savingType()).isEqualTo(SavingProductType.INSTALLMENT);
-        assertThat(response.principalAmount()).isEqualTo(100000L);
-        assertThat(response.interestAmount()).isEqualTo(19500L);
-        assertThat(response.payoutAmount()).isEqualTo(119500L);
-        assertThat(response.status()).isEqualTo("MATURED");
-        assertThat(activeAccount.getBalance()).isEqualTo(2119500L);
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.MATURED);
-
-        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
-        verify(transactionHistoryRepository).save(captor.capture());
-        TransactionHistory history = captor.getValue();
-        assertThat(history.getType()).isEqualTo(TransactionType.SAVING_MATURITY);
-        assertThat(history.getDirection()).isEqualTo(TransactionDirection.IN);
-        assertThat(history.getAmount()).isEqualTo(119500L);
-        assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
-        assertThat(history.getBalanceAfter()).isEqualTo(2119500L);
-        assertThat(history.getMemo()).isEqualTo("적금 만기 지급");
+        assertThat(response).isEqualTo(maturityRes);
         verify(installmentRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
+        verify(savingBatchProcessor).matureInstallment(installment);
     }
 
     @Test
@@ -618,6 +620,8 @@ class SavingDepositServiceTest {
 
         when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
+        when(savingBatchProcessor.matureDeposit(deposit))
+                .thenThrow(new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED));
 
         assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -633,6 +637,8 @@ class SavingDepositServiceTest {
 
         when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
+        when(savingBatchProcessor.matureDeposit(deposit))
+                .thenThrow(new BusinessException(SavingErrorCode.SAVING_NOT_MATURED_YET));
 
         assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -645,207 +651,133 @@ class SavingDepositServiceTest {
     void matureDueSavings() {
         Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        ReflectionTestUtils.setField(deposit, "maturityDate", LocalDate.now());
-        ReflectionTestUtils.setField(installment, "maturityDate", LocalDate.now());
 
-        when(depositRepository.findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+        when(depositRepository.findAllByStatusAndMaturityDateLessThanEqualWithAccount(
                 DepositStatus.ACTIVE,
-                LocalDate.now()
+                TODAY
         )).thenReturn(List.of(deposit));
-        when(installmentRepository.findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+        when(installmentRepository.findAllByStatusAndMaturityDateLessThanEqualWithAccount(
                 InstallmentStatus.ACTIVE,
-                LocalDate.now()
+                TODAY
         )).thenReturn(List.of(installment));
 
         int maturedCount = savingDepositService.matureDueSavings();
 
         assertThat(maturedCount).isEqualTo(2);
-        assertThat(deposit.getStatus()).isEqualTo(DepositStatus.MATURED);
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.MATURED);
-        assertThat(activeAccount.getBalance()).isEqualTo(3154500L);
-
-        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
-        verify(transactionHistoryRepository, times(2)).save(captor.capture());
-        List<TransactionHistory> histories = captor.getAllValues();
-        assertThat(histories)
-                .extracting(TransactionHistory::getType)
-                .containsExactly(TransactionType.SAVING_MATURITY, TransactionType.SAVING_MATURITY);
-        assertThat(histories)
-                .extracting(TransactionHistory::getAmount)
-                .containsExactly(1035000L, 119500L);
+        verify(savingBatchProcessor).matureDeposit(deposit);
+        verify(savingBatchProcessor).matureInstallment(installment);
     }
 
     @Test
     @DisplayName("정기 납입 대상 적금의 자동이체에 성공한다")
     void processDueInstallmentPayments() {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
 
         when(installmentRepository.findAllPaymentTargets(
                 InstallmentStatus.ACTIVE,
-                LocalDate.now()
+                TODAY
         )).thenReturn(List.of(installment));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
-        assertThat(installment.getPaidAmount()).isEqualTo(200000L);
-        assertThat(installment.getNextPaymentDate()).isEqualTo(LocalDate.now().plusMonths(1));
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
-
-        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
-        verify(transactionHistoryRepository).save(captor.capture());
-        TransactionHistory history = captor.getValue();
-        assertThat(history.getType()).isEqualTo(TransactionType.INSTALLMENT_PAYMENT);
-        assertThat(history.getDirection()).isEqualTo(TransactionDirection.OUT);
-        assertThat(history.getAmount()).isEqualTo(100000L);
-        assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
-        assertThat(history.getBalanceAfter()).isEqualTo(1900000L);
-        assertThat(history.getMemo()).isEqualTo("적금 월 납입 자동이체");
+        verify(savingBatchProcessor).processInstallmentPayment(installment);
     }
 
     @Test
     @DisplayName("정기 납입 자동이체 잔액이 부족하면 납입 실패 상태로 변경한다")
     void processDueInstallmentPaymentsWithInsufficientBalance() {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
-        ReflectionTestUtils.setField(activeAccount, "balance", 50000L);
 
         when(installmentRepository.findAllPaymentTargets(
                 InstallmentStatus.ACTIVE,
-                LocalDate.now()
+                TODAY
         )).thenReturn(List.of(installment));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        assertThat(activeAccount.getBalance()).isEqualTo(50000L);
-        assertThat(installment.getPaidAmount()).isEqualTo(100000L);
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.PAYMENT_FAILED);
-        assertThat(installment.getPaymentRetryCount()).isEqualTo(1);
-        assertThat(installment.getLastPaymentFailedDate()).isEqualTo(LocalDate.now());
-        assertThat(installment.getNextPaymentRetryDate()).isEqualTo(LocalDate.now().plusDays(1));
-        assertThat(installment.getPaymentFailureReason()).isEqualTo("잔액 부족");
-        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+        verify(savingBatchProcessor).processInstallmentPayment(installment);
     }
 
     @Test
     @DisplayName("목표 금액을 이미 채운 적금은 자동이체하지 않는다")
     void processDueInstallmentPaymentsWithReachedTargetAmount() {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
-        ReflectionTestUtils.setField(installment, "paidAmount", 1200000L);
 
         when(installmentRepository.findAllPaymentTargets(
                 InstallmentStatus.ACTIVE,
-                LocalDate.now()
+                TODAY
         )).thenReturn(List.of(installment));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
-        assertThat(installment.getPaidAmount()).isEqualTo(1200000L);
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
-        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+        verify(savingBatchProcessor).processInstallmentPayment(installment);
     }
 
     @Test
     @DisplayName("다음 납입일이 만기일 이상이면 자동이체하지 않는다")
     void processDueInstallmentPaymentsOnOrAfterMaturityDate() {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
-        ReflectionTestUtils.setField(installment, "maturityDate", LocalDate.now());
 
         when(installmentRepository.findAllPaymentTargets(
                 InstallmentStatus.ACTIVE,
-                LocalDate.now()
+                TODAY
         )).thenReturn(List.of(installment));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
-        assertThat(installment.getPaidAmount()).isEqualTo(100000L);
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
-        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+        verify(savingBatchProcessor).processInstallmentPayment(installment);
     }
 
     @Test
     @DisplayName("출금 계좌가 비활성이면 자동이체하지 않고 납입 실패 상태로 변경한다")
     void processDueInstallmentPaymentsWithInactiveAccount() {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        ReflectionTestUtils.setField(installment, "nextPaymentDate", LocalDate.now());
-        ReflectionTestUtils.setField(activeAccount, "status", AccountStatus.CLOSED);
 
         when(installmentRepository.findAllPaymentTargets(
                 InstallmentStatus.ACTIVE,
-                LocalDate.now()
+                TODAY
         )).thenReturn(List.of(installment));
 
         int processedCount = savingDepositService.processDueInstallmentPayments();
 
         assertThat(processedCount).isEqualTo(1);
-        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
-        assertThat(installment.getPaidAmount()).isEqualTo(100000L);
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.PAYMENT_FAILED);
-        assertThat(installment.getPaymentRetryCount()).isEqualTo(1);
-        assertThat(installment.getPaymentFailureReason()).isEqualTo("출금 계좌 비활성");
-        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+        verify(savingBatchProcessor).processInstallmentPayment(installment);
     }
 
     @Test
     @DisplayName("실패한 적금 납입 재시도에 성공하면 ACTIVE 상태로 복구한다")
     void retryFailedInstallmentPayments() {
         Installment installment = createInstallment(1L, InstallmentStatus.PAYMENT_FAILED);
-        ReflectionTestUtils.setField(installment, "paymentRetryCount", 1);
-        ReflectionTestUtils.setField(installment, "nextPaymentRetryDate", LocalDate.now());
-        ReflectionTestUtils.setField(installment, "lastPaymentFailedDate", LocalDate.now().minusDays(1));
-        ReflectionTestUtils.setField(installment, "paymentFailureReason", "잔액 부족");
 
         when(installmentRepository.findAllRetryTargets(
                 InstallmentStatus.PAYMENT_FAILED,
-                LocalDate.now()
+                TODAY
         )).thenReturn(List.of(installment));
 
         int retryCount = savingDepositService.retryFailedInstallmentPayments();
 
         assertThat(retryCount).isEqualTo(1);
-        assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
-        assertThat(installment.getPaidAmount()).isEqualTo(200000L);
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
-        assertThat(installment.getPaymentRetryCount()).isZero();
-        assertThat(installment.getNextPaymentRetryDate()).isNull();
-        assertThat(installment.getLastPaymentFailedDate()).isNull();
-        assertThat(installment.getPaymentFailureReason()).isNull();
-        verify(transactionHistoryRepository).save(any(TransactionHistory.class));
+        verify(savingBatchProcessor).processInstallmentPayment(installment);
     }
 
     @Test
     @DisplayName("실패한 적금 납입 재시도가 최대 횟수에 도달하면 다음 재시도일을 비운다")
     void retryFailedInstallmentPaymentsWithMaxRetryCount() {
         Installment installment = createInstallment(1L, InstallmentStatus.PAYMENT_FAILED);
-        ReflectionTestUtils.setField(installment, "paymentRetryCount", 2);
-        ReflectionTestUtils.setField(installment, "nextPaymentRetryDate", LocalDate.now());
-        ReflectionTestUtils.setField(activeAccount, "balance", 50000L);
 
         when(installmentRepository.findAllRetryTargets(
                 InstallmentStatus.PAYMENT_FAILED,
-                LocalDate.now()
+                TODAY
         )).thenReturn(List.of(installment));
 
         int retryCount = savingDepositService.retryFailedInstallmentPayments();
 
         assertThat(retryCount).isEqualTo(1);
-        assertThat(activeAccount.getBalance()).isEqualTo(50000L);
-        assertThat(installment.getPaidAmount()).isEqualTo(100000L);
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.PAYMENT_FAILED);
-        assertThat(installment.getPaymentRetryCount()).isEqualTo(3);
-        assertThat(installment.getLastPaymentFailedDate()).isEqualTo(LocalDate.now());
-        assertThat(installment.getNextPaymentRetryDate()).isNull();
-        assertThat(installment.getPaymentFailureReason()).isEqualTo("잔액 부족");
-        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+        verify(savingBatchProcessor).processInstallmentPayment(installment);
     }
 
     @Test
@@ -873,7 +805,7 @@ class SavingDepositServiceTest {
 
         assertThat(response.installmentId()).isEqualTo(1L);
         assertThat(response.status()).isEqualTo(InstallmentStatus.ACTIVE);
-        assertThat(response.maturityDate()).isEqualTo(LocalDate.now().plusMonths(12));
+        assertThat(response.maturityDate()).isEqualTo(TODAY.plusMonths(12));
         assertThat(response.progressRate()).isEqualTo(8L);
         assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
         verify(installmentRepository).save(any(Installment.class));
@@ -1037,7 +969,7 @@ class SavingDepositServiceTest {
                 activeAccount,
                 1000000L,
                 3.5,
-                LocalDate.now().plusMonths(12),
+                TODAY.plusMonths(12),
                 35000L
         );
         ReflectionTestUtils.setField(deposit, "id", id);
@@ -1053,7 +985,7 @@ class SavingDepositServiceTest {
                 100000L,
                 1200000L,
                 3.0,
-                LocalDate.now().plusMonths(12),
+                TODAY.plusMonths(12),
                 true
         );
         ReflectionTestUtils.setField(installment, "id", id);

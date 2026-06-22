@@ -54,12 +54,11 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
     @Query("""
           select i
           from Installment i
-          join fetch i.savingProduct
           join fetch i.withdrawAccount
           where i.status = :status
           and i.maturityDate <= :today
           """)
-    List<Installment> findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+    List<Installment> findAllByStatusAndMaturityDateLessThanEqualWithAccount(
             @Param("status") InstallmentStatus status,
             @Param("today") LocalDate today
     );
@@ -97,7 +96,6 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
     @Query("""
           select i
           from Installment i
-          join fetch i.savingProduct
           join fetch i.withdrawAccount
           where i.id = :installmentId
           and i.user.id = :userId
