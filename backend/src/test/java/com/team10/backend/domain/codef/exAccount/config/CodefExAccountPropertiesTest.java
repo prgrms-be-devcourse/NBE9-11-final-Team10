@@ -14,6 +14,7 @@ class CodefExAccountPropertiesTest {
                     "codef.account-inquiry.client-id=account-client-id",
                     "codef.account-inquiry.client-secret=account-client-secret",
                     "codef.account-inquiry.public-key=account-public-key",
+                    "codef.account-inquiry.base-url=https://development.codef.io",
                     "codef.account-inquiry.account-list-path=/account-list",
                     "codef.account-inquiry.bank-transaction-path=/transaction-list",
                     "codef.one-won-transfer.client-id=transfer-client-id",
@@ -31,8 +32,31 @@ class CodefExAccountPropertiesTest {
             assertThat(properties.clientId()).isEqualTo("account-client-id");
             assertThat(properties.clientSecret()).isEqualTo("account-client-secret");
             assertThat(properties.publicKey()).isEqualTo("account-public-key");
+            assertThat(properties.baseUrl()).isEqualTo("https://development.codef.io");
             assertThat(properties.accountListPath()).isEqualTo("/account-list");
             assertThat(properties.bankTransactionPath()).isEqualTo("/transaction-list");
+            assertThat(properties.toString())
+                    .doesNotContain("account-client-id")
+                    .doesNotContain("account-client-secret")
+                    .doesNotContain("account-public-key");
         });
+    }
+
+    @Test
+    void failsToStartWhenRequiredSecretIsMissing() {
+        assertMissingPropertyFails("client-id");
+        assertMissingPropertyFails("client-secret");
+        assertMissingPropertyFails("public-key");
+        assertMissingPropertyFails("base-url");
+    }
+
+    private void assertMissingPropertyFails(String propertyName) {
+        contextRunner
+                .withPropertyValues("codef.account-inquiry." + propertyName + "=")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasMessageContaining("Could not bind properties");
+                });
     }
 }

@@ -11,7 +11,20 @@ public record CodefExAccountProperties(
         @NotBlank String clientId,
         @NotBlank String clientSecret,
         @NotBlank String publicKey,
+        @NotBlank String baseUrl,
         @NotBlank String accountListPath,
         @NotBlank String bankTransactionPath
 ) {
+
+    @Override
+    public String toString() {
+        return "CodefExAccountProperties[serviceType=" + serviceType
+                + ", clientId=<redacted>"
+                + ", clientSecret=<redacted>"
+                + ", publicKey=<redacted>"
+                + ", baseUrl=" + baseUrl
+                + ", accountListPath=" + accountListPath
+                + ", bankTransactionPath=" + bankTransactionPath
+                + "]";
+    }
 }

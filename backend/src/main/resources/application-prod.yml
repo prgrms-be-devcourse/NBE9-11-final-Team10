@@ -27,3 +27,13 @@ logging:
     org.hibernate.orm.jdbc.extract: INFO
     org.springframework.transaction.interceptor: INFO
 
+codef:
+  account-inquiry:
+    service-type: ${CODEF_ACCOUNT_INQUIRY_SERVICE_TYPE:PRODUCTION}
+    client-id: ${CODEF_ACCOUNT_INQUIRY_CLIENT_ID:}
+    client-secret: ${CODEF_ACCOUNT_INQUIRY_CLIENT_SECRET:}
+    public-key: ${CODEF_ACCOUNT_INQUIRY_PUBLIC_KEY:}
+    base-url: ${CODEF_ACCOUNT_INQUIRY_BASE_URL:}
+    account-list-path: /v1/kr/bank/p/account/account-list
+    bank-transaction-path: /v1/kr/bank/p/account/transaction-list
+

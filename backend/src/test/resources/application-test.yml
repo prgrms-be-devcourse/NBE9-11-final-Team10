@@ -62,6 +62,7 @@ codef:
     client-id: test-account-inquiry-client-id
     client-secret: test-account-inquiry-client-secret
     public-key: test-account-inquiry-public-key
+    base-url: https://development.codef.io
     account-list-path: /v1/kr/bank/p/account/account-list
     bank-transaction-path: /v1/kr/bank/p/account/transaction-list
 
