@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Service
@@ -230,8 +231,6 @@ public class SavingDepositService {
                     .orElseThrow(() -> new
                             BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
 
-            int periodMonth = installment.getSavingProduct().getPeriodMonth(); // 적금 가입기간(개월)
-
             Long expectedInterest = calculateInstallmentExpectedInterest(installment);
 
             Long expectedTotalAmount =
@@ -291,7 +290,7 @@ public class SavingDepositService {
     ) {
         if (request.savingType() == SavingProductType.DEPOSIT) {
             Deposit deposit =
-                    depositRepository.findByIdAndUserIdWithProduct(savingId, userId)
+                    depositRepository.findByIdAndUserIdWithProductForUpdate(savingId, userId)
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
 
@@ -333,7 +332,7 @@ public class SavingDepositService {
 
         if (request.savingType() == SavingProductType.INSTALLMENT) {
             Installment installment =
-                    installmentRepository.findByIdAndUserIdWithProduct(savingId,
+                    installmentRepository.findByIdAndUserIdWithProductForUpdate(savingId,
                                     userId)
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND)
@@ -344,11 +343,7 @@ public class SavingDepositService {
                         BusinessException(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
             }
 
-            Long expectedInterest =
-                    calculateInstallmentExpectedInterest(installment);
-
-            Long interestAmount =
-                    expectedInterest / EARLY_CANCEL_INTEREST_RATE_DIVISOR;
+            Long interestAmount = calculateInstallmentEarlyCancelInterest(installment);
 
             Long refundAmount =
                     installment.getPaidAmount() + interestAmount;
@@ -380,18 +375,42 @@ public class SavingDepositService {
         throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
     }
 
+    private Long calculateInstallmentEarlyCancelInterest(Installment installment) {
+        LocalDate startDate =
+                installment.getCreatedAt().toLocalDate(); // 적금 가입일
+
+        LocalDate cancelDate =
+                LocalDate.now(); // 중도 해지일
+
+        long holdingMonths =
+                ChronoUnit.MONTHS.between(startDate, cancelDate); // 가입일부터 해지일까지지난 개월 수
+
+        if (holdingMonths < 1) {
+            holdingMonths = 1; // 최소 1개월은 계산되도록 보정
+        }
+
+        return (long) (
+                installment.getPaidAmount()        // 실제 납입한 금액
+                        * installment.getInterestRate() // 연 이율(%)
+                        / PERCENT_DIVISOR          // 퍼센트를 소수로 변환
+                        / MONTHS_IN_YEAR           // 연 이율을 월 이율로 변환
+                        * holdingMonths            // 실제 유지한 개월 수
+                        / EARLY_CANCEL_INTEREST_RATE_DIVISOR // 중도 해지라서 이자의 50%만 지급
+      );
+    }
+
     private Long calculateInstallmentExpectedInterest(Installment installment) {
         int periodMonth =
                 installment.getSavingProduct().getPeriodMonth(); // 적금 가입 기간(개월)
 
         return (long) (
                 installment.getMonthlyAmount()      // 매월 납입하는 금액
-                        * installment.getInterestRate() // 연 이율(%). 예: 3.0
-                        / PERCENT_DIVISOR          // 3.0%를 0.03으로 바꾸기 위해 100으로 나눔
-                        / MONTHS_IN_YEAR           // 연 이율을 월 이율로 바꾸기 위해 12로 나눔
-                        * periodMonth              // 가입 기간 개월 수. 예: 12개월
-                        * (periodMonth + 1)        // 12 + 11 + ... + 1 계산을 위한 값
-                        / 2                        // n * (n + 1) / 2 공식으로 이자 적용 개월 수 합계 계산
+                        * installment.getInterestRate() // 연 이율(%)
+                        / PERCENT_DIVISOR          // 퍼센트를 소수로 변환
+                        / MONTHS_IN_YEAR           // 연 이율을 월 이율로 변환
+                        * periodMonth              // 가입 기간 개월 수
+                        * (periodMonth + 1)        // 1부터 기간까지 합 계산용
+                        / 2                        // 등차수열 합 공식
         );
     }
 
@@ -403,7 +422,7 @@ public class SavingDepositService {
     ) {
         if (request.savingType() == SavingProductType.DEPOSIT) {
             Deposit deposit =
-                    depositRepository.findByIdAndUserIdWithProduct(savingId, userId)
+                    depositRepository.findByIdAndUserIdWithProductForUpdate(savingId, userId)
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
 
@@ -412,7 +431,7 @@ public class SavingDepositService {
 
         if (request.savingType() == SavingProductType.INSTALLMENT) {
             Installment installment =
-                    installmentRepository.findByIdAndUserIdWithProduct(savingId, userId)
+                    installmentRepository.findByIdAndUserIdWithProductForUpdate(savingId, userId)
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
 

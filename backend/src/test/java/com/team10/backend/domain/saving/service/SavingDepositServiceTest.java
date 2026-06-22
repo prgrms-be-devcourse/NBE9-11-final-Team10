@@ -36,6 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -469,7 +470,7 @@ class SavingDepositServiceTest {
         Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
         EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
 
         EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
@@ -492,16 +493,17 @@ class SavingDepositServiceTest {
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
         assertThat(history.getBalanceAfter()).isEqualTo(3017500L);
         assertThat(history.getMemo()).isEqualTo("예금 중도 해지 반환");
-        verify(depositRepository).findByIdAndUserIdWithProduct(1L, 1L);
+        verify(depositRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
     }
 
     @Test
     @DisplayName("가입중 적금을 중도 해지한다")
     void cancelInstallment() {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        ReflectionTestUtils.setField(installment, "createdAt", LocalDateTime.now().minusMonths(6));
         EarlyCancelReq request = new EarlyCancelReq(SavingProductType.INSTALLMENT);
 
-        when(installmentRepository.findByIdAndUserIdWithProduct(1L, 1L))
+        when(installmentRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(installment));
 
         EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
@@ -509,10 +511,10 @@ class SavingDepositServiceTest {
         assertThat(response.savingId()).isEqualTo(1L);
         assertThat(response.savingType()).isEqualTo(SavingProductType.INSTALLMENT);
         assertThat(response.principalAmount()).isEqualTo(100000L);
-        assertThat(response.interestAmount()).isEqualTo(9750L);
-        assertThat(response.refundAmount()).isEqualTo(109750L);
+        assertThat(response.interestAmount()).isEqualTo(750L);
+        assertThat(response.refundAmount()).isEqualTo(100750L);
         assertThat(response.status()).isEqualTo("CANCELLED");
-        assertThat(activeAccount.getBalance()).isEqualTo(2109750L);
+        assertThat(activeAccount.getBalance()).isEqualTo(2100750L);
         assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.CANCELLED);
 
         ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
@@ -520,11 +522,11 @@ class SavingDepositServiceTest {
         TransactionHistory history = captor.getValue();
         assertThat(history.getType()).isEqualTo(TransactionType.SAVING_CANCEL_REFUND);
         assertThat(history.getDirection()).isEqualTo(TransactionDirection.IN);
-        assertThat(history.getAmount()).isEqualTo(109750L);
+        assertThat(history.getAmount()).isEqualTo(100750L);
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
-        assertThat(history.getBalanceAfter()).isEqualTo(2109750L);
+        assertThat(history.getBalanceAfter()).isEqualTo(2100750L);
         assertThat(history.getMemo()).isEqualTo("적금 중도 해지 반환");
-        verify(installmentRepository).findByIdAndUserIdWithProduct(1L, 1L);
+        verify(installmentRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
     }
 
     @Test
@@ -533,7 +535,7 @@ class SavingDepositServiceTest {
         Deposit deposit = createDeposit(1L, DepositStatus.MATURED);
         EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
 
         assertThatThrownBy(() -> savingDepositService.cancelSaving(1L, 1L, request))
@@ -549,7 +551,7 @@ class SavingDepositServiceTest {
         ReflectionTestUtils.setField(deposit, "maturityDate", LocalDate.now());
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
 
         MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
@@ -572,7 +574,7 @@ class SavingDepositServiceTest {
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
         assertThat(history.getBalanceAfter()).isEqualTo(3035000L);
         assertThat(history.getMemo()).isEqualTo("예금 만기 지급");
-        verify(depositRepository).findByIdAndUserIdWithProduct(1L, 1L);
+        verify(depositRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
     }
 
     @Test
@@ -582,7 +584,7 @@ class SavingDepositServiceTest {
         ReflectionTestUtils.setField(installment, "maturityDate", LocalDate.now());
         MaturityReq request = new MaturityReq(SavingProductType.INSTALLMENT);
 
-        when(installmentRepository.findByIdAndUserIdWithProduct(1L, 1L))
+        when(installmentRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(installment));
 
         MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
@@ -605,7 +607,7 @@ class SavingDepositServiceTest {
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
         assertThat(history.getBalanceAfter()).isEqualTo(2119500L);
         assertThat(history.getMemo()).isEqualTo("적금 만기 지급");
-        verify(installmentRepository).findByIdAndUserIdWithProduct(1L, 1L);
+        verify(installmentRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
     }
 
     @Test
@@ -614,7 +616,7 @@ class SavingDepositServiceTest {
         Deposit deposit = createDeposit(1L, DepositStatus.MATURED);
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
 
         assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))
@@ -629,7 +631,7 @@ class SavingDepositServiceTest {
         Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
+        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
 
         assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))

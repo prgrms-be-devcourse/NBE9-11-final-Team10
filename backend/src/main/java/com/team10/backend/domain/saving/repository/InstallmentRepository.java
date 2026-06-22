@@ -50,6 +50,7 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
             @Param("userId") Long userId
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
           select i
           from Installment i
@@ -90,6 +91,20 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
     List<Installment> findAllPaymentTargets(
             @Param("status") InstallmentStatus status,
             @Param("today") LocalDate today
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+          select i
+          from Installment i
+          join fetch i.savingProduct
+          join fetch i.withdrawAccount
+          where i.id = :installmentId
+          and i.user.id = :userId
+          """)
+    Optional<Installment> findByIdAndUserIdWithProductForUpdate(
+            @Param("installmentId") Long installmentId,
+            @Param("userId") Long userId
     );
 
 }
