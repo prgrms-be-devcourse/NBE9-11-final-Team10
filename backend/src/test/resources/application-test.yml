@@ -49,6 +49,10 @@ jwt:
   access-token-expiration-seconds: 3600
   refresh-token-expiration-seconds: 604800
 
+security:
+  hmac:
+    secret: dGVzdC1obWFjLXNlY3JldA==
+
 codef:
   client-id: test-client-id
   client-secret: test-client-secret

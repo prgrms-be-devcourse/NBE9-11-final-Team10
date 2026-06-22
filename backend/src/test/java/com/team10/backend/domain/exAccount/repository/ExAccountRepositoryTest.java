@@ -24,6 +24,9 @@ import org.springframework.test.context.ActiveProfiles;
 @Import(QuerydslConfig.class)
 class ExAccountRepositoryTest {
 
+    private static final String OWNER_ACCOUNT_HASH = "a".repeat(64);
+    private static final String OTHER_ACCOUNT_HASH = "b".repeat(64);
+
     @Autowired
     private ExAccountRepository exAccountRepository;
 
@@ -39,8 +42,20 @@ class ExAccountRepositoryTest {
     void setUp() {
         owner = persistUser("owner@example.com", "계좌주");
         other = persistUser("other@example.com", "타계좌주");
-        ownerAccount = persistExAccount(owner, "국민은행", "12345678901234", "KB Star 입출금통장");
-        otherAccount = persistExAccount(other, "국민은행", "99999999999999", "타인 외부계좌");
+        ownerAccount = persistExAccount(
+                owner,
+                "국민은행",
+                OWNER_ACCOUNT_HASH,
+                "123456****1234",
+                "KB Star 입출금통장"
+        );
+        otherAccount = persistExAccount(
+                other,
+                "국민은행",
+                OTHER_ACCOUNT_HASH,
+                "999999****9999",
+                "타인 외부계좌"
+        );
 
         entityManager.flush();
         entityManager.clear();
@@ -54,7 +69,8 @@ class ExAccountRepositoryTest {
         assertThat(accounts).hasSize(1);
         assertThat(accounts.get(0).getId()).isEqualTo(ownerAccount.getId());
         assertThat(accounts.get(0).getOrganization()).isEqualTo("국민은행");
-        assertThat(accounts.get(0).getAccountNumber()).isEqualTo("12345678901234");
+        assertThat(accounts.get(0).getAccountNumberHash()).isEqualTo(OWNER_ACCOUNT_HASH);
+        assertThat(accounts.get(0).getAccountNumberMasked()).isEqualTo("123456****1234");
     }
 
     @Test
@@ -69,17 +85,17 @@ class ExAccountRepositoryTest {
     }
 
     @Test
-    @DisplayName("같은 사용자, 기관, 계좌번호로 기존 외부 계좌를 조회한다")
-    void findByUserIdAndOrganizationAndAccountNumber() {
-        Optional<ExAccount> found = exAccountRepository.findByUserIdAndOrganizationAndAccountNumber(
+    @DisplayName("같은 사용자, 기관, 계좌번호 해시로 기존 외부 계좌를 조회한다")
+    void findByUserIdAndOrganizationAndAccountNumberHash() {
+        Optional<ExAccount> found = exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
                 owner.getId(),
                 "국민은행",
-                "12345678901234"
+                OWNER_ACCOUNT_HASH
         );
-        Optional<ExAccount> missing = exAccountRepository.findByUserIdAndOrganizationAndAccountNumber(
+        Optional<ExAccount> missing = exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
                 owner.getId(),
                 "신한은행",
-                "12345678901234"
+                OWNER_ACCOUNT_HASH
         );
 
         assertThat(found).isPresent();
@@ -99,11 +115,18 @@ class ExAccountRepositoryTest {
         return user;
     }
 
-    private ExAccount persistExAccount(User user, String organization, String accountNumber, String accountName) {
+    private ExAccount persistExAccount(
+            User user,
+            String organization,
+            String accountNumberHash,
+            String accountNumberMasked,
+            String accountName
+    ) {
         ExAccount account = ExAccount.create(
                 user,
                 organization,
-                accountNumber,
+                accountNumberHash,
+                accountNumberMasked,
                 accountName,
                 "생활비 통장",
                 ExAccountType.DEMAND,
