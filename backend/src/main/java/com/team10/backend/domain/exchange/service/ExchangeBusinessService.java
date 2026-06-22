@@ -14,6 +14,7 @@ import com.team10.backend.domain.exchange.repository.ExchangeQuoteRepository;
 import com.team10.backend.domain.exchange.repository.FxWalletLedgerRepository;
 import com.team10.backend.domain.exchange.repository.FxWalletRepository;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
+import com.team10.backend.domain.exchange.type.CurrencyStatus;
 import com.team10.backend.domain.exchange.type.ExchangeDirection;
 import com.team10.backend.domain.transaction.entity.TransactionHistory;
 import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
@@ -151,6 +152,10 @@ public class ExchangeBusinessService {
         }
         if (!fxWallet.isActive()) {
             throw new BusinessException(ExchangeErrorCode.FX_WALLET_NOT_ACTIVE);
+        }
+        if (quote.getFromCurrency().getStatus() != CurrencyStatus.ACTIVE
+                || quote.getToCurrency().getStatus() != CurrencyStatus.ACTIVE) {
+            throw new BusinessException(ExchangeErrorCode.CURRENCY_NOT_SUPPORTED);
         }
         // 지갑 통화와 견적 외화 통화가 일치하는지 검증
         if (fxWallet.getCurrency().getCurrencyCode() != quote.getFxCurrency().getCurrencyCode()) {

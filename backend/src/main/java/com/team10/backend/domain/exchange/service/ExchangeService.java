@@ -14,6 +14,7 @@ import com.team10.backend.domain.exchange.repository.ExchangeOrderRepository;
 import com.team10.backend.domain.exchange.repository.ExchangeQuoteRepository;
 import com.team10.backend.domain.exchange.repository.ExchangeRateRepository;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
+import com.team10.backend.domain.exchange.type.CurrencyStatus;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
@@ -55,6 +56,8 @@ public class ExchangeService {
         // 통화 조회
         Currency fromCurrency = findCurrency(fromCurrencyCode);
         Currency toCurrency = findCurrency(toCurrencyCode);
+        validateActiveCurrency(fromCurrency);
+        validateActiveCurrency(toCurrency);
 
         CurrencyCode foreignCurrencyCode = resolveForeignCurrency(fromCurrencyCode, toCurrencyCode);
 
@@ -129,6 +132,12 @@ public class ExchangeService {
     private Currency findCurrency(CurrencyCode currencyCode) {
         return currencyRepository.findByCurrencyCode(currencyCode)
                 .orElseThrow(() -> new BusinessException(ExchangeErrorCode.CURRENCY_NOT_FOUND));
+    }
+
+    private void validateActiveCurrency(Currency currency) {
+        if (currency.getStatus() != CurrencyStatus.ACTIVE) {
+            throw new BusinessException(ExchangeErrorCode.CURRENCY_NOT_SUPPORTED);
+        }
     }
 
     private CurrencyCode resolveForeignCurrency(CurrencyCode fromCurrencyCode, CurrencyCode toCurrencyCode) {

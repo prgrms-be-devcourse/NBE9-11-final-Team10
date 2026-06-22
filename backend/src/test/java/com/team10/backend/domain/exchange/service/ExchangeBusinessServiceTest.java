@@ -15,6 +15,7 @@ import com.team10.backend.domain.exchange.repository.ExchangeQuoteRepository;
 import com.team10.backend.domain.exchange.repository.FxWalletLedgerRepository;
 import com.team10.backend.domain.exchange.repository.FxWalletRepository;
 import com.team10.backend.domain.exchange.type.CurrencyCode;
+import com.team10.backend.domain.exchange.type.CurrencyStatus;
 import com.team10.backend.domain.exchange.type.ExchangeDirection;
 import com.team10.backend.domain.exchange.type.ExchangeOrderStatus;
 import com.team10.backend.domain.transaction.entity.TransactionHistory;
@@ -276,6 +277,44 @@ class ExchangeBusinessServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ExchangeErrorCode.FX_WALLET_CURRENCY_MISMATCH);
+
+        assertThat(krwAccount.getBalance()).isEqualTo(200000L);
+        assertThat(fxWallet.getBalance()).isEqualByComparingTo(BigDecimal.ZERO);
+        verify(exchangeOrderRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("견적 통화가 비활성 상태이면 환전 주문에 실패한다")
+    void executeExchangeOrderWithInactiveQuoteCurrency() {
+        ReflectionTestUtils.setField(usd, "status", CurrencyStatus.SUSPENDED);
+        ExchangeQuote quote = createQuote(
+                10L,
+                user,
+                krw,
+                usd,
+                new BigDecimal("100000"),
+                new BigDecimal("1380.000000"),
+                new BigDecimal("250.0000"),
+                new BigDecimal("72.2826"),
+                LocalDateTime.now().plusMinutes(5)
+        );
+        Account krwAccount = createAccount(20L, user, 200000L);
+        FxWallet fxWallet = createWallet(30L, user, usd, BigDecimal.ZERO);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(exchangeQuoteRepository.findById(10L)).thenReturn(Optional.of(quote));
+        when(exchangeOrderRepository.existsByExchangeQuote_Id(10L)).thenReturn(false);
+        when(accountRepository.findByIdAndUserIdForUpdate(20L, 1L)).thenReturn(Optional.of(krwAccount));
+        when(fxWalletRepository.findByIdAndUserIdForUpdate(30L, 1L)).thenReturn(Optional.of(fxWallet));
+
+        assertThatThrownBy(() -> exchangeBusinessService.executeExchangeOrder(
+                1L,
+                10L,
+                20L,
+                30L
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ExchangeErrorCode.CURRENCY_NOT_SUPPORTED);
 
         assertThat(krwAccount.getBalance()).isEqualTo(200000L);
         assertThat(fxWallet.getBalance()).isEqualByComparingTo(BigDecimal.ZERO);
