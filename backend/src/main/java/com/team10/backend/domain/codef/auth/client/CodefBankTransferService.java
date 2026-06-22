@@ -1,4 +1,4 @@
-package com.team10.backend.domain.codef.client;
+package com.team10.backend.domain.codef.auth.client;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.user.exception.UserErrorCode;

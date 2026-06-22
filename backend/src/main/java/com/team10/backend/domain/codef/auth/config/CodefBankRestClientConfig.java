@@ -1,4 +1,4 @@
-package com.team10.backend.domain.codef.config;
+package com.team10.backend.domain.codef.auth.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

@@ -1,7 +1,7 @@
-package com.team10.backend.domain.codef.ocr;
+package com.team10.backend.domain.codef.auth.ocr;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.team10.backend.domain.codef.client.CodefAuthClient;
+import com.team10.backend.domain.codef.auth.client.CodefAuthClient;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;

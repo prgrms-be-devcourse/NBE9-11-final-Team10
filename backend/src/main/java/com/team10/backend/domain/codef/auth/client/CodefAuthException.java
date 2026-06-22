@@ -1,4 +1,6 @@
-package com.team10.backend.domain.codef.client;
+package com.team10.backend.domain.codef.auth.client;
+
+import com.team10.backend.domain.codef.auth.ocr.CodefOcrClient;
 
 /**
  * CODEF OAuth 토큰 발급/파싱 실패 시 발생하는 예외.
