@@ -573,13 +573,13 @@ class SavingDepositServiceTest {
                 "MATURED"
         );
 
-        when(savingBatchProcessor.matureDeposit(1L))
+        when(savingBatchProcessor.matureDeposit(1L, 1L))
                 .thenReturn(maturityRes);
 
         MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
 
         assertThat(response).isEqualTo(maturityRes);
-        verify(savingBatchProcessor).matureDeposit(1L);
+        verify(savingBatchProcessor).matureDeposit(1L, 1L);
     }
 
     @Test
@@ -595,13 +595,13 @@ class SavingDepositServiceTest {
                 "MATURED"
         );
 
-        when(savingBatchProcessor.matureInstallment(1L))
+        when(savingBatchProcessor.matureInstallment(1L, 1L))
                 .thenReturn(maturityRes);
 
         MaturityRes response = savingDepositService.matureSaving(1L, 1L, request);
 
         assertThat(response).isEqualTo(maturityRes);
-        verify(savingBatchProcessor).matureInstallment(1L);
+        verify(savingBatchProcessor).matureInstallment(1L, 1L);
     }
 
     @Test
@@ -609,7 +609,7 @@ class SavingDepositServiceTest {
     void matureSavingWithNotActiveStatus() {
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
 
-        when(savingBatchProcessor.matureDeposit(1L))
+        when(savingBatchProcessor.matureDeposit(1L, 1L))
                 .thenThrow(new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED));
 
         assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))
@@ -623,7 +623,7 @@ class SavingDepositServiceTest {
     void matureSavingBeforeMaturityDate() {
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
 
-        when(savingBatchProcessor.matureDeposit(1L))
+        when(savingBatchProcessor.matureDeposit(1L, 1L))
                 .thenThrow(new BusinessException(SavingErrorCode.SAVING_NOT_MATURED_YET));
 
         assertThatThrownBy(() -> savingDepositService.matureSaving(1L, 1L, request))
