@@ -21,14 +21,17 @@ import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -38,9 +41,6 @@ public class SavingDepositService {
     private static final int EARLY_CANCEL_INTEREST_RATE_DIVISOR = 2;
     private static final String DEPOSIT_CANCEL_REFUND_MEMO = "예금 중도 해지 반환";
     private static final String INSTALLMENT_CANCEL_REFUND_MEMO = "적금 중도 해지 반환";
-    private static final String DEPOSIT_MATURITY_PAYOUT_MEMO = "예금 만기 지급";
-    private static final String INSTALLMENT_MATURITY_PAYOUT_MEMO = "적금 만기 지급";
-    private static final String INSTALLMENT_PAYMENT_MEMO = "적금 월 납입 자동이체";
 
     private final TransactionHistoryRepository transactionHistoryRepository;
     private final DepositRepository depositRepository;
@@ -48,6 +48,8 @@ public class SavingDepositService {
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
     private final InstallmentRepository installmentRepository;
+    private final SavingBatchProcessor savingBatchProcessor;
+    private final Clock clock;
 
     @Transactional
     public DepositCreateRes createDeposit(Long userId, DepositCreateReq request) {
@@ -76,7 +78,7 @@ public class SavingDepositService {
             throw new BusinessException(SavingErrorCode.INVALID_DEPOSIT_AMOUNT);
         }
 
-        LocalDate maturityDate = LocalDate.now()
+        LocalDate maturityDate = LocalDate.now(clock)
                 .plusMonths(savingProduct.getPeriodMonth());
 
         withdrawAccount.withdraw(request.amount());
@@ -139,7 +141,7 @@ public class SavingDepositService {
             throw new BusinessException(SavingErrorCode.INVALID_TARGET_AMOUNT);
         }
 
-        LocalDate maturityDate = LocalDate.now()
+        LocalDate maturityDate = LocalDate.now(clock)
                 .plusMonths(savingProduct.getPeriodMonth());
 
         // 적금 가입할 때 출금 계좌에서 1회차 월 납입액을 빼는 코드
@@ -250,8 +252,9 @@ public class SavingDepositService {
             Long savingId,
             WithdrawalLockReq request
     ) {
-        if (!request.lockYn() && (request.reason() == null ||
+        if (Boolean.FALSE.equals(request.lockYn()) && (request.reason() == null ||
                 request.reason().isBlank())) {
+
             throw new
                     BusinessException(SavingErrorCode.WITHDRAWAL_UNLOCK_REASON_REQUIRED);
         }
@@ -300,8 +303,7 @@ public class SavingDepositService {
             }
 
             Long interestAmount =
-                    deposit.getExpectedInterest() /
-                            EARLY_CANCEL_INTEREST_RATE_DIVISOR;
+                    calculateDepositEarlyCancelInterest(deposit);
 
             Long refundAmount =
                     deposit.getPrincipal() + interestAmount;
@@ -320,7 +322,7 @@ public class SavingDepositService {
                             balanceBefore,
                             balanceAfter,
                             DEPOSIT_CANCEL_REFUND_MEMO,
-                            LocalDateTime.now()
+                            LocalDateTime.now(clock)
                     );
 
             transactionHistoryRepository.save(transactionHistory);
@@ -362,7 +364,7 @@ public class SavingDepositService {
                             balanceBefore,
                             balanceAfter,
                             INSTALLMENT_CANCEL_REFUND_MEMO,
-                            LocalDateTime.now()
+                            LocalDateTime.now(clock)
                     );
 
             transactionHistoryRepository.save(transactionHistory);
@@ -375,12 +377,36 @@ public class SavingDepositService {
         throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
     }
 
+    private Long calculateDepositEarlyCancelInterest(Deposit deposit) {
+        LocalDate startDate =
+                deposit.getCreatedAt().toLocalDate(); // 예금 가입일
+
+        LocalDate cancelDate =
+                LocalDate.now(clock); // 중도 해지일
+
+        long holdingMonths =
+                ChronoUnit.MONTHS.between(startDate, cancelDate); // 가입일부터 해지일까지 지난 개월 수
+
+        if (holdingMonths < 1) {
+            holdingMonths = 1; // 최소 1개월 계산
+        }
+
+        return (long) (
+                deposit.getPrincipal()          // 예치 원금
+                        * deposit.getInterestRate() // 연 이율(%)
+                        / PERCENT_DIVISOR       // 퍼센트를 소수로 변환
+                        / MONTHS_IN_YEAR        // 연 이율을 월 이율로 변환
+                        * holdingMonths         // 실제 보유 개월 수
+                        / EARLY_CANCEL_INTEREST_RATE_DIVISOR // 중도 해지라 50%만 지급
+        );
+    }
+
     private Long calculateInstallmentEarlyCancelInterest(Installment installment) {
         LocalDate startDate =
                 installment.getCreatedAt().toLocalDate(); // 적금 가입일
 
         LocalDate cancelDate =
-                LocalDate.now(); // 중도 해지일
+                LocalDate.now(clock); // 중도 해지일
 
         long holdingMonths =
                 ChronoUnit.MONTHS.between(startDate, cancelDate); // 가입일부터 해지일까지지난 개월 수
@@ -426,7 +452,7 @@ public class SavingDepositService {
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
 
-            return matureDeposit(deposit);
+            return savingBatchProcessor.matureDeposit(deposit);
         }
 
         if (request.savingType() == SavingProductType.INSTALLMENT) {
@@ -435,7 +461,7 @@ public class SavingDepositService {
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
 
-            return matureInstallment(installment);
+            return savingBatchProcessor.matureInstallment(installment);
         }
 
         throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
@@ -444,31 +470,45 @@ public class SavingDepositService {
 
     @Transactional
     public int matureDueSavings() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
 
         List<Deposit> deposits =
 
-                depositRepository.findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+                depositRepository.findAllByStatusAndMaturityDateLessThanEqualWithAccount(
                         DepositStatus.ACTIVE,
                         today
                 );
 
         List<Installment> installments =
 
-                installmentRepository.findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+                installmentRepository.findAllByStatusAndMaturityDateLessThanEqualWithAccount(
                         InstallmentStatus.ACTIVE,
                         today
                 );
 
-        deposits.forEach(this::matureDeposit);
-        installments.forEach(this::matureInstallment);
+        for (Deposit deposit : deposits) {
+            try {
+                savingBatchProcessor.matureDeposit(deposit);
+            } catch (Exception e) {
+                log.warn("예금 만기 처리 실패 depositId={}", deposit.getId(), e);
+            }
+        }
+
+        for (Installment installment : installments) {
+            try {
+                savingBatchProcessor.matureInstallment(installment);
+            } catch (Exception e) {
+                log.warn("적금 만기 처리 실패 installmentId={}", installment.getId(), e);
+            }
+        }
+
 
         return deposits.size() + installments.size();
     }
 
     @Transactional
     public int processDueInstallmentPayments() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
 
         List<Installment> installments =
                 installmentRepository.findAllPaymentTargets(
@@ -476,14 +516,20 @@ public class SavingDepositService {
                         today
                 );
 
-        installments.forEach(this::processInstallmentPayment);
+        for (Installment installment : installments) {
+            try {
+                savingBatchProcessor.processInstallmentPayment(installment);
+            } catch (Exception e) {
+                log.warn("적금 정기 납입 처리 실패 installmentId={}", installment.getId(), e);
+            }
+        }
 
         return installments.size();
     }
 
     @Transactional
     public int retryFailedInstallmentPayments() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
 
         List<Installment> installments =
                 installmentRepository.findAllRetryTargets(
@@ -491,134 +537,16 @@ public class SavingDepositService {
                         today
                 );
 
-        installments.forEach(this::processInstallmentPayment);
+        for (Installment installment : installments) {
+            try {
+                savingBatchProcessor.processInstallmentPayment(installment);
+            } catch (Exception e) {
+                log.warn("적금 납입 재시도 처리 실패 installmentId={}", installment.getId(),
+                        e);
+            }
+        }
 
         return installments.size();
 
     }
-
-    private void processInstallmentPayment(Installment installment) {
-        Account withdrawAccount = installment.getWithdrawAccount();
-
-        if (installment.getPaidAmount() >= installment.getTargetAmount()
-                || !installment.getNextPaymentDate().isBefore(installment.getMaturityDate())) {
-            return;
-        }
-
-        if (!withdrawAccount.isActive()) {
-            installment.failPayment("출금 계좌 비활성", LocalDate.now());
-            return;
-        }
-
-        if (withdrawAccount.getBalance() < installment.getMonthlyAmount()) {
-            installment.failPayment("잔액 부족", LocalDate.now());
-            return;
-        }
-
-        Long paymentAmount = installment.getMonthlyAmount();
-        Long balanceBefore = withdrawAccount.getBalance();
-
-        withdrawAccount.withdraw(paymentAmount);
-
-        Long balanceAfter = withdrawAccount.getBalance();
-
-        TransactionHistory transactionHistory =
-                TransactionHistory.createInstallmentPayment(
-                        withdrawAccount,
-                        paymentAmount,
-                        balanceBefore,
-                        balanceAfter,
-                        INSTALLMENT_PAYMENT_MEMO,
-                        LocalDateTime.now()
-                );
-
-        transactionHistoryRepository.save(transactionHistory);
-
-        installment.payMonthlyAmount();
-
-    }
-
-    private MaturityRes matureDeposit(Deposit deposit) {
-        // 기존 matureSaving 안에 있던 예금 만기 처리 코드
-
-        if (deposit.getStatus() != DepositStatus.ACTIVE) {
-            throw new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED);
-        }
-
-        if (deposit.getMaturityDate().isAfter(LocalDate.now())) {
-            throw new BusinessException(SavingErrorCode.SAVING_NOT_MATURED_YET);
-        }
-
-        Long interestAmount = deposit.getExpectedInterest();
-
-        Long payoutAmount =
-                deposit.getPrincipal() + interestAmount;
-
-        Account withdrawAccount = deposit.getWithdrawAccount();
-        Long balanceBefore = withdrawAccount.getBalance();
-
-        withdrawAccount.deposit(payoutAmount);
-
-        Long balanceAfter = withdrawAccount.getBalance();
-
-        TransactionHistory transactionHistory =
-                TransactionHistory.createSavingMaturityPayout(
-                        withdrawAccount,
-                        payoutAmount,
-                        balanceBefore,
-                        balanceAfter,
-                        DEPOSIT_MATURITY_PAYOUT_MEMO,
-                        LocalDateTime.now()
-                );
-
-        transactionHistoryRepository.save(transactionHistory);
-
-        deposit.mature();
-
-        return MaturityRes.fromDeposit(deposit, interestAmount, payoutAmount);
-    }
-
-    private MaturityRes matureInstallment(Installment installment) {
-        // 기존 matureSaving 안에 있던 적금 만기 처리 코드
-
-        if (installment.getStatus() != InstallmentStatus.ACTIVE) {
-            throw new BusinessException(SavingErrorCode.SAVING_MATURITY_NOT_ALLOWED);
-        }
-
-        if (installment.getMaturityDate().isAfter(LocalDate.now())) {
-            throw new BusinessException(SavingErrorCode.SAVING_NOT_MATURED_YET);
-        }
-
-        Long interestAmount =
-                calculateInstallmentExpectedInterest(installment);
-
-        Long payoutAmount =
-                installment.getPaidAmount() + interestAmount;
-
-        Account withdrawAccount = installment.getWithdrawAccount();
-        Long balanceBefore = withdrawAccount.getBalance();
-
-        withdrawAccount.deposit(payoutAmount);
-
-        Long balanceAfter = withdrawAccount.getBalance();
-
-        TransactionHistory transactionHistory =
-                TransactionHistory.createSavingMaturityPayout(
-                        withdrawAccount,
-                        payoutAmount,
-                        balanceBefore,
-                        balanceAfter,
-                        INSTALLMENT_MATURITY_PAYOUT_MEMO,
-                        LocalDateTime.now()
-                );
-
-        transactionHistoryRepository.save(transactionHistory);
-
-        installment.mature();
-
-        return MaturityRes.fromInstallment(installment, interestAmount,
-                payoutAmount);
-    }
-
 }
-

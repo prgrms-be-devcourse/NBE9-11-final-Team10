@@ -54,12 +54,11 @@ public interface DepositRepository extends JpaRepository<Deposit, Long> {
     @Query("""
       select d
       from Deposit d
-      join fetch d.savingProduct
       join fetch d.withdrawAccount
       where d.status = :status
       and d.maturityDate <= :today
       """)
-    List<Deposit> findAllByStatusAndMaturityDateLessThanEqualWithProductAndAccount(
+    List<Deposit> findAllByStatusAndMaturityDateLessThanEqualWithAccount(
             @Param("status") DepositStatus status,
             @Param("today") LocalDate today
     );
@@ -68,7 +67,6 @@ public interface DepositRepository extends JpaRepository<Deposit, Long> {
     @Query("""
       select d
       from Deposit d
-      join fetch d.savingProduct
       join fetch d.withdrawAccount
       where d.id = :depositId
       and d.user.id = :userId
