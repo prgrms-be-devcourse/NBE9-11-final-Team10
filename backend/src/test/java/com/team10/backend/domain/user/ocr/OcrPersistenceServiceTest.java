@@ -1,6 +1,6 @@
 package com.team10.backend.domain.user.ocr;
 
-import com.team10.backend.domain.codef.ocr.IdCardOcrResult;
+import com.team10.backend.domain.codef.auth.ocr.IdCardOcrResult;
 import com.team10.backend.domain.user.entity.IdentityVerification;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.IdentityVerificationRepository;

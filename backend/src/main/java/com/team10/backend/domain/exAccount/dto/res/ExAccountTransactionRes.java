@@ -1,6 +1,6 @@
 package com.team10.backend.domain.exAccount.dto.res;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountTransactionDirection;
+import com.team10.backend.domain.exAccount.type.ExAccountTransactionDirection;
 import com.team10.backend.domain.exAccount.entity.ExAccountTransaction;
 import io.swagger.v3.oas.annotations.media.Schema;
 

@@ -49,10 +49,16 @@ export default function AccountsPage() {
             {loading ? '' : `총 ${accounts.length}개 계좌`}
           </p>
         </div>
-        <Button size="sm" nativeButton={false} render={<Link href="/accounts/new" />}>
-          <Plus data-icon="inline-start" />
-          계좌 만들기
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/accounts/import" />} className="border-border hover:bg-muted text-foreground">
+            <Plus data-icon="inline-start" />
+            외부 계좌 연동
+          </Button>
+          <Button size="sm" nativeButton={false} render={<Link href="/accounts/new" />}>
+            <Plus data-icon="inline-start" />
+            계좌 만들기
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -72,11 +78,17 @@ export default function AccountsPage() {
           <CardContent className="py-12 text-center">
             <CreditCard className="size-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm font-medium text-foreground mb-1">등록된 계좌가 없습니다</p>
-            <p className="text-xs text-muted-foreground mb-4">새 계좌를 개설해 보세요.</p>
-            <Button size="sm" nativeButton={false} render={<Link href="/accounts/new" />}>
-              <Plus data-icon="inline-start" />
-              계좌 만들기
-            </Button>
+            <p className="text-xs text-muted-foreground mb-4">새 계좌를 개설하거나 보유한 외부 계좌를 연동해 보세요.</p>
+            <div className="flex justify-center gap-2">
+              <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/accounts/import" />} className="border-border hover:bg-muted text-foreground">
+                <Plus data-icon="inline-start" />
+                외부 계좌 연동
+              </Button>
+              <Button size="sm" nativeButton={false} render={<Link href="/accounts/new" />}>
+                <Plus data-icon="inline-start" />
+                계좌 만들기
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (

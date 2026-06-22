@@ -1,7 +1,8 @@
 package com.team10.backend.domain.exAccount.dto.res;
 
-import com.team10.backend.domain.exAccount.Type.ExAccountType;
+import com.team10.backend.domain.codef.exAccount.dto.internal.CodefExAccountSnapshot;
 import com.team10.backend.domain.exAccount.dto.req.ExAccountLinkReq;
+import com.team10.backend.domain.exAccount.type.ExAccountType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
@@ -9,6 +10,8 @@ import java.time.LocalDate;
 
 @Schema(description = "외부 계좌 조회 후보 응답")
 public record ExAccountCandidateRes(
+        @Schema(description = "계좌 후보 인덱스 번호 (0부터 시작)", example = "0")
+        int index,
         @Schema(description = "외부 금융기관명 또는 기관 코드", example = "국민은행")
         String organization,
         @Schema(description = "마스킹된 외부 계좌번호", example = "123456******7890")
@@ -33,22 +36,25 @@ public record ExAccountCandidateRes(
         boolean linked
 ) {
     public static ExAccountCandidateRes from(
-            ExAccountLinkReq request,
+            int index,
+            CodefExAccountSnapshot snapshot,
             String accountNumberMasked,
             boolean linked
     ) {
         return new ExAccountCandidateRes(
-                request.organization(),
+                index,
+                snapshot.organization(),
                 accountNumberMasked,
-                request.accountName(),
-                request.accountAlias(),
-                request.assetType(),
-                request.balance(),
-                request.withdrawableAmount(),
-                request.openedAt(),
-                request.maturityAt(),
-                request.lastTransactionAt(),
+                snapshot.accountName(),
+                snapshot.accountAlias(),
+                snapshot.assetType(),
+                snapshot.balance(),
+                snapshot.withdrawableAmount(),
+                snapshot.openedAt(),
+                snapshot.maturityAt(),
+                snapshot.lastTransactionAt(),
                 linked
         );
     }
+
 }
