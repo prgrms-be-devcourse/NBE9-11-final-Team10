@@ -118,3 +118,83 @@ resource "aws_route_table_association" "public" {
   # Public Subnet에 연결할 Route Table ID입니다.
   route_table_id = aws_route_table.public.id
 }
+
+# Edge 서버용 Security Group을 생성합니다.
+# SSH 접속은 열지 않고, 추후 EC2에 SSM IAM Role을 붙여 Session Manager로 접속합니다.
+resource "aws_security_group" "edge" {
+  name        = "team10-edge-sg"
+  description = "Security group for edge server"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Nginx Proxy Manager Admin"
+    from_port   = 81
+    to_port     = 81
+    protocol    = "tcp"
+    cidr_blocks = [var.admin_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "team10-edge-sg"
+    Team = var.team
+  }
+}
+
+# Public Subnet에 배치하되 외부에서 직접 접근하지 못하도록 Security Group으로 제한합니다.
+# SSH 접속은 열지 않고, 추후 EC2에 SSM IAM Role을 붙여 Session Manager로 접속합니다.
+resource "aws_security_group" "app_data" {
+  name        = "team10-app-data-sg"
+  description = "Security group for app-data server"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description     = "Spring App #1"
+    from_port       = 8081
+    to_port         = 8081
+    protocol        = "tcp"
+    security_groups = [aws_security_group.edge.id]
+  }
+
+  ingress {
+    description     = "Spring App #2"
+    from_port       = 8082
+    to_port         = 8082
+    protocol        = "tcp"
+    security_groups = [aws_security_group.edge.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "team10-app-data-sg"
+    Team = var.team
+  }
+}
