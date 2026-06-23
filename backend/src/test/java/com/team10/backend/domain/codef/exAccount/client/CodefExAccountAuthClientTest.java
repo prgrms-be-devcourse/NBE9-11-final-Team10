@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -22,6 +23,7 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -37,11 +39,13 @@ class CodefExAccountAuthClientTest {
 
     private static final String OAUTH_TOKEN_URL = "https://oauth.codef.io/oauth/token";
     private static final String REDIS_TOKEN_KEY = "codef:oauth:token:account-inquiry";
+    private static final String REDIS_LOCK_KEY = "codef:oauth:token:lock:account-inquiry";
 
     private MockRestServiceServer server;
     private CodefExAccountAuthClient authClient;
     private StringRedisTemplate redisTemplate;
     private ValueOperations<String, String> valueOperations;
+    private RedisScript<Long> getAndDeleteIfMatchScript;
 
     @BeforeEach
     void setUp() {
@@ -49,8 +53,16 @@ class CodefExAccountAuthClientTest {
         server = MockRestServiceServer.bindTo(builder).build();
         redisTemplate = mock(StringRedisTemplate.class);
         valueOperations = mock(ValueOperations.class);
+        getAndDeleteIfMatchScript = mock(RedisScript.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        authClient = new CodefExAccountAuthClient(properties(), builder.build(), redisTemplate);
+        when(valueOperations.setIfAbsent(eq(REDIS_LOCK_KEY), anyString(), eq(Duration.ofSeconds(10))))
+                .thenReturn(true);
+        authClient = new CodefExAccountAuthClient(
+                properties(),
+                builder.build(),
+                redisTemplate,
+                getAndDeleteIfMatchScript
+        );
     }
 
     @Test
@@ -77,6 +89,11 @@ class CodefExAccountAuthClientTest {
                 eq("account-access-token"),
                 eq(Duration.ofSeconds(3300))
         );
+        verify(redisTemplate).execute(
+                eq(getAndDeleteIfMatchScript),
+                eq(List.of(REDIS_LOCK_KEY)),
+                anyString()
+        );
         server.verify();
     }
 
@@ -102,6 +119,21 @@ class CodefExAccountAuthClientTest {
     @Test
     void reusesSharedRedisTokenWhenLocalCacheIsEmpty() {
         when(valueOperations.get(REDIS_TOKEN_KEY)).thenReturn("shared-access-token");
+        when(redisTemplate.getExpire(REDIS_TOKEN_KEY)).thenReturn(1200L);
+
+        assertThat(authClient.getAccessToken()).isEqualTo("shared-access-token");
+
+        verify(valueOperations, never()).set(any(), any(), any(Duration.class));
+        server.verify();
+    }
+
+    @Test
+    void waitsForSharedRedisTokenWhenAnotherInstanceOwnsLock() {
+        when(valueOperations.setIfAbsent(eq(REDIS_LOCK_KEY), anyString(), eq(Duration.ofSeconds(10))))
+                .thenReturn(false);
+        when(valueOperations.get(REDIS_TOKEN_KEY))
+                .thenReturn(null)
+                .thenReturn("shared-access-token");
         when(redisTemplate.getExpire(REDIS_TOKEN_KEY)).thenReturn(1200L);
 
         assertThat(authClient.getAccessToken()).isEqualTo("shared-access-token");
