@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.team10.backend.domain.codef.exAccount.config.CodefExAccountProperties;
 import com.team10.backend.domain.codef.exAccount.exception.CodefExAccountAuthException;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,18 +24,22 @@ public class CodefExAccountAuthClient {
 
     private static final String OAUTH_TOKEN_URL = "https://oauth.codef.io/oauth/token";
     private static final long TOKEN_REFRESH_SKEW_SECONDS = 300;
+    private static final String REDIS_TOKEN_KEY = "codef:oauth:token:account-inquiry";
 
     private final CodefExAccountProperties properties;
     private final RestClient restClient;
+    private final StringRedisTemplate redisTemplate;
     private final AtomicReference<TokenCache> tokenCache = new AtomicReference<>();
     private final Object tokenLock = new Object();
 
     public CodefExAccountAuthClient(
             CodefExAccountProperties properties,
-            @Qualifier(OAUTH_REST_CLIENT) RestClient restClient
+            @Qualifier(OAUTH_REST_CLIENT) RestClient restClient,
+            StringRedisTemplate redisTemplate
     ) {
         this.properties = properties;
         this.restClient = restClient;
+        this.redisTemplate = redisTemplate;
     }
 
     public String getAccessToken() {
@@ -47,13 +53,35 @@ public class CodefExAccountAuthClient {
             if (isValid(cache)) {
                 return cache.accessToken();
             }
+            String sharedToken = readSharedToken();
+            if (sharedToken != null) {
+                return sharedToken;
+            }
             return issueAndCacheAccessToken();
         }
     }
 
     private boolean isValid(TokenCache cache) {
         return cache != null
-                && Instant.now().getEpochSecond() < cache.expiresAtEpochSecond() - TOKEN_REFRESH_SKEW_SECONDS;
+                && Instant.now().getEpochSecond() < cache.validUntilEpochSecond();
+    }
+
+    private String readSharedToken() {
+        String token = redisTemplate.opsForValue().get(REDIS_TOKEN_KEY);
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+
+        Long remainingTtlSeconds = redisTemplate.getExpire(REDIS_TOKEN_KEY);
+        if (remainingTtlSeconds == null || remainingTtlSeconds <= 0) {
+            return null;
+        }
+
+        tokenCache.set(new TokenCache(
+                token,
+                Instant.now().getEpochSecond() + remainingTtlSeconds
+        ));
+        return token;
     }
 
     private String issueAndCacheAccessToken() {
@@ -68,8 +96,16 @@ public class CodefExAccountAuthClient {
 
             validateResponse(response);
 
-            long expiresAt = Instant.now().getEpochSecond() + response.expiresIn();
-            tokenCache.set(new TokenCache(response.accessToken(), expiresAt));
+            long cacheableSeconds = response.expiresIn() - TOKEN_REFRESH_SKEW_SECONDS;
+            tokenCache.set(new TokenCache(
+                    response.accessToken(),
+                    Instant.now().getEpochSecond() + cacheableSeconds
+            ));
+            redisTemplate.opsForValue().set(
+                    REDIS_TOKEN_KEY,
+                    response.accessToken(),
+                    Duration.ofSeconds(cacheableSeconds)
+            );
             return response.accessToken();
         } catch (CodefExAccountAuthException exception) {
             throw exception;
@@ -101,6 +137,6 @@ public class CodefExAccountAuthClient {
     ) {
     }
 
-    private record TokenCache(String accessToken, long expiresAtEpochSecond) {
+    private record TokenCache(String accessToken, long validUntilEpochSecond) {
     }
 }

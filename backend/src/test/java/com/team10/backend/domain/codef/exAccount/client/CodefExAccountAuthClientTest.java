@@ -4,6 +4,8 @@ import com.team10.backend.domain.codef.exAccount.config.CodefExAccountProperties
 import com.team10.backend.domain.codef.exAccount.exception.CodefExAccountAuthException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -11,6 +13,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -18,6 +21,12 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -27,15 +36,21 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class CodefExAccountAuthClientTest {
 
     private static final String OAUTH_TOKEN_URL = "https://oauth.codef.io/oauth/token";
+    private static final String REDIS_TOKEN_KEY = "codef:oauth:token:account-inquiry";
 
     private MockRestServiceServer server;
     private CodefExAccountAuthClient authClient;
+    private StringRedisTemplate redisTemplate;
+    private ValueOperations<String, String> valueOperations;
 
     @BeforeEach
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        authClient = new CodefExAccountAuthClient(properties(), builder.build());
+        redisTemplate = mock(StringRedisTemplate.class);
+        valueOperations = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        authClient = new CodefExAccountAuthClient(properties(), builder.build(), redisTemplate);
     }
 
     @Test
@@ -57,6 +72,11 @@ class CodefExAccountAuthClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         assertThat(authClient.getAccessToken()).isEqualTo("account-access-token");
+        verify(valueOperations).set(
+                eq(REDIS_TOKEN_KEY),
+                eq("account-access-token"),
+                eq(Duration.ofSeconds(3300))
+        );
         server.verify();
     }
 
@@ -76,6 +96,17 @@ class CodefExAccountAuthClientTest {
 
         assertThat(requests)
                 .allSatisfy(request -> assertThat(request.join()).isEqualTo("cached-access-token"));
+        server.verify();
+    }
+
+    @Test
+    void reusesSharedRedisTokenWhenLocalCacheIsEmpty() {
+        when(valueOperations.get(REDIS_TOKEN_KEY)).thenReturn("shared-access-token");
+        when(redisTemplate.getExpire(REDIS_TOKEN_KEY)).thenReturn(1200L);
+
+        assertThat(authClient.getAccessToken()).isEqualTo("shared-access-token");
+
+        verify(valueOperations, never()).set(any(), any(), any(Duration.class));
         server.verify();
     }
 
