@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -166,6 +167,36 @@ class ExAccountSyncServiceTest {
         assertThat(response.accountName()).isEqualTo("입출금통장");
         verify(exAccountRepository, never()).save(any());
         verify(candidateStore).remove(1L, "token");
+    }
+
+    @Test
+    @DisplayName("현재 구현은 같은 후보 토큰으로 들어온 두 요청이 모두 후보 목록을 읽고 처리할 수 있다")
+    void linkAccountsCurrentlyAllowsSameCandidateTokenToBeReadTwice() {
+        ExAccountLinkReq request = new ExAccountLinkReq("token", List.of(0));
+        CodefExAccountSnapshot snapshot = snapshot();
+        ExAccount existingAccount = createExAccount(10L, user, snapshot);
+
+        when(candidateStore.get(1L, "token")).thenReturn(List.of(snapshot));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(hmacSha256Hasher.hash("1234567890")).thenReturn(ACCOUNT_NUMBER_HASH);
+        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
+                1L,
+                "0004",
+                ACCOUNT_NUMBER_HASH
+        )).thenReturn(Optional.empty(), Optional.of(existingAccount));
+        when(exAccountRepository.save(any(ExAccount.class))).thenAnswer(invocation -> {
+            ExAccount account = invocation.getArgument(0);
+            ReflectionTestUtils.setField(account, "id", 10L);
+            return account;
+        });
+
+        List<ExAccountRes> firstResponses = exAccountSyncService.linkAccounts(1L, request);
+        List<ExAccountRes> secondResponses = exAccountSyncService.linkAccounts(1L, request);
+
+        assertThat(firstResponses).hasSize(1);
+        assertThat(secondResponses).hasSize(1);
+        verify(candidateStore, times(2)).get(1L, "token");
+        verify(candidateStore, times(2)).remove(1L, "token");
     }
 
     @Test
