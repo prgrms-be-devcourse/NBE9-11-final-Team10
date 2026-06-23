@@ -68,6 +68,10 @@ public class Account extends BaseEntity {
     }
 
     public void verifyPassword(PasswordEncoder encoder, String rawPassword) {
+        if (rawPassword == null || rawPassword.isBlank()) {
+            throw new BusinessException(AccountErrorCode.ACCOUNT_PASSWORD_MISMATCH);
+        }
+
         if (accountPasswordHash == null) {
             throw new BusinessException(AccountErrorCode.ACCOUNT_PASSWORD_NOT_SET);
         }

@@ -106,6 +106,10 @@ public class AccountService {
             throw new BusinessException(AccountErrorCode.ACCOUNT_NOT_ACTIVE);
         }
 
+        if (request.currentPassword().equals(request.newPassword())) {
+            throw new BusinessException(AccountErrorCode.ACCOUNT_PASSWORD_SAME);
+        }
+
         account.verifyPassword(passwordEncoder, request.currentPassword());
 
         account.changePassword(passwordEncoder.encode(request.newPassword()));

@@ -260,6 +260,25 @@ class AccountServiceTest {
     }
 
     @Test
+    @DisplayName("현재 비밀번호와 새 비밀번호가 같으면 계좌 비밀번호 변경에 실패한다")
+    void changePasswordSameAsCurrent() {
+        Account account = createAccount(1L, verifiedUser, "100200300001", "생활비 계좌");
+        ReflectionTestUtils.setField(account, "accountPasswordHash", "encoded-password");
+        AccountPasswordChangeReq request = new AccountPasswordChangeReq("123456", "123456");
+
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
+
+        assertThatThrownBy(() -> accountService.changePassword(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(AccountErrorCode.ACCOUNT_PASSWORD_SAME);
+
+        assertThat(account.getAccountPasswordHash()).isEqualTo("encoded-password");
+        verify(passwordEncoder, never()).matches(any(String.class), any(String.class));
+        verify(passwordEncoder, never()).encode(any(String.class));
+    }
+
+    @Test
     @DisplayName("현재 비밀번호가 일치하지 않으면 계좌 비밀번호 변경에 실패한다")
     void changePasswordMismatch() {
         Account account = createAccount(1L, verifiedUser, "100200300001", "생활비 계좌");
