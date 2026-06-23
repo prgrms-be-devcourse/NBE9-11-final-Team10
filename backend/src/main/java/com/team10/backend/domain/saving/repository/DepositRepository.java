@@ -97,4 +97,9 @@ public interface DepositRepository extends JpaRepository<Deposit, Long> {
             @Param("depositId") Long depositId,
             @Param("userId") Long userId
     );
+
+    boolean existsByWithdrawAccountIdAndStatusAndWithdrawalLockedTrue(
+            Long withdrawAccountId,
+            DepositStatus status
+    );
 }

@@ -3,6 +3,10 @@ package com.team10.backend.domain.transfer.service;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.repository.AccountRepository;
+import com.team10.backend.domain.saving.repository.DepositRepository;
+import com.team10.backend.domain.saving.repository.InstallmentRepository;
+import com.team10.backend.domain.saving.type.DepositStatus;
+import com.team10.backend.domain.saving.type.InstallmentStatus;
 import com.team10.backend.domain.transaction.entity.TransactionHistory;
 import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
 import com.team10.backend.domain.transfer.dto.res.TopUpRes;
@@ -29,11 +33,13 @@ public class TransferBusinessService {
     private final TransferRepository transferRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final PasswordEncoder passwordEncoder;
+    private final DepositRepository depositRepository;
+    private final InstallmentRepository installmentRepository;
 
     @Transactional
     public TopUpRes executeTopUp(Long userId, Long accountId, Long amount, String memo) {
         // amount 1원 이상 확인
-        if(amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
+        if (amount == null || amount < 1L) throw new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
 
         // accountId로 계좌 조회 & 로그인 사용자 소유 계좌인지 확인 -> 비관적락
         Account account = accountRepository.findByIdAndUserIdForUpdate(accountId, userId).orElseThrow(
@@ -92,6 +98,8 @@ public class TransferBusinessService {
         validateDifferentAccounts(senderAccount, receiverAccount);
         // 두 계좌 모두 ACTIVE인지 확인
         validateAccountsActive(senderAccount, receiverAccount);
+        // 출금 제한 계좌 일반 송금 차단
+        validateWithdrawalLock(senderAccount);
         // 출금 계좌 비밀번호 일치 여부 확인
         validateAccountPassword(senderAccount, accountPassword);
 
@@ -158,6 +166,24 @@ public class TransferBusinessService {
             }
 
             throw e;
+        }
+    }
+
+    private void validateWithdrawalLock(Account senderAccount) {
+        boolean lockedDepositExists =
+                depositRepository.existsByWithdrawAccountIdAndStatusAndWithdrawalLockedTrue(
+                        senderAccount.getId(),
+                        DepositStatus.ACTIVE
+                );
+
+        boolean lockedInstallmentExists =
+                installmentRepository.existsByWithdrawAccountIdAndStatusAndWithdrawalLockedTrue(
+                                senderAccount.getId(),
+                                InstallmentStatus.ACTIVE
+                        );
+
+        if (lockedDepositExists || lockedInstallmentExists) {
+            throw new BusinessException(TransferErrorCode.ACCOUNT_WITHDRAWAL_LOCKED);
         }
     }
 
