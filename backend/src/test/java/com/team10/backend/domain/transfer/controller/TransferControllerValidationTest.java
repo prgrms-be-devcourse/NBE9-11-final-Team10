@@ -40,7 +40,7 @@ class TransferControllerValidationTest {
     @Test
     @DisplayName("송금 요청 검증 - 금액이 null이면 400을 반환하고 서비스를 호출하지 않는다")
     void transfer_amountNull_returnsBadRequest() throws Exception {
-        TransferReq request = new TransferReq(1L, "100200300002", null, "금액 없음");
+        TransferReq request = new TransferReq(1L, "100200300002", "123456", null, "금액 없음");
 
         performTransfer(request)
                 .andExpect(status().isBadRequest())
@@ -52,7 +52,7 @@ class TransferControllerValidationTest {
     @Test
     @DisplayName("송금 요청 검증 - 금액이 0이면 400을 반환하고 서비스를 호출하지 않는다")
     void transfer_amountZero_returnsBadRequest() throws Exception {
-        TransferReq request = new TransferReq(1L, "100200300002", 0L, "0원 송금");
+        TransferReq request = new TransferReq(1L, "100200300002", "123456", 0L, "0원 송금");
 
         performTransfer(request)
                 .andExpect(status().isBadRequest())
@@ -64,7 +64,7 @@ class TransferControllerValidationTest {
     @Test
     @DisplayName("송금 요청 검증 - 금액이 음수이면 400을 반환하고 서비스를 호출하지 않는다")
     void transfer_amountNegative_returnsBadRequest() throws Exception {
-        TransferReq request = new TransferReq(1L, "100200300002", -1L, "음수 송금");
+        TransferReq request = new TransferReq(1L, "100200300002", "123456", -1L, "음수 송금");
 
         performTransfer(request)
                 .andExpect(status().isBadRequest())
@@ -76,7 +76,7 @@ class TransferControllerValidationTest {
     @Test
     @DisplayName("송금 요청 검증 - 수취 계좌번호가 blank이면 400을 반환하고 서비스를 호출하지 않는다")
     void transfer_receiverAccountNumberBlank_returnsBadRequest() throws Exception {
-        TransferReq request = new TransferReq(1L, " ", 50_000L, "blank 계좌번호");
+        TransferReq request = new TransferReq(1L, " ", "123456", 50_000L, "blank 계좌번호");
 
         performTransfer(request)
                 .andExpect(status().isBadRequest())
@@ -88,7 +88,31 @@ class TransferControllerValidationTest {
     @Test
     @DisplayName("송금 요청 검증 - 수취 계좌번호 형식이 잘못되면 400을 반환하고 서비스를 호출하지 않는다")
     void transfer_receiverAccountNumberInvalidFormat_returnsBadRequest() throws Exception {
-        TransferReq request = new TransferReq(1L, "100ABC300002", 50_000L, "형식 오류");
+        TransferReq request = new TransferReq(1L, "100ABC300002", "123456", 50_000L, "형식 오류");
+
+        performTransfer(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+        verifyTransferServiceNeverCalled();
+    }
+
+    @Test
+    @DisplayName("송금 요청 검증 - 계좌 비밀번호가 blank이면 400을 반환하고 서비스를 호출하지 않는다")
+    void transfer_accountPasswordBlank_returnsBadRequest() throws Exception {
+        TransferReq request = new TransferReq(1L, "100200300002", " ", 50_000L, "blank 비밀번호");
+
+        performTransfer(request)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT_VALUE"));
+
+        verifyTransferServiceNeverCalled();
+    }
+
+    @Test
+    @DisplayName("송금 요청 검증 - 계좌 비밀번호가 숫자 6자리가 아니면 400을 반환하고 서비스를 호출하지 않는다")
+    void transfer_accountPasswordInvalidFormat_returnsBadRequest() throws Exception {
+        TransferReq request = new TransferReq(1L, "100200300002", "abc123", 50_000L, "비밀번호 형식 오류");
 
         performTransfer(request)
                 .andExpect(status().isBadRequest())
@@ -100,7 +124,7 @@ class TransferControllerValidationTest {
     @Test
     @DisplayName("송금 요청 검증 - Idempotency-Key 헤더가 없으면 400을 반환하고 서비스를 호출하지 않는다")
     void transfer_missingIdempotencyKeyHeader_returnsBadRequest() throws Exception {
-        TransferReq request = new TransferReq(1L, "100200300002", 50_000L, "키 누락");
+        TransferReq request = new TransferReq(1L, "100200300002", "123456", 50_000L, "키 누락");
 
         mockMvc.perform(post("/api/v1/transfers")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -211,6 +235,7 @@ class TransferControllerValidationTest {
                 anyLong(),
                 anyString(),
                 anyLong(),
+                anyString(),
                 anyString(),
                 any(),
                 any()

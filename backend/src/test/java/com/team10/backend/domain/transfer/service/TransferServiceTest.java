@@ -43,13 +43,13 @@ class TransferServiceTest {
     @DisplayName("송금 요청은 비즈니스 송금 서비스에 위임한다")
     void transfer_delegatesToBusinessService() {
         TransferRes response = transferResponse();
-        when(transferBusinessService.executeTransfer(1L, 1L, "100200300002", 50_000L, "점심값"))
+        when(transferBusinessService.executeTransfer(1L, 1L, "100200300002", "123456", 50_000L, "점심값"))
                 .thenReturn(response);
 
-        TransferRes result = transferService.transfer(1L, "transfer-key", 1L, "100200300002", 50_000L, "점심값");
+        TransferRes result = transferService.transfer(1L, "transfer-key", 1L, "100200300002", "123456", 50_000L, "점심값");
 
         assertSame(response, result);
-        verify(transferBusinessService).executeTransfer(1L, 1L, "100200300002", 50_000L, "점심값");
+        verify(transferBusinessService).executeTransfer(1L, 1L, "100200300002", "123456", 50_000L, "점심값");
     }
 
     private TopUpRes topUpResponse() {

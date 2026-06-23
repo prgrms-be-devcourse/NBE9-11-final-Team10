@@ -22,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -74,6 +75,9 @@ class TransferConcurrencyE2ETest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @BeforeEach
     void setUp() {
         cleanDatabase();
@@ -109,6 +113,7 @@ class TransferConcurrencyE2ETest {
                     TransferReq request = new TransferReq(
                             senderAccount.getId(),
                             receiverAccount.getAccountNumber(),
+                            "123456",
                             amount,
                             "동시 송금"
                     );
@@ -211,6 +216,7 @@ class TransferConcurrencyE2ETest {
 
     private Account saveAccount(User user, String accountNumber, Long balance) {
         Account account = Account.create(user, accountNumber, "테스트 계좌", AccountType.DEPOSIT);
+        account.changePassword(passwordEncoder.encode("123456"));
         account.deposit(balance);
         return transactionTemplate.execute(status -> accountRepository.save(account));
     }

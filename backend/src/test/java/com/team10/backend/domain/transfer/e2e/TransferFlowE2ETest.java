@@ -27,6 +27,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -73,6 +74,9 @@ class TransferFlowE2ETest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @BeforeEach
     void setUp() {
         cleanDatabase();
@@ -98,6 +102,7 @@ class TransferFlowE2ETest {
         TransferReq request = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "점심값"
         );
@@ -200,6 +205,7 @@ class TransferFlowE2ETest {
         TransferReq request = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "잔액 부족"
         );
@@ -291,6 +297,7 @@ class TransferFlowE2ETest {
         TransferReq request = new TransferReq(
                 ownerAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "비소유 계좌 송금 시도"
         );
@@ -343,6 +350,7 @@ class TransferFlowE2ETest {
         TransferReq request = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "비활성 계좌 송금 시도"
         );
@@ -391,6 +399,7 @@ class TransferFlowE2ETest {
         TransferReq request = new TransferReq(
                 senderAccount.getId(),
                 "999999999999",
+                "123456",
                 50_000L,
                 "없는 수취 계좌"
         );
@@ -436,6 +445,7 @@ class TransferFlowE2ETest {
         TransferReq request = new TransferReq(
                 missingSenderAccountId,
                 receiverAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "없는 출금 계좌"
         );
@@ -479,6 +489,7 @@ class TransferFlowE2ETest {
         TransferReq request = new TransferReq(
                 senderAccount.getId(),
                 senderAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "자기 자신 송금"
         );
@@ -523,6 +534,7 @@ class TransferFlowE2ETest {
         TransferReq request = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "잘못된 멱등성 키"
         );
@@ -748,6 +760,7 @@ class TransferFlowE2ETest {
 
     private Account saveAccount(User user, String accountNumber, Long balance) {
         Account account = Account.create(user, accountNumber, "테스트 계좌", AccountType.DEPOSIT);
+        account.changePassword(passwordEncoder.encode("123456"));
         account.deposit(balance);
         return transactionTemplate.execute(status -> accountRepository.save(account));
     }
