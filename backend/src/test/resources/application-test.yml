@@ -23,6 +23,7 @@ spring:
     redis:
       host: localhost
       port: 6379
+      password: ${REDIS_PASSWORD:redis_local_pw}
 
   servlet:
     multipart:
@@ -89,4 +90,7 @@ portone:
 
 app:
   hmac:
-    key: +O0yIB/iZbAKeOPdw2Bf9fmvPxJLhpIB6SBNRxXeki4=
+    active-version: v1
+    keys:
+      v1: +O0yIB/iZbAKeOPdw2Bf9fmvPxJLhpIB6SBNRxXeki4=
+

@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Script from 'next/script'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, UserPlus } from 'lucide-react'
+import { Eye, EyeOff, ShieldCheck, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +12,22 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { signup as apiSignup } from '@/lib/api/auth'
 import { ApiRequestError } from '@/lib/api'
+
+declare global {
+  interface Window {
+    PortOne?: {
+      requestIdentityVerification: (params: {
+        storeId: string
+        channelKey: string
+        identityVerificationId: string
+      }) => Promise<{
+        identityVerificationId?: string
+        code?: string
+        message?: string
+      }>
+    }
+  }
+}
 
 interface FormState {
   email: string
@@ -49,6 +66,7 @@ export default function SignupPage() {
   const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({})
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [verifying, setVerifying] = useState(false)
 
   function validate(): FormErrors {
     const e: FormErrors = {}
@@ -69,6 +87,45 @@ export default function SignupPage() {
     if (!form.agreedPersonalInfo) e.agreedPersonalInfo = '개인정보 수집·이용에 동의해 주세요.'
     if (!form.agreedFinancialInfo) e.agreedFinancialInfo = '금융정보 수집·이용에 동의해 주세요.'
     return e
+  }
+
+  async function handleVerifyIdentity() {
+    if (!window.PortOne) {
+      toast.error('본인인증 모듈을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.')
+      return
+    }
+    const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID
+    const channelKey = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY
+    if (!storeId || !channelKey) {
+      toast.error('본인인증 설정이 누락되었습니다. 관리자에게 문의해 주세요.')
+      return
+    }
+
+    setVerifying(true)
+    try {
+      const response = await window.PortOne.requestIdentityVerification({
+        storeId,
+        channelKey,
+        identityVerificationId: `identity-verification-${crypto.randomUUID()}`,
+      })
+
+      if (response?.code !== undefined) {
+        toast.error(response.message ?? '본인인증에 실패했습니다.')
+        return
+      }
+      if (!response?.identityVerificationId) {
+        toast.error('본인인증 결과를 확인할 수 없습니다. 다시 시도해 주세요.')
+        return
+      }
+
+      setForm((p) => ({ ...p, identityVerificationId: response.identityVerificationId! }))
+      setErrors((p) => ({ ...p, identityVerificationId: undefined }))
+      toast.success('본인인증이 완료되었습니다.')
+    } catch {
+      toast.error('본인인증 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setVerifying(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -118,6 +175,7 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 py-10">
+      <Script src="https://cdn.portone.io/v2/browser-sdk.js" strategy="afterInteractive" />
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
           <div className="inline-flex items-center justify-center size-12 rounded-lg bg-primary mb-3">
@@ -243,14 +301,33 @@ export default function SignupPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="identityVerificationId">본인인증 ID</Label>
-              <Input
-                id="identityVerificationId"
-                placeholder="PortOne 본인인증 ID"
-                value={form.identityVerificationId}
-                onChange={(e) => setForm((p) => ({ ...p, identityVerificationId: e.target.value }))}
-                aria-invalid={!!fieldError('identityVerificationId')}
-              />
+              <Label>본인인증</Label>
+              {form.identityVerificationId ? (
+                <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                  <span className="flex items-center gap-1.5 text-sm text-foreground">
+                    <ShieldCheck className="size-4 text-primary" />
+                    본인인증이 완료되었습니다.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleVerifyIdentity}
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    다시 인증
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleVerifyIdentity}
+                  disabled={verifying}
+                  aria-invalid={!!fieldError('identityVerificationId')}
+                >
+                  {verifying ? '본인인증 진행 중...' : '휴대폰 본인인증하기'}
+                </Button>
+              )}
               {fieldError('identityVerificationId') && (
                 <p className="text-xs text-destructive">{fieldError('identityVerificationId')}</p>
               )}
