@@ -448,7 +448,6 @@ public class SavingDepositService {
         );
     }
 
-    @Transactional
     public MaturityRes matureSaving(
             Long userId,
             Long savingId,
@@ -466,7 +465,6 @@ public class SavingDepositService {
     }
 
 
-    @Transactional
     public int matureDueSavings() {
         LocalDate today = LocalDate.now(clock);
 
@@ -504,7 +502,6 @@ public class SavingDepositService {
         return depositIds.size() + installmentIds.size();
     }
 
-    @Transactional
     public int processDueInstallmentPayments() {
         LocalDate today = LocalDate.now(clock);
 
@@ -525,7 +522,6 @@ public class SavingDepositService {
         return installmentIds.size();
     }
 
-    @Transactional
     public int retryFailedInstallmentPayments() {
         LocalDate today = LocalDate.now(clock);
 
