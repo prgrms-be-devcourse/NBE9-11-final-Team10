@@ -147,7 +147,7 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
           where i.id = :installmentId
           and i.user.id = :userId
           """)
-    Optional<Installment> findByIdAndUserIdWithProductForUpdate(
+    Optional<Installment> findByIdAndUserIdWithAccountForUpdate(
             @Param("installmentId") Long installmentId,
             @Param("userId") Long userId
     );

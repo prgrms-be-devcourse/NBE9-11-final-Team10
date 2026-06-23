@@ -486,7 +486,7 @@ class SavingDepositServiceTest {
         ReflectionTestUtils.setField(deposit, "createdAt", LocalDateTime.of(2025, 12, 23, 0, 0));
         EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
+        when(depositRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
 
         EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
@@ -509,7 +509,7 @@ class SavingDepositServiceTest {
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
         assertThat(history.getBalanceAfter()).isEqualTo(3008750L);
         assertThat(history.getMemo()).isEqualTo("예금 중도 해지 반환");
-        verify(depositRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
+        verify(depositRepository).findByIdAndUserIdWithAccountForUpdate(1L, 1L);
     }
 
     @Test
@@ -519,7 +519,7 @@ class SavingDepositServiceTest {
         ReflectionTestUtils.setField(installment, "createdAt", LocalDateTime.of(2025, 12, 23, 0, 0));
         EarlyCancelReq request = new EarlyCancelReq(SavingProductType.INSTALLMENT);
 
-        when(installmentRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
+        when(installmentRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
                 .thenReturn(Optional.of(installment));
 
         EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
@@ -542,7 +542,7 @@ class SavingDepositServiceTest {
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
         assertThat(history.getBalanceAfter()).isEqualTo(2100750L);
         assertThat(history.getMemo()).isEqualTo("적금 중도 해지 반환");
-        verify(installmentRepository).findByIdAndUserIdWithProductForUpdate(1L, 1L);
+        verify(installmentRepository).findByIdAndUserIdWithAccountForUpdate(1L, 1L);
     }
 
     @Test
@@ -551,7 +551,7 @@ class SavingDepositServiceTest {
         Deposit deposit = createDeposit(1L, DepositStatus.MATURED);
         EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithProductForUpdate(1L, 1L))
+        when(depositRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
 
         assertThatThrownBy(() -> savingDepositService.cancelSaving(1L, 1L, request))

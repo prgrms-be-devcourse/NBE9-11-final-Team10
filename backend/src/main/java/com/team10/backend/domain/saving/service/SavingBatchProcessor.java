@@ -109,7 +109,7 @@ public class SavingBatchProcessor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public MaturityRes matureDeposit(Long depositId, Long userId) {
         Deposit deposit =
-                depositRepository.findByIdAndUserIdWithProductForUpdate(depositId, userId)
+                depositRepository.findByIdAndUserIdWithAccountForUpdate(depositId, userId)
                         .orElseThrow(() -> new
                                 BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
 
@@ -168,7 +168,7 @@ public class SavingBatchProcessor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public MaturityRes matureInstallment(Long installmentId, Long userId) {
         Installment installment =
-                installmentRepository.findByIdAndUserIdWithProductForUpdate(installmentId,
+                installmentRepository.findByIdAndUserIdWithAccountForUpdate(installmentId,
                                 userId)
                         .orElseThrow(() -> new
                                 BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));

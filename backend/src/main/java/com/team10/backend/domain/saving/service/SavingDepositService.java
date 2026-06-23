@@ -23,6 +23,7 @@ import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -293,7 +294,7 @@ public class SavingDepositService {
     ) {
         if (request.savingType() == SavingProductType.DEPOSIT) {
             Deposit deposit =
-                    depositRepository.findByIdAndUserIdWithProductForUpdate(savingId, userId)
+                    depositRepository.findByIdAndUserIdWithAccountForUpdate(savingId, userId)
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
 
@@ -338,7 +339,7 @@ public class SavingDepositService {
 
         if (request.savingType() == SavingProductType.INSTALLMENT) {
             Installment installment =
-                    installmentRepository.findByIdAndUserIdWithProductForUpdate(savingId,
+                    installmentRepository.findByIdAndUserIdWithAccountForUpdate(savingId,
                                     userId)
                             .orElseThrow(() -> new
                                     BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND)
@@ -448,6 +449,7 @@ public class SavingDepositService {
         );
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public MaturityRes matureSaving(
             Long userId,
             Long savingId,
@@ -465,6 +467,7 @@ public class SavingDepositService {
     }
 
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int matureDueSavings() {
         LocalDate today = LocalDate.now(clock);
 
@@ -502,6 +505,7 @@ public class SavingDepositService {
         return depositIds.size() + installmentIds.size();
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int processDueInstallmentPayments() {
         LocalDate today = LocalDate.now(clock);
 
@@ -522,6 +526,7 @@ public class SavingDepositService {
         return installmentIds.size();
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int retryFailedInstallmentPayments() {
         LocalDate today = LocalDate.now(clock);
 

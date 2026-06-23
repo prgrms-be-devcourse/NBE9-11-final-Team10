@@ -93,7 +93,7 @@ public interface DepositRepository extends JpaRepository<Deposit, Long> {
       where d.id = :depositId
       and d.user.id = :userId
       """)
-    Optional<Deposit> findByIdAndUserIdWithProductForUpdate(
+    Optional<Deposit> findByIdAndUserIdWithAccountForUpdate(
             @Param("depositId") Long depositId,
             @Param("userId") Long userId
     );
