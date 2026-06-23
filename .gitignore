@@ -94,9 +94,12 @@ backend/.gradle-home/
 **/.terraform/*
 **/*.tfstate
 **/*.tfstate.*
-
-**/.tfvars
+**/*.tfvars
+**/*.tfvars.json
 **/secrets.tf
+**/crash.log
+**/crash.*.log
+**/*.tfplan
 
 node_modules/
 
