@@ -72,6 +72,19 @@ public class SecurityConfig {
                             "/api/v1/auth/refresh"
                     ).permitAll();
 
+                    // 주식 종목 조회
+                    auth.requestMatchers(
+                            HttpMethod.GET,
+                            "/api/v1/investment/stocks/**"
+                    ).permitAll();
+
+                    // 공개 환전 조회 API
+                    auth.requestMatchers(HttpMethod.GET,
+                            "/api/v1/exchanges/rates",
+                            "/api/v1/exchanges/currencies",
+                            "/api/v1/exchanges/currencies/{currencyCode}"
+                    ).permitAll();
+
                     // Swagger UI
                     auth.requestMatchers(
                             "/swagger-ui/**",
