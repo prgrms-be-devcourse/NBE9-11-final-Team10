@@ -302,6 +302,10 @@ public class SavingDepositService {
                         BusinessException(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
             }
 
+            if (deposit.isWithdrawalLocked()) {
+                throw new BusinessException(SavingErrorCode.SAVING_WITHDRAWAL_LOCKED);
+            }
+
             Long interestAmount =
                     calculateDepositEarlyCancelInterest(deposit);
 
@@ -343,6 +347,10 @@ public class SavingDepositService {
             if (installment.getStatus() != InstallmentStatus.ACTIVE) {
                 throw new
                         BusinessException(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
+            }
+
+            if (installment.isWithdrawalLocked()) {
+                throw new BusinessException(SavingErrorCode.SAVING_WITHDRAWAL_LOCKED);
             }
 
             Long interestAmount = calculateInstallmentEarlyCancelInterest(installment);
