@@ -42,7 +42,7 @@ public class ExAccountSyncService {
      * 1. 클라이언트가 보낸 일회용 'candidateToken'으로 Redis에서 원본 CODEF 조회 스냅샷 목록을 꺼냅니다.
      * 2. 사용자가 선택한 인덱스 목록('selectedIndexes')이 유효한 범위(0 ~ 원본 개수-1) 내에 있는지 무결성 검증을 수행합니다.
      * 3. 검증된 원본 데이터를 바탕으로 DB에 Upsert(신규 저장 또는 기존 정보 갱신)를 수행합니다.
-     * 4. 연동 처리가 무사히 완료되면, 보안을 위해 Redis에서 세션 토큰을 즉시 파기합니다.
+     * 4. claim에 성공한 토큰은 성공/실패와 관계없이 Redis에서 즉시 파기합니다.
      */
     @Transactional
     public List<ExAccountRes> linkAccounts(Long userId, ExAccountLinkReq request) {
@@ -59,6 +59,7 @@ public class ExAccountSyncService {
         try {
             return linkClaimedAccounts(userId, request);
         } finally {
+            candidateStore.remove(userId, request.candidateToken());
             candidateStore.releaseClaim(userId, request.candidateToken(), claimId.get());
         }
     }
@@ -84,10 +85,6 @@ public class ExAccountSyncService {
             ExAccount account = upsertAccount(userId, snapshot);
             results.add(ExAccountRes.from(account));
         }
-
-        // 4. 보안 강화를 위해 연동 성공 직후 세션 토큰을 즉시 삭제 (일회용 토큰 원칙 준수)
-        candidateStore.remove(userId, request.candidateToken());
-
         return results;
     }
 

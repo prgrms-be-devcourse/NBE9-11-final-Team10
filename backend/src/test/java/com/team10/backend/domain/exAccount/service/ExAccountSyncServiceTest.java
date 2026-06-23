@@ -89,6 +89,8 @@ class ExAccountSyncServiceTest {
                 .isEqualTo(ExAccountErrorCode.EX_ACCOUNT_CANDIDATE_NOT_FOUND);
 
         verify(exAccountRepository, never()).save(any());
+        verify(candidateStore).remove(1L, "invalid-token");
+        verify(candidateStore).releaseClaim(1L, "invalid-token", "claim-id");
     }
 
     @Test
@@ -105,6 +107,8 @@ class ExAccountSyncServiceTest {
                 .isEqualTo(ExAccountErrorCode.EX_ACCOUNT_CANDIDATE_INVALID_INDEX);
 
         verify(exAccountRepository, never()).save(any());
+        verify(candidateStore).remove(1L, "token");
+        verify(candidateStore).releaseClaim(1L, "token", "claim-id");
     }
 
     @Test
@@ -206,6 +210,7 @@ class ExAccountSyncServiceTest {
                 .isEqualTo(UserErrorCode.USER_NOT_FOUND);
 
         verify(exAccountRepository, never()).save(any());
+        verify(candidateStore).remove(999L, "token");
         verify(candidateStore).releaseClaim(999L, "token", "claim-id");
     }
 
