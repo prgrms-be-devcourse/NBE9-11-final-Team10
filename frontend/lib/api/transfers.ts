@@ -1,12 +1,6 @@
 import { apiFetch } from '../api'
+import { createIdempotencyKey } from '../idempotency'
 import type { DepositRequest, TransferRequest, TransferResult } from '../types'
-
-function createIdempotencyKey(prefix: string) {
-  const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  return `${prefix}-${id}`
-}
 
 export async function deposit(data: DepositRequest): Promise<TransferResult> {
   const response = await apiFetch<{
