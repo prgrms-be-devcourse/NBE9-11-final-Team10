@@ -2,10 +2,10 @@ package com.team10.backend.domain.saving.dto.res;
 
 import com.team10.backend.domain.saving.entity.Deposit;
 import com.team10.backend.domain.saving.entity.Installment;
+import com.team10.backend.domain.saving.exception.SavingErrorCode;
 import com.team10.backend.domain.saving.type.SavingProductType;
+import com.team10.backend.global.exception.BusinessException;
 import io.swagger.v3.oas.annotations.media.Schema;
-
-import java.util.Objects;
 
 public record EarlyCancelRes(
         @Schema(description = "저축 가입 ID", example = "1")
@@ -31,7 +31,9 @@ public record EarlyCancelRes(
             Long interestAmount,
             Long refundAmount
     ) {
-        Objects.requireNonNull(deposit, "deposit은 null일 수 없습니다.");
+        if (deposit == null) {
+            throw new BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND);
+        }
 
         return new EarlyCancelRes(
                 deposit.getId(),
@@ -48,7 +50,9 @@ public record EarlyCancelRes(
             Long interestAmount,
             Long refundAmount
     ) {
-        Objects.requireNonNull(installment, "installment는 null일 수 없습니다.");
+        if (installment == null) {
+            throw new BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND);
+        }
 
         return new EarlyCancelRes(
                 installment.getId(),
