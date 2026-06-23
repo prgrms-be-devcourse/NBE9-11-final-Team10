@@ -24,7 +24,6 @@ provider "aws" {
 }
 
 # VPC를 생성합니다.
-# VPC는 AWS 안에서 우리 팀 리소스들을 담는 독립적인 네트워크 공간입니다.
 resource "aws_vpc" "main" {
   # VPC에서 사용할 사설 IP 대역입니다.
   # 10.0.0.0/16은 10.0.x.x 범위의 IP를 이 VPC 안에서 사용할 수 있다는 의미입니다.
@@ -39,12 +38,34 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
 
   # AWS 리소스에 붙이는 태그입니다.
-  # 리소스 식별, 비용 추적, 팀 구분에 사용합니다.
   tags = {
-    # AWS 콘솔에서 보이는 VPC 이름입니다.
-    Name = "team10-vpc"
+    Name = "team10-vpc" # AWS 콘솔에서 보이는 VPC 이름입니다.
+    Team = var.team     # 팀 공통 태그입니다.
+  }
+}
 
-    # 데브코스 요구사항에 따른 팀 공통 태그입니다.
-    Team = "devcos-team10"
+# public subnet 설정
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "${var.region}a"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "team10-public-subnet"
+    Team = var.team
+  }
+}
+
+# private subnet 설정
+resource "aws_subnet" "private" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "${var.region}a"
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name = "team10-private-subnet"
+    Team = var.team
   }
 }
