@@ -49,7 +49,6 @@ class InvestmentPortfolioControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.content[0].id").value(30L))
-                .andExpect(jsonPath("$.content[0].accountId").value(10L))
                 .andExpect(jsonPath("$.content[0].stockCode").value("005930"))
                 .andExpect(jsonPath("$.content[0].stockName").value("삼성전자"))
                 .andExpect(jsonPath("$.content[0].quantity").value(3L))
@@ -87,7 +86,6 @@ class InvestmentPortfolioControllerTest {
     private InvestmentHoldingRes holding() {
         return new InvestmentHoldingRes(
                 30L,
-                10L,
                 20L,
                 "005930",
                 "삼성전자",

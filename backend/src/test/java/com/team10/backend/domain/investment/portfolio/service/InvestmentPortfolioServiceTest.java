@@ -104,7 +104,6 @@ class InvestmentPortfolioServiceTest {
         assertThat(response.getTotalElements()).isEqualTo(1);
         InvestmentHoldingRes result = response.getContent().get(0);
         assertThat(result.id()).isEqualTo(30L);
-        assertThat(result.accountId()).isEqualTo(10L);
         assertThat(result.stockId()).isEqualTo(20L);
         assertThat(result.stockCode()).isEqualTo("005930");
         assertThat(result.stockName()).isEqualTo("삼성전자");

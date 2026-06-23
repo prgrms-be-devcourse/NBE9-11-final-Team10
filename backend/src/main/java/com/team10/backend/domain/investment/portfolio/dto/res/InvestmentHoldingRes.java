@@ -8,7 +8,6 @@ import java.math.BigDecimal;
 
 public record InvestmentHoldingRes(
         Long id,
-        Long accountId,
         Long stockId,
         String stockCode,
         String stockName,
@@ -23,7 +22,6 @@ public record InvestmentHoldingRes(
         Stock stock = holding.getStock();
         return new InvestmentHoldingRes(
                 holding.getId(),
-                holding.getInvestmentAccount().getId(),
                 stock.getId(),
                 stock.getStockCode(),
                 stock.getStockName(),
