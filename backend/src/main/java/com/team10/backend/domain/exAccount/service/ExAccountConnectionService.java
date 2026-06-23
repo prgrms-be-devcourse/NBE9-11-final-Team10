@@ -37,6 +37,7 @@ public class ExAccountConnectionService {
     private final ExAccountSyncService exAccountSyncService;
     private final ExAccountRepository exAccountRepository;
     private final CodefExAccountCandidateStore candidateStore;
+    private final ExAccountCodefRateLimitService rateLimitService;
 
     /**
      * 사용자의 특정 금융기관 계정 인증 정보(connectedId)를 등록하고 DB에 저장(암호화)합니다.
@@ -49,6 +50,8 @@ public class ExAccountConnectionService {
         // 1. 유저 검증
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+
+        rateLimitService.checkRegister(userId, request.organization());
 
         // 2. CODEF API에 계정을 등록하고, 발급된 connectedId를 AES-GCM 알고리즘으로 양방향 암호화 처리
         EncryptedConnectedId encryptedConnectedId = codefExAccountGateway.register(request);
@@ -90,6 +93,8 @@ public class ExAccountConnectionService {
     public ExAccountCandidateListRes getLinkCandidates(Long userId, String organization) {
         // 1. 해당 기관의 연결 정보(ExAccountConnection)가 유효(ACTIVE)한 상태인지 확인
         ExAccountConnection connection = getActiveConnection(userId, organization);
+
+        rateLimitService.checkAccountList(userId, organization);
 
         // 2. 암호화된 connectedId를 복호화하여 CODEF API로부터 실시간 보유 계좌 스냅샷 데이터 획득
         List<CodefExAccountSnapshot> snapshots = codefExAccountGateway

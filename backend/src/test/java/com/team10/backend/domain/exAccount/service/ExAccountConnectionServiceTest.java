@@ -34,6 +34,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +54,8 @@ class ExAccountConnectionServiceTest {
     private ExAccountRepository exAccountRepository;
     @Mock
     private CodefExAccountCandidateStore candidateStore;
+    @Mock
+    private ExAccountCodefRateLimitService rateLimitService;
 
     private ExAccountConnectionService service;
     private User user;
@@ -66,7 +69,8 @@ class ExAccountConnectionServiceTest {
                 codefExAccountGateway,
                 exAccountSyncService,
                 exAccountRepository,
-                candidateStore
+                candidateStore,
+                rateLimitService
         );
         user = User.create(
                 "test@example.com",
@@ -106,6 +110,7 @@ class ExAccountConnectionServiceTest {
         assertThat(captured.getUser()).isEqualTo(user);
         assertThat(captured.getOrganization()).isEqualTo("0004");
         assertThat(captured.encryptedConnectedId()).isEqualTo(encryptedConnectedId);
+        verify(rateLimitService).checkRegister(1L, "0004");
         verify(codefExAccountGateway).register(createRequest);
     }
 
@@ -127,6 +132,21 @@ class ExAccountConnectionServiceTest {
         assertThat(response.organization()).isEqualTo("0004");
         assertThat(response.status()).isEqualTo(ExAccountConnectionStatus.ACTIVE);
         assertThat(existingConnection.encryptedConnectedId()).isEqualTo(encryptedConnectedId);
+    }
+
+    @Test
+    void registerDoesNotCallCodefWhenUserOrganizationRateLimitIsExceeded() {
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        doThrow(new BusinessException(
+                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_REGISTER_RATE_LIMIT_EXCEEDED
+        )).when(rateLimitService).checkRegister(1L, "0004");
+
+        assertThatThrownBy(() -> service.register(1L, createRequest))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_REGISTER_RATE_LIMIT_EXCEEDED));
+
+        verify(codefExAccountGateway, never()).register(any());
     }
 
     @Test
@@ -154,7 +174,25 @@ class ExAccountConnectionServiceTest {
         assertThat(result.accounts()).containsExactly(candidate);
         assertThat(result.accounts().getFirst().accountNoMasked()).doesNotContain("1234567890");
         assertThat(connection.getLastSyncedAt()).isNotNull();
+        verify(rateLimitService).checkAccountList(1L, "0004");
         verify(codefExAccountGateway).getAccountSnapshots("0004", connection.encryptedConnectedId());
+    }
+
+    @Test
+    void getLinkCandidatesDoesNotCallCodefWhenUserOrganizationRateLimitIsExceeded() {
+        ExAccountConnection connection = connection("ciphertext");
+        when(connectionRepository.findByUserIdAndOrganization(1L, "0004"))
+                .thenReturn(Optional.of(connection));
+        doThrow(new BusinessException(
+                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_ACCOUNT_LIST_RATE_LIMIT_EXCEEDED
+        )).when(rateLimitService).checkAccountList(1L, "0004");
+
+        assertThatThrownBy(() -> service.getLinkCandidates(1L, "0004"))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_ACCOUNT_LIST_RATE_LIMIT_EXCEEDED));
+
+        verify(codefExAccountGateway, never()).getAccountSnapshots(any(), any());
     }
 
     @Test
