@@ -127,7 +127,7 @@ class ExAccountSyncServiceTest {
                 "0004",
                 ACCOUNT_NUMBER_HASH
         )).thenReturn(Optional.empty());
-        when(exAccountRepository.save(any(ExAccount.class))).thenAnswer(invocation -> {
+        when(exAccountRepository.saveAndFlush(any(ExAccount.class))).thenAnswer(invocation -> {
             ExAccount account = invocation.getArgument(0);
             ReflectionTestUtils.setField(account, "id", 10L);
             return account;
@@ -144,7 +144,7 @@ class ExAccountSyncServiceTest {
         assertThat(response.status()).isEqualTo(ExAccountStatus.ACTIVE);
 
         ArgumentCaptor<ExAccount> accountCaptor = ArgumentCaptor.forClass(ExAccount.class);
-        verify(exAccountRepository).save(accountCaptor.capture());
+        verify(exAccountRepository).saveAndFlush(accountCaptor.capture());
         assertThat(accountCaptor.getValue().getAccountNumberHash()).isEqualTo(ACCOUNT_NUMBER_HASH);
         assertThat(accountCaptor.getValue().getAccountNumberMasked()).isEqualTo("123***7890");
         verify(candidateStore).remove(1L, "token");
@@ -152,10 +152,11 @@ class ExAccountSyncServiceTest {
     }
 
     @Test
-    @DisplayName("현재 계좌 upsert는 조회 후 insert 사이 unique 충돌이 나면 그대로 실패한다")
-    void linkAccountCreateCurrentlyFailsOnUniqueConflict() {
+    @DisplayName("계좌 insert unique 충돌이 나면 다시 조회해 기존 계좌 스냅샷을 갱신한다")
+    void linkAccountCreateRecoversFromUniqueConflictByUpdatingExistingAccount() {
         ExAccountLinkReq request = new ExAccountLinkReq("token", List.of(0));
         CodefExAccountSnapshot snapshot = snapshot();
+        ExAccount existingAccount = createExAccount(10L, user, snapshot);
 
         claimToken(1L, "token");
         when(candidateStore.get(1L, "token")).thenReturn(List.of(snapshot));
@@ -165,14 +166,15 @@ class ExAccountSyncServiceTest {
                 1L,
                 "0004",
                 ACCOUNT_NUMBER_HASH
-        )).thenReturn(Optional.empty());
-        when(exAccountRepository.save(any(ExAccount.class)))
+        )).thenReturn(Optional.empty(), Optional.of(existingAccount));
+        when(exAccountRepository.saveAndFlush(any(ExAccount.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate external account"));
 
-        assertThatThrownBy(() -> exAccountSyncService.linkAccounts(1L, request))
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("duplicate external account");
+        List<ExAccountRes> responses = exAccountSyncService.linkAccounts(1L, request);
 
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).id()).isEqualTo(10L);
+        assertThat(existingAccount.getAccountName()).isEqualTo("입출금통장");
         verify(candidateStore).remove(1L, "token");
         verify(candidateStore).releaseClaim(1L, "token", "claim-id");
     }

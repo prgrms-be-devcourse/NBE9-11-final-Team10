@@ -14,6 +14,7 @@ import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import com.team10.backend.global.security.HmacSha256Hasher;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -139,10 +140,27 @@ public class ExAccountSyncService {
                     snapshot.maturityAt(),
                     snapshot.lastTransactionAt()
             );
-            return exAccountRepository.save(newAccount);
+            try {
+                return exAccountRepository.saveAndFlush(newAccount);
+            } catch (DataIntegrityViolationException exception) {
+                ExAccount concurrentAccount = exAccountRepository
+                        .findByUserIdAndOrganizationAndAccountNumberHash(
+                                userId,
+                                snapshot.organization(),
+                                accountNumber.hash()
+                        )
+                        .orElseThrow(() -> exception);
+                updateAccountSnapshot(concurrentAccount, snapshot);
+                return concurrentAccount;
+            }
         }
 
         // [기존 계좌인 경우]: 잔액, 계좌별명, 만기일, 마지막 거래일자 등 최신 정보로 동기화 (Update)
+        updateAccountSnapshot(exAccount, snapshot);
+        return exAccount;
+    }
+
+    private void updateAccountSnapshot(ExAccount exAccount, CodefExAccountSnapshot snapshot) {
         exAccount.updateSnapshot(
                 snapshot.accountName(),
                 snapshot.accountAlias(),
@@ -151,7 +169,6 @@ public class ExAccountSyncService {
                 snapshot.maturityAt(),
                 snapshot.lastTransactionAt()
         );
-        return exAccount;
     }
 
     /**
