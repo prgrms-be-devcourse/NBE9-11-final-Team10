@@ -256,3 +256,120 @@ resource "aws_iam_instance_profile" "ec2_ssm_profile" {
     Team = var.team                 # 팀 공통 태그입니다.
   }
 }
+
+# 최신 Amazon Linux 2023 AMI를 조회합니다.
+# EC2를 생성할 때는 운영체제 이미지인 AMI ID가 필요합니다.
+# AMI ID는 리전과 시점에 따라 달라질 수 있으므로, 하드코딩하지 않고 조건에 맞는 최신 AMI를 자동 조회합니다.
+data "aws_ami" "latest_amazon_linux" {
+  # 조건에 맞는 AMI가 여러 개 있을 때 가장 최신 이미지를 선택합니다.
+  most_recent = true
+
+  # Amazon에서 공식 제공하는 AMI만 조회합니다.
+  owners = ["amazon"]
+
+  # Amazon Linux 2023 AMI 이름 패턴을 기준으로 필터링합니다.
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-x86_64"]
+  }
+
+  # x86_64 아키텍처 이미지만 조회합니다.
+  # t3 계열 인스턴스는 x86_64 AMI를 사용할 수 있습니다.
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+
+  # HVM 가상화 타입 이미지만 조회합니다.
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  # EBS 기반 루트 디바이스를 사용하는 AMI만 조회합니다.
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+}
+
+# Edge EC2 인스턴스를 생성합니다.
+# 이 서버는 외부 요청을 가장 먼저 받는 진입점 역할을 합니다.
+# Nginx Proxy Manager, HTTPS 인증서 처리, Prometheus/Grafana 등을 배치할 예정입니다.
+resource "aws_instance" "edge" {
+  # 위에서 조회한 최신 Amazon Linux 2023 AMI ID를 사용합니다.
+  ami = data.aws_ami.latest_amazon_linux.id
+
+  # Edge 서버 인스턴스 타입입니다.
+  # Nginx Proxy Manager와 모니터링 도구를 고려하여 t3.small을 사용합니다.
+  instance_type = "t3.small"
+
+  # Edge 서버는 외부 요청을 받아야 하므로 Public Subnet에 배치합니다.
+  subnet_id = aws_subnet.public.id
+
+  # Edge 서버용 Security Group을 연결합니다.
+  # 80/443은 전체 허용, 81은 관리자 IP만 허용합니다.
+  vpc_security_group_ids = [aws_security_group.edge.id]
+
+  # Public Subnet에 배치된 EC2에 Public IP를 자동 할당합니다.
+  # 추후 Elastic IP를 연결하면 고정 IP로 교체됩니다.
+  associate_public_ip_address = true
+
+  # SSM Session Manager 접속을 위해 EC2에 Instance Profile을 연결합니다.
+  # SSH 포트를 열지 않고도 AWS 콘솔에서 EC2에 접속할 수 있게 됩니다.
+  iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
+
+  # 루트 EBS 볼륨 설정입니다.
+  # Docker 이미지, Nginx Proxy Manager 데이터, 모니터링 데이터 등을 고려하여 30GiB로 설정합니다.
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 30
+  }
+
+  # AWS 리소스에 붙이는 태그입니다.
+  tags = {
+    Name = "team10-edge-ec2" # AWS 콘솔에서 보이는 Edge EC2 이름입니다.
+    Team = var.team          # 팀 공통 태그입니다.
+  }
+}
+
+# App-Data EC2 인스턴스를 생성합니다.
+# 이 서버는 Spring App 2개, MySQL, Redis를 함께 실행하는 역할입니다.
+# 비용과 운영 난이도를 고려하여 App 계층과 Data 계층을 하나의 t3.medium 인스턴스에 통합합니다.
+resource "aws_instance" "app_data" {
+  # 위에서 조회한 최신 Amazon Linux 2023 AMI ID를 사용합니다.
+  ami = data.aws_ami.latest_amazon_linux.id
+
+  # App-Data 서버 인스턴스 타입입니다.
+  # Spring JVM 2개와 MySQL, Redis를 함께 실행해야 하므로 t3.medium을 사용합니다.
+  instance_type = "t3.medium"
+
+  # NAT Gateway를 사용하지 않는 교육용 환경이므로 App-Data 서버도 Public Subnet에 배치합니다.
+  # 단, Security Group을 통해 외부 직접 접근은 차단합니다.
+  subnet_id = aws_subnet.public.id
+
+  # App-Data 서버용 Security Group을 연결합니다.
+  # Spring 포트 8081/8082는 Edge Security Group에서만 접근할 수 있습니다.
+  vpc_security_group_ids = [aws_security_group.app_data.id]
+
+  # Public Subnet에 배치된 EC2에 Public IP를 자동 할당합니다.
+  # Docker 이미지 Pull, 패키지 설치, 외부 API 호출 등을 위해 필요합니다.
+  associate_public_ip_address = true
+
+  # SSM Session Manager 접속을 위해 EC2에 Instance Profile을 연결합니다.
+  # SSH 포트를 열지 않고도 AWS 콘솔에서 EC2에 접속할 수 있게 됩니다.
+  iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
+
+  # 루트 EBS 볼륨 설정입니다.
+  # Spring 이미지, MySQL 데이터, Redis 데이터, 로그 저장을 고려하여 40GiB로 설정합니다.
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 40
+  }
+
+  # AWS 리소스에 붙이는 태그입니다.
+  tags = {
+    Name = "team10-app-data-ec2" # AWS 콘솔에서 보이는 App-Data EC2 이름입니다.
+    Team = var.team              # 팀 공통 태그입니다.
+  }
+}
