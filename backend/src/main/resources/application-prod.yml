@@ -2,6 +2,10 @@ spring:
   # 운영 DB 설정 - ec2 instance
   # datasource:
 
+  data:
+    redis:
+      password: ${REDIS_PASSWORD} # 운영 서버 환경변수로 주입, 기본값 없음(누락 시 기동 실패)
+
   jpa:
     show-sql: false
 
