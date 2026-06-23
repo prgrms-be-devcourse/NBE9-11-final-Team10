@@ -1,8 +1,10 @@
 package com.team10.backend.domain.investment.portfolio.entity;
 
 import com.team10.backend.domain.investment.account.entity.InvestmentAccount;
+import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
 import com.team10.backend.domain.investment.stock.entity.Stock;
 import com.team10.backend.global.entity.BaseEntity;
+import com.team10.backend.global.exception.BusinessException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -11,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -55,5 +58,45 @@ public class InvestmentHolding extends BaseEntity {
         return holding;
     }
 
-    // TODO : 주식 거래 시 보유 주식 수량 및 평균가 재계산
+    public void increase(Long quantity, Long executionPrice) {
+        validateQuantity(quantity);
+        validatePrice(executionPrice);
+
+        BigDecimal currentAmount = averagePrice.multiply(BigDecimal.valueOf(this.quantity));
+        BigDecimal addedAmount = BigDecimal.valueOf(executionPrice).multiply(BigDecimal.valueOf(quantity));
+        long newQuantity;
+        try {
+            newQuantity = Math.addExact(this.quantity, quantity);
+        } catch (ArithmeticException e) {
+            throw new BusinessException(InvestmentErrorCode.INVALID_ORDER_QUANTITY);
+        }
+
+        this.quantity = newQuantity;
+        this.averagePrice = currentAmount.add(addedAmount)
+                .divide(BigDecimal.valueOf(newQuantity), 2, RoundingMode.HALF_UP);
+    }
+
+    public void decrease(Long quantity) {
+        validateQuantity(quantity);
+        if (this.quantity < quantity) {
+            throw new BusinessException(InvestmentErrorCode.INSUFFICIENT_HOLDING_QUANTITY);
+        }
+        this.quantity -= quantity;
+    }
+
+    public boolean isEmpty() {
+        return quantity == 0L;
+    }
+
+    private void validateQuantity(Long quantity) {
+        if (quantity == null || quantity <= 0) {
+            throw new BusinessException(InvestmentErrorCode.INVALID_ORDER_QUANTITY);
+        }
+    }
+
+    private void validatePrice(Long executionPrice) {
+        if (executionPrice == null || executionPrice <= 0) {
+            throw new BusinessException(InvestmentErrorCode.INVALID_ORDER_AMOUNT);
+        }
+    }
 }

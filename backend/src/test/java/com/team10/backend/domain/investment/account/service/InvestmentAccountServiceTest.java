@@ -3,7 +3,6 @@ package com.team10.backend.domain.investment.account.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,8 +20,6 @@ import com.team10.backend.domain.investment.account.entity.InvestmentAccount;
 import com.team10.backend.domain.investment.account.repository.InvestmentAccountRepository;
 import com.team10.backend.domain.investment.account.type.InvestmentAccountStatus;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
-import com.team10.backend.domain.investment.order.repository.InvestmentOrderRepository;
-import com.team10.backend.domain.investment.order.type.InvestmentOrderStatus;
 import com.team10.backend.domain.investment.portfolio.repository.InvestmentHoldingRepository;
 import com.team10.backend.domain.investment.type.CurrencyCode;
 import com.team10.backend.domain.user.entity.User;
@@ -60,9 +57,6 @@ class InvestmentAccountServiceTest {
 
     @Mock
     private InvestmentHoldingRepository investmentHoldingRepository;
-
-    @Mock
-    private InvestmentOrderRepository investmentOrderRepository;
 
     @InjectMocks
     private InvestmentAccountService investmentAccountService;
@@ -371,7 +365,7 @@ class InvestmentAccountServiceTest {
     }
 
     @Test
-    @DisplayName("예수금, 보유 종목, 미체결 주문이 없고 비밀번호가 일치하면 투자 계좌를 해지한다")
+    @DisplayName("예수금과 보유 종목이 없고 비밀번호가 일치하면 투자 계좌를 해지한다")
     void closeAccount() {
         InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
         InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("123456");
@@ -379,19 +373,11 @@ class InvestmentAccountServiceTest {
         when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
         when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
         when(investmentHoldingRepository.existsByInvestmentAccountId(1L)).thenReturn(false);
-        when(investmentOrderRepository.existsByInvestmentAccountIdAndStatusIn(
-                eq(1L),
-                eq(openOrderStatuses())
-        )).thenReturn(false);
 
         InvestmentAccountCloseRes response = investmentAccountService.closeAccount(1L, 1L, request);
 
         assertThat(response.status()).isEqualTo(InvestmentAccountStatus.CLOSED);
         assertThat(account.getStatus()).isEqualTo(InvestmentAccountStatus.CLOSED);
-        verify(investmentOrderRepository).existsByInvestmentAccountIdAndStatusIn(
-                eq(1L),
-                eq(openOrderStatuses())
-        );
     }
 
     @Test
@@ -447,27 +433,6 @@ class InvestmentAccountServiceTest {
                 .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_HOLDING_EXISTS);
 
         assertThat(account.getStatus()).isEqualTo(InvestmentAccountStatus.ACTIVE);
-        verify(investmentOrderRepository, never()).existsByInvestmentAccountIdAndStatusIn(any(Long.class), any());
-    }
-
-    @Test
-    @DisplayName("미체결 주문이 있으면 투자 계좌를 해지할 수 없다")
-    void closeAccountWithOpenOrder() {
-        InvestmentAccount account = createInvestmentAccount(1L, verifiedUser, "모의투자 계좌");
-        InvestmentAccountCloseReq request = new InvestmentAccountCloseReq("123456");
-
-        when(investmentAccountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
-        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
-        when(investmentHoldingRepository.existsByInvestmentAccountId(1L)).thenReturn(false);
-        when(investmentOrderRepository.existsByInvestmentAccountIdAndStatusIn(eq(1L), eq(openOrderStatuses())))
-                .thenReturn(true);
-
-        assertThatThrownBy(() -> investmentAccountService.closeAccount(1L, 1L, request))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(InvestmentErrorCode.INVESTMENT_ACCOUNT_OPEN_ORDER_EXISTS);
-
-        assertThat(account.getStatus()).isEqualTo(InvestmentAccountStatus.ACTIVE);
     }
 
     @Test
@@ -512,7 +477,4 @@ class InvestmentAccountServiceTest {
         return account;
     }
 
-    private List<InvestmentOrderStatus> openOrderStatuses() {
-        return List.of(InvestmentOrderStatus.PENDING, InvestmentOrderStatus.PARTIALLY_FILLED);
-    }
 }
