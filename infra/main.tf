@@ -17,28 +17,6 @@ terraform {
 
 }
 
-# Edge EC2에 연결할 Elastic IP를 생성합니다.
-resource "aws_eip" "edge" {
-  # VPC 내부 EC2에 연결할 Elastic IP임을 의미합니다.
-  domain = "vpc"
-
-  # AWS 리소스에 붙이는 태그입니다.
-  tags = {
-    Name = "team10-edge-eip" # AWS 콘솔에서 보이는 Elastic IP 이름입니다.
-    Team = var.team          # 팀 공통 태그입니다.
-  }
-}
-
-# 생성한 Elastic IP를 Edge EC2 인스턴스에 연결합니다.
-# 이후 도메인을 구매하면 api.example.com 같은 백엔드 도메인의 A Record를 이 Elastic IP로 연결합니다.
-resource "aws_eip_association" "edge" {
-  # Elastic IP를 연결할 Edge EC2 인스턴스 ID입니다.
-  instance_id = aws_instance.edge.id
-
-  # 위에서 생성한 Elastic IP의 Allocation ID입니다.
-  allocation_id = aws_eip.edge.id
-}
-
 # AWS Provider 설정입니다.
 # Terraform이 AWS API를 호출할 때 사용할 리전 정보를 지정합니다.
 provider "aws" {
@@ -342,6 +320,13 @@ resource "aws_instance" "edge" {
   # SSH 포트를 열지 않고도 AWS 콘솔에서 EC2에 접속할 수 있게 됩니다.
   iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
 
+  # EC2 최초 생성 시 Docker 및 NPM을 자동 설치합니다.
+  user_data = file("${path.module}/user-data/edge.sh")
+
+  # user_data가 변경되면 기존 EC2를 교체 생성합니다.
+  # user_data는 최초 부팅 시 실행되므로, 변경 내용을 확실히 반영하기 위해 재생성되도록 설정합니다.
+  user_data_replace_on_change = true
+
   # 루트 EBS 볼륨 설정입니다.
   # Docker 이미지, Nginx Proxy Manager 데이터, 모니터링 데이터 등을 고려하여 30GiB로 설정합니다.
   root_block_device {
@@ -383,6 +368,13 @@ resource "aws_instance" "app_data" {
   # SSH 포트를 열지 않고도 AWS 콘솔에서 EC2에 접속할 수 있게 됩니다.
   iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
 
+  # EC2 최초 생성 시 Docker 및 기본 시스템 설정을 자동 적용합니다.
+  user_data = file("${path.module}/user-data/app-data.sh")
+
+  # user_data가 변경되면 기존 EC2를 교체 생성합니다.
+  # user_data는 최초 부팅 시 실행되므로, 변경 내용을 확실히 반영하기 위해 재생성되도록 설정합니다.
+  user_data_replace_on_change = true
+
   # 루트 EBS 볼륨 설정입니다.
   # Spring 이미지, MySQL 데이터, Redis 데이터, 로그 저장을 고려하여 40GiB로 설정합니다.
   root_block_device {
@@ -395,4 +387,26 @@ resource "aws_instance" "app_data" {
     Name = "team10-app-data-ec2" # AWS 콘솔에서 보이는 App-Data EC2 이름입니다.
     Team = var.team              # 팀 공통 태그입니다.
   }
+}
+
+# Edge EC2에 연결할 Elastic IP를 생성합니다.
+resource "aws_eip" "edge" {
+  # VPC 내부 EC2에 연결할 Elastic IP임을 의미합니다.
+  domain = "vpc"
+
+  # AWS 리소스에 붙이는 태그입니다.
+  tags = {
+    Name = "team10-edge-eip" # AWS 콘솔에서 보이는 Elastic IP 이름입니다.
+    Team = var.team          # 팀 공통 태그입니다.
+  }
+}
+
+# 생성한 Elastic IP를 Edge EC2 인스턴스에 연결합니다.
+# 이후 도메인을 구매하면 api.example.com 같은 백엔드 도메인의 A Record를 이 Elastic IP로 연결합니다.
+resource "aws_eip_association" "edge" {
+  # Elastic IP를 연결할 Edge EC2 인스턴스 ID입니다.
+  instance_id = aws_instance.edge.id
+
+  # 위에서 생성한 Elastic IP의 Allocation ID입니다.
+  allocation_id = aws_eip.edge.id
 }
