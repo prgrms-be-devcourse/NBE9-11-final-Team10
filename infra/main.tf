@@ -321,7 +321,11 @@ resource "aws_instance" "edge" {
   iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
 
   # EC2 최초 생성 시 Docker 및 NPM을 자동 설치합니다.
-  user_data = file("${path.module}/user-data/edge.sh")
+  user_data = templatefile("${path.module}/user-data/edge.sh.tftpl",
+    {
+      compose_yml = file("${path.module}/compose/edge.docker-compose.yml")
+    }
+  )
 
   # user_data가 변경되면 기존 EC2를 교체 생성합니다.
   # user_data는 최초 부팅 시 실행되므로, 변경 내용을 확실히 반영하기 위해 재생성되도록 설정합니다.
@@ -369,7 +373,13 @@ resource "aws_instance" "app_data" {
   iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
 
   # EC2 최초 생성 시 Docker 및 기본 시스템 설정을 자동 적용합니다.
-  user_data = file("${path.module}/user-data/app-data.sh")
+  user_data = templatefile("${path.module}/user-data/app-data.sh.tftpl",
+    {
+      compose_yml         = file("${path.module}/compose/app-data.docker-compose.yml")
+      mysql_root_password = var.mysql_root_password
+      redis_password      = var.redis_password
+    }
+  )
 
   # user_data가 변경되면 기존 EC2를 교체 생성합니다.
   # user_data는 최초 부팅 시 실행되므로, 변경 내용을 확실히 반영하기 위해 재생성되도록 설정합니다.
