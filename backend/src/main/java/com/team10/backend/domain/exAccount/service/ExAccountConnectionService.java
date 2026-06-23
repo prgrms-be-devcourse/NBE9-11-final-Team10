@@ -17,6 +17,7 @@ import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,8 +62,24 @@ public class ExAccountConnectionService {
                         request.organization(),
                         encryptedConnectedId
                 ));
-        ExAccountConnection saved = connectionRepository.save(connection);
+        ExAccountConnection saved = saveConnection(userId, request.organization(), connection, encryptedConnectedId);
         return new ExAccountConnectionRes(saved.getOrganization(), saved.getStatus());
+    }
+
+    private ExAccountConnection saveConnection(
+            Long userId,
+            String organization,
+            ExAccountConnection connection,
+            EncryptedConnectedId encryptedConnectedId
+    ) {
+        try {
+            return connectionRepository.saveAndFlush(connection);
+        } catch (DataIntegrityViolationException exception) {
+            ExAccountConnection concurrentConnection = connectionRepository
+                    .findByUserIdAndOrganization(userId, organization)
+                    .orElseThrow(() -> exception);
+            return updateConnection(concurrentConnection, encryptedConnectedId);
+        }
     }
 
     /**

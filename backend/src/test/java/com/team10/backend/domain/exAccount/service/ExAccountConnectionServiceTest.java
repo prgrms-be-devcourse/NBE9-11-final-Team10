@@ -90,7 +90,7 @@ class ExAccountConnectionServiceTest {
                 .thenReturn(Optional.empty());
 
         ExAccountConnection mockSaved = connection("ciphertext");
-        when(connectionRepository.save(any())).thenReturn(mockSaved);
+        when(connectionRepository.saveAndFlush(any())).thenReturn(mockSaved);
 
         ExAccountConnectionRes response = service.register(1L, createRequest);
 
@@ -99,7 +99,7 @@ class ExAccountConnectionServiceTest {
 
         ArgumentCaptor<ExAccountConnection> captor =
                 ArgumentCaptor.forClass(ExAccountConnection.class);
-        verify(connectionRepository).save(captor.capture());
+        verify(connectionRepository).saveAndFlush(captor.capture());
         ExAccountConnection captured = captor.getValue();
         assertThat(captured.getUser()).isEqualTo(user);
         assertThat(captured.getOrganization()).isEqualTo("0004");
@@ -107,20 +107,23 @@ class ExAccountConnectionServiceTest {
     }
 
     @Test
-    void registerCurrentlyFailsWhenConnectionInsertHitsUniqueConflict() {
+    void registerRecoversFromConnectionInsertUniqueConflictByUpdatingExistingConnection() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         EncryptedConnectedId encryptedConnectedId = new EncryptedConnectedId(
                 "ciphertext", "iv", "v1"
         );
+        ExAccountConnection existingConnection = connection("old-ciphertext");
         when(codefExAccountGateway.register(createRequest)).thenReturn(encryptedConnectedId);
         when(connectionRepository.findByUserIdAndOrganization(1L, "0004"))
-                .thenReturn(Optional.empty());
-        when(connectionRepository.save(any()))
+                .thenReturn(Optional.empty(), Optional.of(existingConnection));
+        when(connectionRepository.saveAndFlush(any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate external account connection"));
 
-        assertThatThrownBy(() -> service.register(1L, createRequest))
-                .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("duplicate external account connection");
+        ExAccountConnectionRes response = service.register(1L, createRequest);
+
+        assertThat(response.organization()).isEqualTo("0004");
+        assertThat(response.status()).isEqualTo(ExAccountConnectionStatus.ACTIVE);
+        assertThat(existingConnection.encryptedConnectedId()).isEqualTo(encryptedConnectedId);
     }
 
     @Test
