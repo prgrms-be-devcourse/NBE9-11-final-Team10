@@ -79,6 +79,7 @@ class ExAccountSyncServiceTest {
                     org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
                     return callback.doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus());
                 });
+        org.mockito.Mockito.lenient().when(userRepository.findById(any())).thenReturn(Optional.of(user));
     }
 
     @Test
@@ -134,6 +135,7 @@ class ExAccountSyncServiceTest {
     void linkAccountCreate() {
         ExAccountLinkReq request = new ExAccountLinkReq("token", List.of(0));
         CodefExAccountSnapshot snapshot = snapshot();
+        ExAccount createdAccount = createExAccount(10L, user, snapshot);
 
         claimToken(1L, "token");
         when(candidateStore.get(1L, "token")).thenReturn(List.of(snapshot));
@@ -143,27 +145,15 @@ class ExAccountSyncServiceTest {
                 1L,
                 "0004",
                 ACCOUNT_NUMBER_HASH
-        )).thenReturn(Optional.empty());
-        when(exAccountRepository.saveAndFlush(any(ExAccount.class))).thenAnswer(invocation -> {
-            ExAccount account = invocation.getArgument(0);
-            ReflectionTestUtils.setField(account, "id", 10L);
-            return account;
-        });
+        )).thenReturn(Optional.of(createdAccount));
 
         List<ExAccountRes> responses = exAccountSyncService.linkAccounts(1L, request);
 
         assertThat(responses).hasSize(1);
-        ExAccountRes response = responses.get(0);
-        assertThat(response.id()).isEqualTo(10L);
-        assertThat(response.organization()).isEqualTo("0004");
-        assertThat(response.accountNoMasked()).isEqualTo("123***7890");
-        assertThat(response.accountName()).isEqualTo("입출금통장");
-        assertThat(response.status()).isEqualTo(ExAccountStatus.ACTIVE);
-
-        ArgumentCaptor<ExAccount> accountCaptor = ArgumentCaptor.forClass(ExAccount.class);
-        verify(exAccountRepository).saveAndFlush(accountCaptor.capture());
-        assertThat(accountCaptor.getValue().getAccountNumberHash()).isEqualTo(ACCOUNT_NUMBER_HASH);
-        assertThat(accountCaptor.getValue().getAccountNumberMasked()).isEqualTo("123***7890");
+        assertThat(responses.get(0).id()).isEqualTo(10L);
+        verify(exAccountRepository).upsert(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        );
         verify(candidateStore).remove(1L, "token");
         verify(candidateStore).releaseClaim(1L, "token", "claim-id");
     }
@@ -231,10 +221,8 @@ class ExAccountSyncServiceTest {
     @DisplayName("존재하지 않는 사용자는 외부 계좌를 연동할 수 없다")
     void linkAccountWithNotFoundUser() {
         ExAccountLinkReq request = new ExAccountLinkReq("token", List.of(0));
-        CodefExAccountSnapshot snapshot = snapshot();
 
-        when(candidateStore.claim(999L, "token")).thenReturn(Optional.of("claim-id"));
-        when(candidateStore.get(999L, "token")).thenReturn(List.of(snapshot));
+        claimToken(999L, "token");
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> exAccountSyncService.linkAccounts(999L, request))

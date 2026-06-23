@@ -132,16 +132,25 @@ public class ExAccountTransactionService {
      * @return 신규 등록(Insert)된 경우 true, 기존 내용 업데이트(Update)인 경우 false 반환
      */
     private boolean upsertTransaction(ExAccount account, ExAccountTransactionSyncReq request) {
-        ExAccountTransaction transaction = transactionRepository
+        boolean isNew = transactionRepository
                 .findByExAccountIdAndTransactionKey(account.getId(), request.transactionKey())
-                .orElse(null);
+                .isEmpty();
 
-        if (transaction == null) {
-            transactionRepository.saveAndFlush(request.toEntity(account));
-            return true;
-        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC);
+        transactionRepository.upsert(
+                account.getId(),
+                request.transactionKey(),
+                request.transactedAt(),
+                request.direction().name(),
+                request.amount() == null ? java.math.BigDecimal.ZERO : request.amount(),
+                request.balanceAfter(),
+                request.counterpartyName(),
+                request.memo(),
+                request.rawCategory(),
+                now,
+                now
+        );
 
-        request.applyTo(transaction);
-        return false;
+        return isNew;
     }
 }

@@ -79,6 +79,9 @@ public class ExAccountSyncService {
     }
 
     private List<ExAccountRes> linkClaimedAccounts(Long userId, ExAccountLinkReq request) {
+        userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+
         // 2. Redis 캐시 저장소에서 유저 고유의 원본 CODEF 스냅샷 리스트를 조회
         List<CodefExAccountSnapshot> snapshots = candidateStore.get(userId, request.candidateToken());
         if (snapshots.isEmpty()) {
@@ -121,44 +124,33 @@ public class ExAccountSyncService {
      * 단일 계좌 정보를 데이터베이스에 반영(Insert 또는 Update)합니다.
      */
     private ExAccount upsertAccount(Long userId, CodefExAccountSnapshot snapshot) {
-        // 계정 검증
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
-
         // 계좌번호 보안 처리 (HMAC 해싱 해시값 & 화면 표시용 마스킹 값 생성)
         ProtectedAccountNumber accountNumber = protectAccountNumber(snapshot.accountNumber());
 
-        // Blind Index(accountNumberHash)를 조건으로 기존에 연동된 적이 있는 계좌인지 RDB에서 조회
-        ExAccount exAccount = exAccountRepository
-                .findByUserIdAndOrganizationAndAccountNumberHash(
-                        userId,
-                        snapshot.organization(),
-                        accountNumber.hash()
-                )
-                .orElse(null);
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC);
+        exAccountRepository.upsert(
+                userId,
+                snapshot.organization(),
+                accountNumber.hash(),
+                accountNumber.masked(),
+                snapshot.accountName(),
+                snapshot.accountAlias(),
+                snapshot.assetType().name(),
+                snapshot.balance() == null ? java.math.BigDecimal.ZERO : snapshot.balance(),
+                snapshot.withdrawableAmount(),
+                snapshot.openedAt(),
+                snapshot.maturityAt(),
+                snapshot.lastTransactionAt(),
+                "ACTIVE",
+                now,
+                now
+        );
 
-        // [신규 계좌인 경우]: DB에 새롭게 등록 (Insert)
-        if (exAccount == null) {
-            ExAccount newAccount = ExAccount.create(
-                    user,
-                    snapshot.organization(),
-                    accountNumber.hash(),
-                    accountNumber.masked(),
-                    snapshot.accountName(),
-                    snapshot.accountAlias(),
-                    snapshot.assetType(),
-                    snapshot.balance(),
-                    snapshot.withdrawableAmount(),
-                    snapshot.openedAt(),
-                    snapshot.maturityAt(),
-                    snapshot.lastTransactionAt()
-            );
-            return exAccountRepository.saveAndFlush(newAccount);
-        }
-
-        // [기존 계좌인 경우]: 잔액, 계좌별명, 만기일, 마지막 거래일자 등 최신 정보로 동기화 (Update)
-        updateAccountSnapshot(exAccount, snapshot);
-        return exAccount;
+        return exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
+                userId,
+                snapshot.organization(),
+                accountNumber.hash()
+        ).orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
     }
 
     private void updateAccountSnapshot(ExAccount exAccount, CodefExAccountSnapshot snapshot) {

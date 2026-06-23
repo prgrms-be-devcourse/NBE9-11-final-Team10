@@ -101,7 +101,11 @@ class ExAccountTransactionServiceTest {
         assertThat(response.updatedCount()).isZero();
         assertThat(account.getLastTransactionAt()).isEqualTo(LocalDate.of(2026, 6, 18));
 
-        verify(transactionRepository).saveAndFlush(any(ExAccountTransaction.class));
+        verify(transactionRepository).upsert(
+                org.mockito.Mockito.eq(10L),
+                org.mockito.Mockito.eq("KB-20260618143000-0001"),
+                any(), any(), any(), any(), org.mockito.Mockito.eq("스타벅스"), any(), any(), any(), any()
+        );
     }
 
     @Test
@@ -144,9 +148,12 @@ class ExAccountTransactionServiceTest {
         assertThat(response.requestedCount()).isEqualTo(1);
         assertThat(response.createdCount()).isZero();
         assertThat(response.updatedCount()).isEqualTo(1);
-        assertThat(transaction.getCounterpartyName()).isEqualTo("편의점");
 
-        verify(transactionRepository, never()).save(any());
+        verify(transactionRepository).upsert(
+                org.mockito.Mockito.eq(10L),
+                org.mockito.Mockito.eq("KB-20260618143000-0001"),
+                any(), any(), any(), any(), org.mockito.Mockito.eq("편의점"), any(), any(), any(), any()
+        );
     }
 
     @Test
