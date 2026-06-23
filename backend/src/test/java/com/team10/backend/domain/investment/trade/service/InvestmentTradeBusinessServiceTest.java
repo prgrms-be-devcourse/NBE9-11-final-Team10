@@ -16,8 +16,8 @@ import com.team10.backend.domain.investment.marketholiday.util.MarketStatusValid
 import com.team10.backend.domain.investment.portfolio.entity.InvestmentHolding;
 import com.team10.backend.domain.investment.portfolio.repository.InvestmentHoldingRepository;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookPriceSnapshot;
-import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscription;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSnapshotStore;
+import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscription;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;
 import com.team10.backend.domain.investment.stock.entity.Stock;
 import com.team10.backend.domain.investment.stock.repository.StockRepository;
@@ -32,6 +32,7 @@ import com.team10.backend.domain.investment.type.CurrencyCode;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.exception.BusinessException;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -111,7 +112,7 @@ class InvestmentTradeBusinessServiceTest {
     @DisplayName("매수 주문은 최우선 매도호가로 전량 체결하고 예수금과 보유 수량을 갱신한다")
     void buySuccess() {
         MarketOrderCreateReq request = request(InvestmentTradeType.BUY, 2L, 70_000L);
-        givenCommon(request, Optional.empty(), snapshot(70_000L, 69_900L, LocalDateTime.now()));
+        givenCommon(request, Optional.empty(), snapshot(70_000L, 69_900L, Instant.now()));
         when(investmentTradeRepository.saveAndFlush(any(InvestmentTrade.class))).thenAnswer(invocation -> {
             InvestmentTrade trade = invocation.getArgument(0);
             ReflectionTestUtils.setField(trade, "id", 100L);
@@ -137,7 +138,7 @@ class InvestmentTradeBusinessServiceTest {
     void sellSuccess() {
         InvestmentHolding holding = holding(5L, "70000.00");
         MarketOrderCreateReq request = request(InvestmentTradeType.SELL, 2L, 70_000L);
-        givenCommon(request, Optional.of(holding), snapshot(70_100L, 70_000L, LocalDateTime.now()));
+        givenCommon(request, Optional.of(holding), snapshot(70_100L, 70_000L, Instant.now()));
         when(investmentTradeRepository.saveAndFlush(any(InvestmentTrade.class))).thenAnswer(invocation -> {
             InvestmentTrade trade = invocation.getArgument(0);
             ReflectionTestUtils.setField(trade, "id", 101L);
@@ -167,7 +168,7 @@ class InvestmentTradeBusinessServiceTest {
     @DisplayName("Redis 스냅샷이 3초보다 오래되면 주문이 실패한다")
     void snapshotStale() {
         MarketOrderCreateReq request = request(InvestmentTradeType.BUY, 1L, 70_000L);
-        givenCommon(request, Optional.empty(), snapshot(70_000L, 69_900L, LocalDateTime.now().minusSeconds(4)));
+        givenCommon(request, Optional.empty(), snapshot(70_000L, 69_900L, Instant.now().minusSeconds(4)));
 
         assertBusinessException(request, InvestmentErrorCode.ORDER_PRICE_STALE);
     }
@@ -177,7 +178,7 @@ class InvestmentTradeBusinessServiceTest {
     void insufficientCash() {
         ReflectionTestUtils.setField(account, "cashBalance", 50_000L);
         MarketOrderCreateReq request = request(InvestmentTradeType.BUY, 1L, 70_000L);
-        givenCommon(request, Optional.empty(), snapshot(70_000L, 69_900L, LocalDateTime.now()));
+        givenCommon(request, Optional.empty(), snapshot(70_000L, 69_900L, Instant.now()));
 
         assertBusinessException(request, InvestmentErrorCode.INSUFFICIENT_CASH_BALANCE);
     }
@@ -187,7 +188,7 @@ class InvestmentTradeBusinessServiceTest {
     void insufficientHoldingQuantity() {
         InvestmentHolding holding = holding(1L, "70000.00");
         MarketOrderCreateReq request = request(InvestmentTradeType.SELL, 2L, 70_000L);
-        givenCommon(request, Optional.of(holding), snapshot(70_100L, 70_000L, LocalDateTime.now()));
+        givenCommon(request, Optional.of(holding), snapshot(70_100L, 70_000L, Instant.now()));
 
         assertBusinessException(request, InvestmentErrorCode.INSUFFICIENT_HOLDING_QUANTITY);
     }
@@ -196,7 +197,7 @@ class InvestmentTradeBusinessServiceTest {
     @DisplayName("체결 가격이 기대 가격 대비 허용 편차를 초과하면 주문이 실패한다")
     void priceDeviationExceeded() {
         MarketOrderCreateReq request = request(InvestmentTradeType.BUY, 1L, 70_000L);
-        givenCommon(request, Optional.empty(), snapshot(70_800L, 70_000L, LocalDateTime.now()));
+        givenCommon(request, Optional.empty(), snapshot(70_800L, 70_000L, Instant.now()));
 
         assertBusinessException(request, InvestmentErrorCode.PRICE_DEVIATION_EXCEEDED);
     }
@@ -238,7 +239,7 @@ class InvestmentTradeBusinessServiceTest {
     void deleteEmptyHoldingAfterSell() {
         InvestmentHolding holding = holding(2L, "70000.00");
         MarketOrderCreateReq request = request(InvestmentTradeType.SELL, 2L, 70_000L);
-        givenCommon(request, Optional.of(holding), snapshot(70_100L, 70_000L, LocalDateTime.now()));
+        givenCommon(request, Optional.of(holding), snapshot(70_100L, 70_000L, Instant.now()));
         when(investmentTradeRepository.saveAndFlush(any(InvestmentTrade.class))).thenAnswer(invocation -> {
             InvestmentTrade trade = invocation.getArgument(0);
             ReflectionTestUtils.setField(trade, "id", 102L);
@@ -302,7 +303,7 @@ class InvestmentTradeBusinessServiceTest {
         return new RealtimeOrderbookSubscription("stream-1", userId, stockCode, "instance-a");
     }
 
-    private RealtimeOrderbookPriceSnapshot snapshot(Long askPrice, Long bidPrice, LocalDateTime receivedAt) {
+    private RealtimeOrderbookPriceSnapshot snapshot(Long askPrice, Long bidPrice, Instant receivedAt) {
         return new RealtimeOrderbookPriceSnapshot("005930", askPrice, bidPrice, receivedAt);
     }
 

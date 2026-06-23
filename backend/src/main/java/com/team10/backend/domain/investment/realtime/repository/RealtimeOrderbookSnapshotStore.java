@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookLevel;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookPriceSnapshot;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -34,7 +34,7 @@ public class RealtimeOrderbookSnapshotStore {
                 snapshot.stockCode(),
                 bestPrice(snapshot.asks()),
                 bestPrice(snapshot.bids()),
-                LocalDateTime.now()
+                Instant.now()
         );
 
         try {

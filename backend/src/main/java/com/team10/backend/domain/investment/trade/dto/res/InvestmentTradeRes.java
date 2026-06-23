@@ -1,5 +1,7 @@
 package com.team10.backend.domain.investment.trade.dto.res;
 
+import static com.team10.backend.domain.investment.config.KisConstants.SEOUL_ZONE;
+
 import com.team10.backend.domain.investment.trade.entity.InvestmentTrade;
 import com.team10.backend.domain.investment.trade.type.InvestmentTradeType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -62,8 +64,8 @@ public record InvestmentTradeRes(
                 trade.getTotalAmount(),
                 trade.getRequestedPrice(),
                 trade.getPriceDeviationBps(),
-                trade.getSnapshotAt(),
-                trade.getExecutedAt()
+                LocalDateTime.ofInstant(trade.getSnapshotAt(), SEOUL_ZONE),
+                LocalDateTime.ofInstant(trade.getExecutedAt(), SEOUL_ZONE)
         );
     }
 }

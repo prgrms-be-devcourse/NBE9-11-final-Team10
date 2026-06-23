@@ -1,5 +1,7 @@
 package com.team10.backend.domain.investment.trade.service;
 
+import static com.team10.backend.domain.investment.config.KisConstants.SEOUL_ZONE;
+
 import com.team10.backend.domain.investment.account.entity.InvestmentAccount;
 import com.team10.backend.domain.investment.account.repository.InvestmentAccountRepository;
 import com.team10.backend.domain.investment.exception.InvestmentErrorCode;
@@ -8,8 +10,8 @@ import com.team10.backend.domain.investment.marketholiday.util.MarketStatusValid
 import com.team10.backend.domain.investment.portfolio.entity.InvestmentHolding;
 import com.team10.backend.domain.investment.portfolio.repository.InvestmentHoldingRepository;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookPriceSnapshot;
-import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscription;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSnapshotStore;
+import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscription;
 import com.team10.backend.domain.investment.realtime.repository.RealtimeOrderbookSubscriptionStore;
 import com.team10.backend.domain.investment.stock.entity.Stock;
 import com.team10.backend.domain.investment.stock.repository.StockRepository;
@@ -20,6 +22,7 @@ import com.team10.backend.domain.investment.trade.repository.InvestmentTradeRepo
 import com.team10.backend.domain.investment.trade.type.InvestmentTradeType;
 import com.team10.backend.global.exception.BusinessException;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -80,7 +83,7 @@ public class InvestmentTradeBusinessService {
 
         Long totalAmount = multiplyExact(executionPrice, request.quantity());
         Integer priceDeviationBps = calculatePriceDeviationBps(executionPrice, request.expectedPrice());
-        LocalDateTime executedAt = LocalDateTime.now();
+        Instant executedAt = Instant.now();
 
         validateExecutable(account, holding, request.tradeType(), request.quantity(), totalAmount);
 
@@ -164,9 +167,9 @@ public class InvestmentTradeBusinessService {
             Long executionPrice,
             Long totalAmount,
             Integer priceDeviationBps,
-            LocalDateTime snapshotAt,
+            Instant snapshotAt,
             String idempotencyKey,
-            LocalDateTime executedAt
+            Instant executedAt
     ) {
         try {
             return investmentTradeRepository.saveAndFlush(InvestmentTrade.create(
@@ -209,7 +212,7 @@ public class InvestmentTradeBusinessService {
 
     private void validateFreshSnapshot(RealtimeOrderbookPriceSnapshot snapshot) {
         if (snapshot.receivedAt() == null
-                || Duration.between(snapshot.receivedAt(), LocalDateTime.now()).compareTo(SNAPSHOT_MAX_AGE) > 0) {
+                || Duration.between(snapshot.receivedAt(), Instant.now()).compareTo(SNAPSHOT_MAX_AGE) > 0) {
             throw new BusinessException(InvestmentErrorCode.ORDER_PRICE_STALE);
         }
     }
@@ -266,7 +269,7 @@ public class InvestmentTradeBusinessService {
     }
 
     private void validateMarketOpen() {
-        if (!marketStatusValidator.isContinuousTradingTime(LocalDateTime.now(), MarketType.KRX)) {
+        if (!marketStatusValidator.isContinuousTradingTime(LocalDateTime.now(SEOUL_ZONE), MarketType.KRX)) {
             throw new BusinessException(InvestmentErrorCode.MARKET_CLOSED);
         }
     }

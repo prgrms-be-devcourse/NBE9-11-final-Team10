@@ -13,7 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -58,13 +58,13 @@ public class InvestmentTrade extends BaseEntity {
     private Integer priceDeviationBps;
 
     @Column(nullable = false)
-    private LocalDateTime snapshotAt;
+    private Instant snapshotAt;
 
     @Column(nullable = false, length = 100)
     private String idempotencyKey;
 
     @Column(nullable = false)
-    private LocalDateTime executedAt;
+    private Instant executedAt;
 
     public static InvestmentTrade create(
             InvestmentAccount investmentAccount,
@@ -75,9 +75,9 @@ public class InvestmentTrade extends BaseEntity {
             Long totalAmount,
             Long requestedPrice,
             Integer priceDeviationBps,
-            LocalDateTime snapshotAt,
+            Instant snapshotAt,
             String idempotencyKey,
-            LocalDateTime executedAt
+            Instant executedAt
     ) {
         InvestmentTrade trade = new InvestmentTrade();
         trade.investmentAccount = investmentAccount;

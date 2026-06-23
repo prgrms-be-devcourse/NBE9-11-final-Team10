@@ -9,6 +9,7 @@ import com.team10.backend.domain.investment.realtime.config.RealtimeOrderbookRed
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookLevel;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookPriceSnapshot;
 import com.team10.backend.domain.investment.realtime.dto.RealtimeOrderbookSnapshot;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -23,7 +24,8 @@ class RealtimeOrderbookSnapshotStoreTest {
     private final StringRedisTemplate redisTemplate = Mockito.mock(StringRedisTemplate.class);
     private final ValueOperations<String, String> valueOperations = Mockito.mock(ValueOperations.class);
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-    private final RealtimeOrderbookSnapshotStore store = new RealtimeOrderbookSnapshotStore(redisTemplate, objectMapper);
+    private final RealtimeOrderbookSnapshotStore store = new RealtimeOrderbookSnapshotStore(redisTemplate,
+            objectMapper);
 
     @Test
     @DisplayName("최우선 매도/매수 호가와 서버 수신 시각을 Redis에 저장한다")
@@ -56,7 +58,7 @@ class RealtimeOrderbookSnapshotStoreTest {
                 "005930",
                 70_100L,
                 70_000L,
-                java.time.LocalDateTime.now()
+                Instant.now()
         );
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("investment:orderbook:snapshot:005930"))
