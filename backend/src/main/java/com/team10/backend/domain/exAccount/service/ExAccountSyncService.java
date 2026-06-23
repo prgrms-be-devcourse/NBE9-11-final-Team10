@@ -13,12 +13,17 @@ import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import com.team10.backend.global.security.HmacSha256Hasher;
+import com.team10.backend.global.lock.DistributedLockTemplate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.time.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +38,8 @@ public class ExAccountSyncService {
     private final UserRepository userRepository;
     private final HmacSha256Hasher hmacSha256Hasher;
     private final CodefExAccountCandidateStore candidateStore;
+    private final DistributedLockTemplate lockTemplate;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 사용자가 선택한 외부 계좌들을 안전하게 RDB에 연동(저장)합니다.
@@ -41,14 +48,39 @@ public class ExAccountSyncService {
      * 1. 클라이언트가 보낸 일회용 'candidateToken'으로 Redis에서 원본 CODEF 조회 스냅샷 목록을 꺼냅니다.
      * 2. 사용자가 선택한 인덱스 목록('selectedIndexes')이 유효한 범위(0 ~ 원본 개수-1) 내에 있는지 무결성 검증을 수행합니다.
      * 3. 검증된 원본 데이터를 바탕으로 DB에 Upsert(신규 저장 또는 기존 정보 갱신)를 수행합니다.
-     * 4. 연동 처리가 무사히 완료되면, 보안을 위해 Redis에서 세션 토큰을 즉시 파기합니다.
+     * 4. claim에 성공한 토큰은 성공/실패와 관계없이 Redis에서 즉시 파기합니다.
      */
-    @Transactional
     public List<ExAccountRes> linkAccounts(Long userId, ExAccountLinkReq request) {
         // 1. 요청 파라미터(토큰 유무 등) 기본 유효성 검사
         if (request == null || request.candidateToken() == null || request.candidateToken().isBlank()) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
         }
+
+        String lockKey = "lock:ex-account:sync:" + userId;
+        return lockTemplate.executeWithLock(
+                lockKey,
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(10),
+                ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC,
+                () -> {
+                    Optional<String> claimId = candidateStore.claim(userId, request.candidateToken());
+                    if (claimId.isEmpty()) {
+                        throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_CANDIDATE_ALREADY_CLAIMED);
+                    }
+
+                    try {
+                        return transactionTemplate.execute(status -> linkClaimedAccounts(userId, request));
+                    } finally {
+                        candidateStore.remove(userId, request.candidateToken());
+                        candidateStore.releaseClaim(userId, request.candidateToken(), claimId.get());
+                    }
+                }
+        );
+    }
+
+    private List<ExAccountRes> linkClaimedAccounts(Long userId, ExAccountLinkReq request) {
+        userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
         // 2. Redis 캐시 저장소에서 유저 고유의 원본 CODEF 스냅샷 리스트를 조회
         List<CodefExAccountSnapshot> snapshots = candidateStore.get(userId, request.candidateToken());
@@ -70,10 +102,6 @@ public class ExAccountSyncService {
             ExAccount account = upsertAccount(userId, snapshot);
             results.add(ExAccountRes.from(account));
         }
-
-        // 4. 보안 강화를 위해 연동 성공 직후 세션 토큰을 즉시 삭제 (일회용 토큰 원칙 준수)
-        candidateStore.remove(userId, request.candidateToken());
-
         return results;
     }
 
@@ -96,42 +124,36 @@ public class ExAccountSyncService {
      * 단일 계좌 정보를 데이터베이스에 반영(Insert 또는 Update)합니다.
      */
     private ExAccount upsertAccount(Long userId, CodefExAccountSnapshot snapshot) {
-        // 계정 검증
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
-
         // 계좌번호 보안 처리 (HMAC 해싱 해시값 & 화면 표시용 마스킹 값 생성)
         ProtectedAccountNumber accountNumber = protectAccountNumber(snapshot.accountNumber());
 
-        // Blind Index(accountNumberHash)를 조건으로 기존에 연동된 적이 있는 계좌인지 RDB에서 조회
-        ExAccount exAccount = exAccountRepository
-                .findByUserIdAndOrganizationAndAccountNumberHash(
-                        userId,
-                        snapshot.organization(),
-                        accountNumber.hash()
-                )
-                .orElse(null);
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC);
+        exAccountRepository.upsert(
+                userId,
+                snapshot.organization(),
+                accountNumber.hash(),
+                accountNumber.masked(),
+                snapshot.accountName(),
+                snapshot.accountAlias(),
+                snapshot.assetType().name(),
+                snapshot.balance() == null ? java.math.BigDecimal.ZERO : snapshot.balance(),
+                snapshot.withdrawableAmount(),
+                snapshot.openedAt(),
+                snapshot.maturityAt(),
+                snapshot.lastTransactionAt(),
+                "ACTIVE",
+                now,
+                now
+        );
 
-        // [신규 계좌인 경우]: DB에 새롭게 등록 (Insert)
-        if (exAccount == null) {
-            ExAccount newAccount = ExAccount.create(
-                    user,
-                    snapshot.organization(),
-                    accountNumber.hash(),
-                    accountNumber.masked(),
-                    snapshot.accountName(),
-                    snapshot.accountAlias(),
-                    snapshot.assetType(),
-                    snapshot.balance(),
-                    snapshot.withdrawableAmount(),
-                    snapshot.openedAt(),
-                    snapshot.maturityAt(),
-                    snapshot.lastTransactionAt()
-            );
-            return exAccountRepository.save(newAccount);
-        }
+        return exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
+                userId,
+                snapshot.organization(),
+                accountNumber.hash()
+        ).orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
+    }
 
-        // [기존 계좌인 경우]: 잔액, 계좌별명, 만기일, 마지막 거래일자 등 최신 정보로 동기화 (Update)
+    private void updateAccountSnapshot(ExAccount exAccount, CodefExAccountSnapshot snapshot) {
         exAccount.updateSnapshot(
                 snapshot.accountName(),
                 snapshot.accountAlias(),
@@ -140,7 +162,6 @@ public class ExAccountSyncService {
                 snapshot.maturityAt(),
                 snapshot.lastTransactionAt()
         );
-        return exAccount;
     }
 
     /**
