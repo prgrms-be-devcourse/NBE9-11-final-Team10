@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 public record WithdrawalLockRes(
         @Schema(description = "저축 가입 ID", example = "1")
@@ -28,7 +27,6 @@ public record WithdrawalLockRes(
         LocalDateTime updatedAt
 ) {
     public static WithdrawalLockRes fromDeposit(Deposit deposit) {
-        Objects.requireNonNull(deposit, "deposit은 null일 수 없습니다.");
 
         return new WithdrawalLockRes(
                 deposit.getId(),
@@ -40,7 +38,6 @@ public record WithdrawalLockRes(
     }
 
     public static WithdrawalLockRes fromInstallment(Installment installment) {
-        Objects.requireNonNull(installment, "installment는 null일 수 없습니다.");
 
         return new WithdrawalLockRes(
                 installment.getId(),

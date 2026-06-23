@@ -5,7 +5,6 @@ import com.team10.backend.domain.saving.entity.Installment;
 import com.team10.backend.domain.saving.type.SavingProductType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import java.util.Objects;
 
 public record MaturityRes(
         @Schema(description = "저축 가입 ID", example = "1")
@@ -31,7 +30,6 @@ public record MaturityRes(
             Long interestAmount,
             Long payoutAmount
     ) {
-        Objects.requireNonNull(deposit, "deposit은 null일 수 없습니다.");
 
         return new MaturityRes(
                 deposit.getId(),
@@ -48,7 +46,6 @@ public record MaturityRes(
             Long interestAmount,
             Long payoutAmount
     ) {
-        Objects.requireNonNull(installment, "installment는 null일 수 없습니다.");
 
         return new MaturityRes(
                 installment.getId(),

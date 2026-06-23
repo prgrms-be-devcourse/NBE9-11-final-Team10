@@ -5,7 +5,6 @@ import com.team10.backend.domain.saving.entity.Installment;
 import com.team10.backend.domain.saving.type.SavingProductType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import java.util.Objects;
 
 public record InterestPreviewRes(
         @Schema(description = "저축 가입 ID", example = "1")
@@ -30,7 +29,6 @@ public record InterestPreviewRes(
             Deposit deposit,
             Long expectedTotalAmount
     ) {
-        Objects.requireNonNull(deposit, "deposit은 null일 수 없습니다.");
 
         return new InterestPreviewRes(
                 deposit.getId(),
@@ -47,7 +45,6 @@ public record InterestPreviewRes(
             Long expectedInterest,
             Long expectedTotalAmount
     ) {
-        Objects.requireNonNull(installment, "installment는 null일 수 없습니다.");
 
         return new InterestPreviewRes(
                 installment.getId(),
