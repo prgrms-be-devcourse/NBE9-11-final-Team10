@@ -14,6 +14,29 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+}
+
+# Edge EC2에 연결할 Elastic IP를 생성합니다.
+resource "aws_eip" "edge" {
+  # VPC 내부 EC2에 연결할 Elastic IP임을 의미합니다.
+  domain = "vpc"
+
+  # AWS 리소스에 붙이는 태그입니다.
+  tags = {
+    Name = "team10-edge-eip" # AWS 콘솔에서 보이는 Elastic IP 이름입니다.
+    Team = var.team          # 팀 공통 태그입니다.
+  }
+}
+
+# 생성한 Elastic IP를 Edge EC2 인스턴스에 연결합니다.
+# 이후 도메인을 구매하면 api.example.com 같은 백엔드 도메인의 A Record를 이 Elastic IP로 연결합니다.
+resource "aws_eip_association" "edge" {
+  # Elastic IP를 연결할 Edge EC2 인스턴스 ID입니다.
+  instance_id = aws_instance.edge.id
+
+  # 위에서 생성한 Elastic IP의 Allocation ID입니다.
+  allocation_id = aws_eip.edge.id
 }
 
 # AWS Provider 설정입니다.
