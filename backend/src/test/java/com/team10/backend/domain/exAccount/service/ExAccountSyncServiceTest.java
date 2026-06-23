@@ -22,6 +22,8 @@ import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import com.team10.backend.global.security.HmacSha256Hasher;
+import com.team10.backend.global.lock.DistributedLockTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -34,7 +36,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +55,12 @@ class ExAccountSyncServiceTest {
     @Mock
     private CodefExAccountCandidateStore candidateStore;
 
+    @Mock
+    private DistributedLockTemplate lockTemplate;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     @InjectMocks
     private ExAccountSyncService exAccountSyncService;
 
@@ -62,6 +69,16 @@ class ExAccountSyncServiceTest {
     @BeforeEach
     void setUp() {
         user = createUser(1L);
+        org.mockito.Mockito.lenient().when(lockTemplate.executeWithLock(any(), any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.function.Supplier<?> supplier = invocation.getArgument(4);
+                    return supplier.get();
+                });
+        org.mockito.Mockito.lenient().when(transactionTemplate.execute(any()))
+                .thenAnswer(invocation -> {
+                    org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
+                    return callback.doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus());
+                });
     }
 
     @Test
@@ -152,31 +169,18 @@ class ExAccountSyncServiceTest {
     }
 
     @Test
-    @DisplayName("계좌 insert unique 충돌이 나면 다시 조회해 기존 계좌 스냅샷을 갱신한다")
-    void linkAccountCreateRecoversFromUniqueConflictByUpdatingExistingAccount() {
+    @DisplayName("락 획득에 실패하면 계좌 연동이 실패한다")
+    void linkAccountsFailsWhenLockAcquisitionFails() {
         ExAccountLinkReq request = new ExAccountLinkReq("token", List.of(0));
-        CodefExAccountSnapshot snapshot = snapshot();
-        ExAccount existingAccount = createExAccount(10L, user, snapshot);
+        org.mockito.Mockito.reset(lockTemplate);
+        when(lockTemplate.executeWithLock(any(), any(), any(), any(), any()))
+                .thenThrow(new BusinessException(ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC));
 
-        claimToken(1L, "token");
-        when(candidateStore.get(1L, "token")).thenReturn(List.of(snapshot));
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        when(hmacSha256Hasher.hash("1234567890")).thenReturn(ACCOUNT_NUMBER_HASH);
-        when(exAccountRepository.findByUserIdAndOrganizationAndAccountNumberHash(
-                1L,
-                "0004",
-                ACCOUNT_NUMBER_HASH
-        )).thenReturn(Optional.empty(), Optional.of(existingAccount));
-        when(exAccountRepository.saveAndFlush(any(ExAccount.class)))
-                .thenThrow(new DataIntegrityViolationException("duplicate external account"));
-
-        List<ExAccountRes> responses = exAccountSyncService.linkAccounts(1L, request);
-
-        assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).id()).isEqualTo(10L);
-        assertThat(existingAccount.getAccountName()).isEqualTo("입출금통장");
-        verify(candidateStore).remove(1L, "token");
-        verify(candidateStore).releaseClaim(1L, "token", "claim-id");
+        assertThatThrownBy(() -> exAccountSyncService.linkAccounts(1L, request))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC
+                        ));
     }
 
     @Test

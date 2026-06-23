@@ -13,10 +13,13 @@ import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import com.team10.backend.global.security.HmacSha256Hasher;
+import com.team10.backend.global.lock.DistributedLockTemplate;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.time.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +38,8 @@ public class ExAccountSyncService {
     private final UserRepository userRepository;
     private final HmacSha256Hasher hmacSha256Hasher;
     private final CodefExAccountCandidateStore candidateStore;
+    private final DistributedLockTemplate lockTemplate;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 사용자가 선택한 외부 계좌들을 안전하게 RDB에 연동(저장)합니다.
@@ -45,24 +50,32 @@ public class ExAccountSyncService {
      * 3. 검증된 원본 데이터를 바탕으로 DB에 Upsert(신규 저장 또는 기존 정보 갱신)를 수행합니다.
      * 4. claim에 성공한 토큰은 성공/실패와 관계없이 Redis에서 즉시 파기합니다.
      */
-    @Transactional
     public List<ExAccountRes> linkAccounts(Long userId, ExAccountLinkReq request) {
         // 1. 요청 파라미터(토큰 유무 등) 기본 유효성 검사
         if (request == null || request.candidateToken() == null || request.candidateToken().isBlank()) {
             throw new BusinessException(GlobalErrorCode.INVALID_INPUT_VALUE);
         }
 
-        Optional<String> claimId = candidateStore.claim(userId, request.candidateToken());
-        if (claimId.isEmpty()) {
-            throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_CANDIDATE_ALREADY_CLAIMED);
-        }
+        String lockKey = "lock:ex-account:sync:" + userId;
+        return lockTemplate.executeWithLock(
+                lockKey,
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(10),
+                ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC,
+                () -> {
+                    Optional<String> claimId = candidateStore.claim(userId, request.candidateToken());
+                    if (claimId.isEmpty()) {
+                        throw new BusinessException(ExAccountErrorCode.EX_ACCOUNT_CANDIDATE_ALREADY_CLAIMED);
+                    }
 
-        try {
-            return linkClaimedAccounts(userId, request);
-        } finally {
-            candidateStore.remove(userId, request.candidateToken());
-            candidateStore.releaseClaim(userId, request.candidateToken(), claimId.get());
-        }
+                    try {
+                        return transactionTemplate.execute(status -> linkClaimedAccounts(userId, request));
+                    } finally {
+                        candidateStore.remove(userId, request.candidateToken());
+                        candidateStore.releaseClaim(userId, request.candidateToken(), claimId.get());
+                    }
+                }
+        );
     }
 
     private List<ExAccountRes> linkClaimedAccounts(Long userId, ExAccountLinkReq request) {
@@ -140,19 +153,7 @@ public class ExAccountSyncService {
                     snapshot.maturityAt(),
                     snapshot.lastTransactionAt()
             );
-            try {
-                return exAccountRepository.saveAndFlush(newAccount);
-            } catch (DataIntegrityViolationException exception) {
-                ExAccount concurrentAccount = exAccountRepository
-                        .findByUserIdAndOrganizationAndAccountNumberHash(
-                                userId,
-                                snapshot.organization(),
-                                accountNumber.hash()
-                        )
-                        .orElseThrow(() -> exception);
-                updateAccountSnapshot(concurrentAccount, snapshot);
-                return concurrentAccount;
-            }
+            return exAccountRepository.saveAndFlush(newAccount);
         }
 
         // [기존 계좌인 경우]: 잔액, 계좌별명, 만기일, 마지막 거래일자 등 최신 정보로 동기화 (Update)

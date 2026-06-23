@@ -12,9 +12,12 @@ import com.team10.backend.domain.exAccount.repository.ExAccountTransactionReposi
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
+import com.team10.backend.global.lock.DistributedLockTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.time.Duration;
 
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -33,6 +36,8 @@ public class ExAccountTransactionService {
     private final ExAccountTransactionRepository transactionRepository;
     private final ExAccountRepository accountRepository;
     private final ExAccountService exAccountService;
+    private final DistributedLockTemplate lockTemplate;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 특정 사용자가 연동한 모든 외부 계좌들의 통합 거래내역 목록을 최신순으로 조회합니다.
@@ -54,38 +59,46 @@ public class ExAccountTransactionService {
      * @param transactions 외부기관으로부터 신규 수신한 거래내역 동기화 요청 DTO 리스트
      * @return 추가/변경 통계 및 업데이트된 계좌 상세 결과를 담은 갱신 응답 DTO
      */
-    @Transactional
     public ExAccountTransactionRefreshRes refreshTransactions(
             Long userId,
             Long exAccountId,
             List<ExAccountTransactionSyncReq> transactions
     ) {
-        validateTransactions(transactions);
+        String lockKey = "lock:ex-account:transactions:" + exAccountId;
+        return lockTemplate.executeWithLock(
+                lockKey,
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(10),
+                ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC,
+                () -> transactionTemplate.execute(status -> {
+                    validateTransactions(transactions);
 
-        ExAccount account = accountRepository.findByIdAndUserId(exAccountId, userId)
-                .orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
+                    ExAccount account = accountRepository.findByIdAndUserId(exAccountId, userId)
+                            .orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
 
-        int createdCount = 0;
-        int updatedCount = 0;
+                    int createdCount = 0;
+                    int updatedCount = 0;
 
-        for (ExAccountTransactionSyncReq transaction : transactions) {
-            if (upsertTransaction(account, transaction)) {
-                createdCount++;
-                continue;
-            }
+                    for (ExAccountTransactionSyncReq transaction : transactions) {
+                        if (upsertTransaction(account, transaction)) {
+                            createdCount++;
+                            continue;
+                        }
 
-            updatedCount++;
-        }
+                        updatedCount++;
+                    }
 
-        // 수신된 거래 내역들 중 가장 최신의 거래 일자로 계좌의 마지막 거래 시각 갱신
-        transactions.stream()
-                .map(ExAccountTransactionSyncReq::transactedAt)
-                .max(Comparator.naturalOrder())
-                .map(LocalDate::from)
-                .ifPresent(account::updateLastTransactionAt);
+                    // 수신된 거래 내역들 중 가장 최신의 거래 일자로 계좌의 마지막 거래 시각 갱신
+                    transactions.stream()
+                            .map(ExAccountTransactionSyncReq::transactedAt)
+                            .max(Comparator.naturalOrder())
+                            .map(LocalDate::from)
+                            .ifPresent(account::updateLastTransactionAt);
 
-        ExAccountDetailRes detail = exAccountService.getAccountDetail(userId, exAccountId);
-        return ExAccountTransactionRefreshRes.of(transactions.size(), createdCount, updatedCount, detail);
+                    ExAccountDetailRes detail = exAccountService.getAccountDetail(userId, exAccountId);
+                    return ExAccountTransactionRefreshRes.of(transactions.size(), createdCount, updatedCount, detail);
+                })
+        );
     }
 
     /**
@@ -124,15 +137,7 @@ public class ExAccountTransactionService {
                 .orElse(null);
 
         if (transaction == null) {
-            try {
-                transactionRepository.saveAndFlush(request.toEntity(account));
-            } catch (DataIntegrityViolationException exception) {
-                ExAccountTransaction concurrentTransaction = transactionRepository
-                        .findByExAccountIdAndTransactionKey(account.getId(), request.transactionKey())
-                        .orElseThrow(() -> exception);
-                request.applyTo(concurrentTransaction);
-                return false;
-            }
+            transactionRepository.saveAndFlush(request.toEntity(account));
             return true;
         }
 

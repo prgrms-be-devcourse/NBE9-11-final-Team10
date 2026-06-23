@@ -22,6 +22,8 @@ import com.team10.backend.domain.exAccount.repository.ExAccountTransactionReposi
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
+import com.team10.backend.global.lock.DistributedLockTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -34,7 +36,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,6 +50,12 @@ class ExAccountTransactionServiceTest {
     @Mock
     private ExAccountService exAccountService;
 
+    @Mock
+    private DistributedLockTemplate lockTemplate;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     @InjectMocks
     private ExAccountTransactionService exAccountTransactionService;
 
@@ -59,6 +66,17 @@ class ExAccountTransactionServiceTest {
     void setUp() {
         user = createUser(1L);
         account = createExAccount(10L);
+
+        org.mockito.Mockito.lenient().when(lockTemplate.executeWithLock(any(), any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.function.Supplier<?> supplier = invocation.getArgument(4);
+                    return supplier.get();
+                });
+        org.mockito.Mockito.lenient().when(transactionTemplate.execute(any()))
+                .thenAnswer(invocation -> {
+                    org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
+                    return callback.doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus());
+                });
     }
 
     @Test
@@ -87,28 +105,22 @@ class ExAccountTransactionServiceTest {
     }
 
     @Test
-    @DisplayName("거래내역 insert unique 충돌이 나면 다시 조회해 기존 거래내역 스냅샷을 갱신한다")
-    void refreshTransactionsCreateRecoversFromUniqueConflictByUpdatingExistingTransaction() {
+    @DisplayName("락 획득에 실패하면 거래내역 동기화가 실패한다")
+    void refreshTransactionsFailsWhenLockAcquisitionFails() {
         ExAccountTransactionSyncReq request = createTransactionSyncReq("KB-20260618143000-0001", "스타벅스");
-        ExAccountTransaction existingTransaction = createTransaction(100L, "KB-20260618143000-0001", "기존상호");
-        ExAccountDetailRes detail = ExAccountDetailRes.of(ExAccountRes.from(account), List.of());
+        org.mockito.Mockito.reset(lockTemplate);
+        when(lockTemplate.executeWithLock(any(), any(), any(), any(), any()))
+                .thenThrow(new BusinessException(ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC));
 
-        when(accountRepository.findByIdAndUserId(10L, 1L)).thenReturn(Optional.of(account));
-        when(transactionRepository.findByExAccountIdAndTransactionKey(10L, "KB-20260618143000-0001"))
-                .thenReturn(Optional.empty(), Optional.of(existingTransaction));
-        when(transactionRepository.saveAndFlush(any(ExAccountTransaction.class)))
-                .thenThrow(new DataIntegrityViolationException("duplicate external transaction"));
-        when(exAccountService.getAccountDetail(1L, 10L)).thenReturn(detail);
-
-        ExAccountTransactionRefreshRes response = exAccountTransactionService.refreshTransactions(
+        assertThatThrownBy(() -> exAccountTransactionService.refreshTransactions(
                 1L,
                 10L,
                 List.of(request)
-        );
-
-        assertThat(response.createdCount()).isZero();
-        assertThat(response.updatedCount()).isEqualTo(1);
-        assertThat(existingTransaction.getCounterpartyName()).isEqualTo("스타벅스");
+        ))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC
+                        ));
     }
 
     @Test

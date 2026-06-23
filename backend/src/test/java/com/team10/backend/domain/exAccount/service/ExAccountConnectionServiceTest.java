@@ -17,6 +17,8 @@ import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.lock.DistributedLockTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +58,10 @@ class ExAccountConnectionServiceTest {
     private CodefExAccountCandidateStore candidateStore;
     @Mock
     private ExAccountCodefRateLimitService rateLimitService;
+    @Mock
+    private DistributedLockTemplate lockTemplate;
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     private ExAccountConnectionService service;
     private User user;
@@ -70,7 +76,9 @@ class ExAccountConnectionServiceTest {
                 exAccountSyncService,
                 exAccountRepository,
                 candidateStore,
-                rateLimitService
+                rateLimitService,
+                lockTemplate,
+                transactionTemplate
         );
         user = User.create(
                 "test@example.com",
@@ -82,6 +90,18 @@ class ExAccountConnectionServiceTest {
         createRequest = new CodefExAccountConnectionCreateReq(
                 "0004", "BK", "P", "1", "user123", "pass123", "990101"
         );
+
+        // Default mock behaviors for lockTemplate and transactionTemplate to run synchronously
+        org.mockito.Mockito.lenient().when(lockTemplate.executeWithLock(any(), any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.function.Supplier<?> supplier = invocation.getArgument(4);
+                    return supplier.get();
+                });
+        org.mockito.Mockito.lenient().when(transactionTemplate.execute(any()))
+                .thenAnswer(invocation -> {
+                    org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
+                    return callback.doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus());
+                });
     }
 
     @Test
@@ -115,23 +135,16 @@ class ExAccountConnectionServiceTest {
     }
 
     @Test
-    void registerRecoversFromConnectionInsertUniqueConflictByUpdatingExistingConnection() {
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
-        EncryptedConnectedId encryptedConnectedId = new EncryptedConnectedId(
-                "ciphertext", "iv", "v1"
-        );
-        ExAccountConnection existingConnection = connection("old-ciphertext");
-        when(codefExAccountGateway.register(createRequest)).thenReturn(encryptedConnectedId);
-        when(connectionRepository.findByUserIdAndOrganization(1L, "0004"))
-                .thenReturn(Optional.empty(), Optional.of(existingConnection));
-        when(connectionRepository.saveAndFlush(any()))
-                .thenThrow(new DataIntegrityViolationException("duplicate external account connection"));
+    void registerThrowsExceptionWhenLockAcquisitionFails() {
+        org.mockito.Mockito.doThrow(new BusinessException(
+                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_CONCURRENT_REQUEST
+        )).when(lockTemplate).executeWithLock(any(), any(), any(), any(), any());
 
-        ExAccountConnectionRes response = service.register(1L, createRequest);
-
-        assertThat(response.organization()).isEqualTo("0004");
-        assertThat(response.status()).isEqualTo(ExAccountConnectionStatus.ACTIVE);
-        assertThat(existingConnection.encryptedConnectedId()).isEqualTo(encryptedConnectedId);
+        assertThatThrownBy(() -> service.register(1L, createRequest))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_CONCURRENT_REQUEST
+                        ));
     }
 
     @Test
