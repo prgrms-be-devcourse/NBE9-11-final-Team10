@@ -198,3 +198,61 @@ resource "aws_security_group" "app_data" {
     Team = var.team
   }
 }
+
+# EC2 인스턴스에 연결할 IAM Role을 생성합니다.
+# 이 Role은 EC2가 AWS Systems Manager(SSM)와 통신할 수 있도록 권한을 부여하는 용도입니다.
+# SSH 포트(22)를 열지 않고 Session Manager로 EC2에 접속하기 위해 필요합니다.
+resource "aws_iam_role" "ec2_ssm_role" {
+  name = "team10-ec2-ssm-role"
+
+  # 신뢰 정책입니다.
+  # 이 Role을 어떤 AWS 서비스가 사용할 수 있는지 정의합니다.
+  # 여기서는 EC2 서비스가 이 Role을 AssumeRole 할 수 있도록 허용합니다.
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  # AWS 리소스에 붙이는 태그입니다.
+  tags = {
+    Name = "team10-ec2-ssm-role" # AWS 콘솔에서 보이는 IAM Role 이름입니다.
+    Team = var.team              # 팀 공통 태그입니다.
+  }
+}
+
+# EC2 IAM Role에 SSM 접속에 필요한 관리형 정책을 연결합니다.
+# AmazonSSMManagedInstanceCore 정책은 EC2가 Systems Manager에 등록되고,
+# Session Manager를 통해 접속될 수 있도록 필요한 최소 권한을 제공합니다.
+resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
+  # 위에서 생성한 EC2 IAM Role 이름입니다.
+  role = aws_iam_role.ec2_ssm_role.name
+
+  # AWS에서 제공하는 SSM 관리형 정책 ARN입니다.
+  # 예제 코드의 AmazonEC2RoleforSSM보다 현재는 이 정책 사용이 권장됩니다.
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# IAM Instance Profile을 생성합니다.
+# EC2는 IAM Role을 직접 붙이는 것이 아니라 Instance Profile을 통해 Role을 연결합니다.
+# 이후 aws_instance 리소스에서 iam_instance_profile 값으로 이 Profile을 지정합니다.
+resource "aws_iam_instance_profile" "ec2_ssm_profile" {
+  # Instance Profile 이름입니다.
+  name = "team10-ec2-ssm-profile"
+
+  # Instance Profile에 연결할 IAM Role입니다.
+  role = aws_iam_role.ec2_ssm_role.name
+
+  # AWS 리소스에 붙이는 태그입니다.
+  tags = {
+    Name = "team10-ec2-ssm-profile" # AWS 콘솔에서 보이는 Instance Profile 이름입니다.
+    Team = var.team                 # 팀 공통 태그입니다.
+  }
+}
