@@ -18,6 +18,7 @@ import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -80,6 +81,7 @@ class ExAccountConnectionServiceTest {
     }
 
     @Test
+    @DisplayName("연결 등록은 사용자+기관 단위 CODEF 계정등록 호출 지점이다")
     void registersConnectionProperly() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         EncryptedConnectedId encryptedConnectedId = new EncryptedConnectedId(
@@ -104,6 +106,7 @@ class ExAccountConnectionServiceTest {
         assertThat(captured.getUser()).isEqualTo(user);
         assertThat(captured.getOrganization()).isEqualTo("0004");
         assertThat(captured.encryptedConnectedId()).isEqualTo(encryptedConnectedId);
+        verify(codefExAccountGateway).register(createRequest);
     }
 
     @Test
@@ -127,6 +130,7 @@ class ExAccountConnectionServiceTest {
     }
 
     @Test
+    @DisplayName("후보 조회는 사용자+기관 단위 CODEF 보유계좌 조회 호출 지점이다")
     void getsProviderAccountsAndReturnsMaskedCandidates() {
         ExAccountConnection connection = connection("ciphertext");
         CodefExAccountSnapshot snapshot = snapshot();
@@ -150,6 +154,7 @@ class ExAccountConnectionServiceTest {
         assertThat(result.accounts()).containsExactly(candidate);
         assertThat(result.accounts().getFirst().accountNoMasked()).doesNotContain("1234567890");
         assertThat(connection.getLastSyncedAt()).isNotNull();
+        verify(codefExAccountGateway).getAccountSnapshots("0004", connection.encryptedConnectedId());
     }
 
     @Test
