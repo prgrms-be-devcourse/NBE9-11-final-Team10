@@ -9,7 +9,9 @@ import com.team10.backend.global.idempotency.service.IdempotencyReservationServi
 import com.team10.backend.global.idempotency.service.IdempotencyReserveResult;
 import com.team10.backend.global.idempotency.service.IdempotencyService;
 import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
+import jakarta.servlet.ServletRequest;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -21,6 +23,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 
 import java.lang.reflect.Method;
@@ -95,14 +100,15 @@ public class IdempotencyAspect {
     }
 
     private String resolveIdempotencyKey() {
-        return httpServletRequest.getHeader("Idempotency-Key");
+        return currentRequest().getHeader("Idempotency-Key");
     }
 
     private String generateRequestHash(IdempotencyOperationType operationType) {
-        String method = httpServletRequest.getMethod();             // POST
-        String uri = httpServletRequest.getRequestURI();            // /api/transfers
-        String queryString = httpServletRequest.getQueryString();   // validate=true
-        String body = resolveRequestBody();                         // {"fromAccountId":1,"toAccountId":2,"amount":10000}
+        HttpServletRequest request = currentRequest();
+        String method = request.getMethod();             // POST
+        String uri = request.getRequestURI();            // /api/transfers
+        String queryString = request.getQueryString();   // validate=true
+        String body = resolveRequestBody(request);       // {"fromAccountId":1,"toAccountId":2,"amount":10000}
 
         return idempotencyRequestHasher.generate(
                 operationType,
@@ -113,17 +119,49 @@ public class IdempotencyAspect {
         );
     }
 
-    private String resolveRequestBody() {
-        // ContentCachingRequestWrapper는 필터에서 요청 body를 캐싱해 둔 wrapper다.
-        // 일반 HttpServletRequest의 InputStream은 한 번 읽으면 다시 읽을 수 없으므로,
-        // Aspect에서는 wrapper에 캐싱된 byte 배열만 읽어야 컨트롤러의 @RequestBody 처리와 충돌하지 않는다.
-        if (!(httpServletRequest instanceof ContentCachingRequestWrapper wrapper)) {
+    private HttpServletRequest currentRequest() {
+        // RequestContextHolder = 현재 요청 스레드에 저장된 HTTP 요청 컨텍스트 보관소
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes(); // 지금 처리 중인 요청의 request 관련 정보 조회
+
+        if (attributes instanceof ServletRequestAttributes servletRequestAttributes) {
+            return servletRequestAttributes.getRequest(); // 현재 HttpServletRequest 꺼내기
+        }
+
+        return httpServletRequest;
+    }
+
+    private String resolveRequestBody(HttpServletRequest request) {
+        ContentCachingRequestWrapper wrapper = findContentCachingRequestWrapper(request);
+
+        if (wrapper == null) {
             return "";
         }
 
         byte[] content = wrapper.getContentAsByteArray();
 
         return new String(content, StandardCharsets.UTF_8);
+    }
+
+    private ContentCachingRequestWrapper findContentCachingRequestWrapper(HttpServletRequest request) {
+        HttpServletRequest currentRequest = request;
+
+        while (currentRequest instanceof HttpServletRequestWrapper wrapper) {
+            if (currentRequest instanceof ContentCachingRequestWrapper contentCachingRequestWrapper) {
+                return contentCachingRequestWrapper;
+            }
+
+            ServletRequest wrappedRequest = wrapper.getRequest();
+
+            // 만약 내부 요청이 HttpServletRequest가 아니면 더 이상 추적할 수 없으니 null 반환.
+            if (!(wrappedRequest instanceof HttpServletRequest nextRequest)) {
+                return null;
+            }
+
+            // 내부 요청이 HttpServletRequest가 맞으면, 자동으로 만들어진 nextRequest를 사용해서 다음 wrapper로 이동
+            currentRequest = nextRequest;
+        }
+
+        return null;
     }
 
     private Object executeBusinessAndCompleteSuccess(

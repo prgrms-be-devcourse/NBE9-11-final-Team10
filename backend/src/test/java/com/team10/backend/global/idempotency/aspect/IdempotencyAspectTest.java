@@ -14,6 +14,7 @@ import com.team10.backend.global.idempotency.service.IdempotencyService;
 import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,8 +29,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.util.ContentCachingRequestWrapper;
 
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -57,6 +63,12 @@ class IdempotencyAspectTest {
 
     @Mock
     private MethodSignature methodSignature;
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+        RequestContextHolder.resetRequestAttributes();
+    }
 
     @Test
     @DisplayName("새 요청을 선점하면 실제 메서드를 실행하고 성공 응답을 저장한다")
@@ -101,7 +113,49 @@ class IdempotencyAspectTest {
         inOrder.verify(joinPoint).proceed();
         inOrder.verify(idempotencyService).completeSuccess(9L, response, HttpStatus.CREATED.value());
         verify(idempotencyService, never()).completeFailure(any());
-        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    @DisplayName("요청 body가 중첩된 ContentCachingRequestWrapper에 있으면 request hash에 포함한다")
+    void handle_cachedBodyInNestedWrapper_includesBodyInRequestHash() throws Throwable {
+        IdempotencyAspect aspect = aspect();
+        Method method = fixtureMethod();
+        Idempotent idempotent = method.getAnnotation(Idempotent.class);
+        Idempotency idempotency = idempotency(9L);
+        TopUpRes response = topUpResponse();
+        ResponseEntity<TopUpRes> responseEntity = ResponseEntity.status(HttpStatus.CREATED).body(response);
+        String requestBody = "{\"accountId\":1,\"amount\":5000,\"memo\":\"입금 메모\"}";
+        givenJoinPoint(method);
+        givenAuthentication();
+        givenCachedRequestBody(requestBody);
+        when(idempotencyRequestHasher.generate(
+                IdempotencyOperationType.TOPUP,
+                "POST",
+                "/api/v1/transfers/topUp",
+                null,
+                requestBody
+        ))
+                .thenReturn("request-hash");
+        when(idempotencyReservationService.reserveOrResolveDuplicate(
+                1L,
+                IdempotencyOperationType.TOPUP,
+                "deposit-key",
+                "request-hash",
+                TopUpRes.class
+        )).thenReturn(IdempotencyReserveResult.reserved(idempotency));
+        when(joinPoint.proceed()).thenReturn(responseEntity);
+        executeTransactionCallback();
+
+        Object result = aspect.handle(joinPoint, idempotent);
+
+        assertSame(responseEntity, result);
+        verify(idempotencyRequestHasher).generate(
+                IdempotencyOperationType.TOPUP,
+                "POST",
+                "/api/v1/transfers/topUp",
+                null,
+                requestBody
+        );
     }
 
     @Test
@@ -137,7 +191,6 @@ class IdempotencyAspectTest {
         verify(joinPoint, never()).proceed();
         verify(idempotencyService, never()).completeSuccess(any(), any(), any());
         verify(idempotencyService, never()).completeFailure(any());
-        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -176,7 +229,6 @@ class IdempotencyAspectTest {
         assertSame(businessException, result);
         verify(idempotencyService).completeFailure(10L);
         verify(idempotencyService, never()).completeSuccess(any(), any(), any());
-        SecurityContextHolder.clearContext();
     }
 
     private IdempotencyAspect aspect() {
@@ -193,6 +245,17 @@ class IdempotencyAspectTest {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transfers/topUp");
         request.addHeader("Idempotency-Key", "deposit-key");
         return request;
+    }
+
+    private void givenCachedRequestBody(String requestBody) throws Exception {
+        MockHttpServletRequest request = request();
+        request.setContent(requestBody.getBytes(StandardCharsets.UTF_8));
+
+        ContentCachingRequestWrapper cachingRequest = new ContentCachingRequestWrapper(request, 1024 * 1024);
+        cachingRequest.getInputStream().readAllBytes();
+
+        HttpServletRequestWrapper nestedRequest = new HttpServletRequestWrapper(cachingRequest);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(nestedRequest));
     }
 
     private void givenAuthentication() {
