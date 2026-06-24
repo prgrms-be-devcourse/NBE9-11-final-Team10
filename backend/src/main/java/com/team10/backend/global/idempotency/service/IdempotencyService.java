@@ -43,7 +43,7 @@ public class IdempotencyService {
         return idempotencyRepository
                 .findByUser_IdAndIdempotencyKey(userId, idempotencyKey)
                 .map(existing -> resolveExisting(existing, requestHash, operationType, responseType))
-                .orElseGet(() -> createProcessing(userId, operationType, idempotencyKey, requestHash, responseType));
+                .orElseGet(() -> createProcessing(userId, operationType, idempotencyKey, requestHash));
     }
 
     // completeSuccess()는 반드시 비즈니스 처리와 같은 트랜잭션 안에서만 호출돼야 한다.
@@ -77,8 +77,7 @@ public class IdempotencyService {
             Long userId,
             IdempotencyOperationType operationType,
             String idempotencyKey,
-            String requestHash,
-            Class<T> responseType
+            String requestHash
     ) {
         User user = userRepository.getReferenceById(userId);
         Idempotency idempotency = idempotencyRepository.saveAndFlush(
