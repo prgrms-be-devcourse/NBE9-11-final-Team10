@@ -457,70 +457,8 @@ class SavingDepositServiceTest {
         verify(installmentRepository).findByIdAndUserIdWithProduct(1L, 1L);
     }
 
-    @Test
-    @DisplayName("예금 출금 제한을 설정한다")
-    void updateDepositWithdrawalLock() {
-        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
-        WithdrawalLockReq request = new WithdrawalLockReq(
-                SavingProductType.DEPOSIT,
-                true,
-                "목표 저축을 위해 제한"
-        );
 
-        when(depositRepository.findByIdAndUserIdWithProduct(1L, 1L))
-                .thenReturn(Optional.of(deposit));
 
-        WithdrawalLockRes response =
-                savingDepositService.updateWithdrawalLock(1L, 1L, request);
-
-        assertThat(response.savingId()).isEqualTo(1L);
-        assertThat(response.savingType()).isEqualTo(SavingProductType.DEPOSIT);
-        assertThat(response.lockYn()).isTrue();
-        assertThat(response.reason()).isEqualTo("목표 저축을 위해 제한");
-        assertThat(deposit.isWithdrawalLocked()).isTrue();
-        assertThat(deposit.getWithdrawalLockReason()).isEqualTo("목표 저축을 위해 제한");
-        verify(depositRepository).findByIdAndUserIdWithProduct(1L, 1L);
-    }
-
-    @Test
-    @DisplayName("적금 출금 제한을 설정한다")
-    void updateInstallmentWithdrawalLock() {
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        WithdrawalLockReq request = new WithdrawalLockReq(
-                SavingProductType.INSTALLMENT,
-                true,
-                "목표 저축을 위해 제한"
-        );
-
-        when(installmentRepository.findByIdAndUserIdWithProduct(1L, 1L))
-                .thenReturn(Optional.of(installment));
-
-        WithdrawalLockRes response =
-                savingDepositService.updateWithdrawalLock(1L, 1L, request);
-
-        assertThat(response.savingId()).isEqualTo(1L);
-        assertThat(response.savingType()).isEqualTo(SavingProductType.INSTALLMENT);
-        assertThat(response.lockYn()).isTrue();
-        assertThat(response.reason()).isEqualTo("목표 저축을 위해 제한");
-        assertThat(installment.isWithdrawalLocked()).isTrue();
-        assertThat(installment.getWithdrawalLockReason()).isEqualTo("목표 저축을 위해 제한");
-        verify(installmentRepository).findByIdAndUserIdWithProduct(1L, 1L);
-    }
-
-    @Test
-    @DisplayName("출금 제한 해제 사유가 없으면 실패한다")
-    void updateWithdrawalLockWithoutUnlockReason() {
-        WithdrawalLockReq request = new WithdrawalLockReq(
-                SavingProductType.DEPOSIT,
-                false,
-                " "
-        );
-
-        assertThatThrownBy(() -> savingDepositService.updateWithdrawalLock(1L, 1L, request))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(SavingErrorCode.WITHDRAWAL_UNLOCK_REASON_REQUIRED);
-    }
 
     @Test
     @DisplayName("가입중 예금을 중도 해지한다")
@@ -625,45 +563,7 @@ class SavingDepositServiceTest {
                 .isEqualTo(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
     }
 
-    @Test
-    @DisplayName("출금 제한된 예금은 중도 해지에 실패한다")
-    void cancelDepositWithWithdrawalLock() {
-        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
-        deposit.updateWithdrawalLock(true, "목표 저축을 위해 제한");
-        EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
 
-        when(depositRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
-                .thenReturn(Optional.of(deposit));
-
-        assertThatThrownBy(() -> savingDepositService.cancelSaving(1L, 1L, request))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(SavingErrorCode.SAVING_WITHDRAWAL_LOCKED);
-
-        assertThat(deposit.getStatus()).isEqualTo(DepositStatus.ACTIVE);
-        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
-        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
-    }
-
-    @Test
-    @DisplayName("출금 제한된 적금은 중도 해지에 실패한다")
-    void cancelInstallmentWithWithdrawalLock() {
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        installment.updateWithdrawalLock(true, "목표 저축을 위해 제한");
-        EarlyCancelReq request = new EarlyCancelReq(SavingProductType.INSTALLMENT);
-
-        when(installmentRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
-                .thenReturn(Optional.of(installment));
-
-        assertThatThrownBy(() -> savingDepositService.cancelSaving(1L, 1L, request))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(SavingErrorCode.SAVING_WITHDRAWAL_LOCKED);
-
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
-        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
-        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
-    }
 
     @Test
     @DisplayName("만기일이 지난 가입중 예금을 만기 처리한다")

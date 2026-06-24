@@ -15,7 +15,6 @@ Saving 도메인은 예금/적금 상품 조회, 가입, 자동이체, 중도해
 | 적금 가입 | 입출금계좌에서 1회차 출금 후 적금 전용 Account 생성/입금 |
 | 자동이체 | 입출금계좌에서 출금 후 적금 전용 Account 입금 |
 | 예상 이자 조회 | 예금/적금 예상 이자 및 만기 예상 수령액 계산 |
-| 출금 제한 | 예금/적금 가입 건의 중도해지 제한 여부 설정 |
 | 중도해지 | 예/적금 전용 Account 출금 후 입출금계좌로 반환 |
 | 만기 처리 | 예/적금 전용 Account 출금 후 입출금계좌로 지급 |
 
@@ -50,8 +49,6 @@ Saving 도메인은 예금/적금 상품 조회, 가입, 자동이체, 중도해
 | `maturityDate` | 만기일 |
 | `expectedInterest` | 예상 이자 |
 | `status` | 예금 상태 |
-| `withdrawalLocked` | 출금 제한 여부 |
-| `withdrawalLockReason` | 출금 제한 사유 |
 
 ### Installment
 
@@ -108,7 +105,6 @@ Base URL: `/api/v1/savings`
 | `GET` | `/installments` | 내 적금 목록 조회 |
 | `GET` | `/installments/{installmentId}` | 내 적금 상세 조회 |
 | `GET` | `/{savingId}/interest-preview` | 예상 이자 조회 |
-| `POST` | `/{savingId}/withdrawal-lock` | 출금 제한 설정 |
 | `POST` | `/{savingId}/cancel` | 중도해지 |
 | `POST` | `/{savingId}/maturity` | 만기 처리 |
 
@@ -167,7 +163,6 @@ Base URL: `/api/v1/savings`
 ```text
 1. Deposit 또는 Installment를 입출금계좌/전용 Account와 함께 락 조회
 2. 상태가 ACTIVE인지 확인
-3. withdrawalLocked가 false인지 확인
 4. 중도해지 이자 계산
 5. 예/적금 전용 Account에서 원금 또는 납입금 출금
 6. 예/적금 전용 Account CLOSED 처리
@@ -238,4 +233,4 @@ Base URL: `/api/v1/savings`
 - 자동이체 실패 시 실패 상태/재시도 정보 저장
 - 중도해지 시 전용 Account 출금, CLOSED 처리, 입출금계좌 반환
 - 만기 시 전용 Account 출금, CLOSED 처리, 입출금계좌 지급
-- 출금 제한 상태에서는 중도해지 실패
+-

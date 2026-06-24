@@ -232,43 +232,6 @@ class SavingBatchProcessorTest {
         assertThat(savingHistory.getMemo()).isEqualTo("적금 계좌 월 납입 입금");
     }
 
-    @Test
-    @DisplayName("출금 제한된 적금도 정기 자동이체는 허용한다")
-    void processInstallmentPaymentWithWithdrawalLock() {
-        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
-        installment.updateWithdrawalLock(true, "목표 저축을 위해 제한");
-        ReflectionTestUtils.setField(installment, "nextPaymentDate", TODAY);
-
-        when(installmentRepository.findByIdWithAccountForUpdate(1L))
-                .thenReturn(Optional.of(installment));
-
-        savingBatchProcessor.processInstallmentPayment(1L);
-
-        assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
-        assertThat(installment.getSavingAccount().getBalance()).isEqualTo(200000L);
-        assertThat(installment.getPaidAmount()).isEqualTo(200000L);
-        assertThat(installment.getNextPaymentDate()).isEqualTo(TODAY.plusMonths(1));
-        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
-
-        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
-        verify(transactionHistoryRepository, times(2)).save(captor.capture());
-        List<TransactionHistory> histories = captor.getAllValues();
-        TransactionHistory withdrawHistory = histories.get(0);
-        assertThat(withdrawHistory.getType()).isEqualTo(TransactionType.INSTALLMENT_PAYMENT);
-        assertThat(withdrawHistory.getDirection()).isEqualTo(TransactionDirection.OUT);
-        assertThat(withdrawHistory.getAmount()).isEqualTo(100000L);
-        assertThat(withdrawHistory.getBalanceBefore()).isEqualTo(2000000L);
-        assertThat(withdrawHistory.getBalanceAfter()).isEqualTo(1900000L);
-        assertThat(withdrawHistory.getMemo()).isEqualTo("적금 월 납입 자동이체");
-
-        TransactionHistory savingHistory = histories.get(1);
-        assertThat(savingHistory.getType()).isEqualTo(TransactionType.INSTALLMENT_PAYMENT);
-        assertThat(savingHistory.getDirection()).isEqualTo(TransactionDirection.IN);
-        assertThat(savingHistory.getAmount()).isEqualTo(100000L);
-        assertThat(savingHistory.getBalanceBefore()).isEqualTo(100000L);
-        assertThat(savingHistory.getBalanceAfter()).isEqualTo(200000L);
-        assertThat(savingHistory.getMemo()).isEqualTo("적금 계좌 월 납입 입금");
-    }
 
     @Test
     @DisplayName("잔액이 부족하면 납입 실패 상태로 변경한다")

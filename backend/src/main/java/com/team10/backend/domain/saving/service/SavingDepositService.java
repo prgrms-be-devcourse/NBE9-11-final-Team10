@@ -288,26 +288,6 @@ public class SavingDepositService {
     }
 
     @Transactional
-    public WithdrawalLockRes updateWithdrawalLock(
-            Long userId,
-            Long savingId,
-            WithdrawalLockReq request
-    ) {
-        validateUnlockReason(request);
-
-        if (request.savingType() == SavingProductType.DEPOSIT) {
-            return updateDepositWithdrawalLock(userId, savingId, request);
-        }
-
-        if (request.savingType() == SavingProductType.INSTALLMENT) {
-            return updateInstallmentWithdrawalLock(userId, savingId, request);
-        }
-
-        throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
-    }
-
-
-    @Transactional
     public EarlyCancelRes cancelSaving(
             Long userId,
             Long savingId,
@@ -339,27 +319,6 @@ public class SavingDepositService {
         return InterestPreviewRes.fromInstallment(installment, expectedInterest, expectedTotalAmount);
     }
 
-    private WithdrawalLockRes updateDepositWithdrawalLock(
-            Long userId,
-            Long savingId,
-            WithdrawalLockReq request
-    ) {
-        Deposit deposit = findDepositWithProduct(userId, savingId);
-        deposit.updateWithdrawalLock(request.lockYn(), request.reason());
-
-        return WithdrawalLockRes.fromDeposit(deposit);
-    }
-
-    private WithdrawalLockRes updateInstallmentWithdrawalLock(
-            Long userId,
-            Long savingId,
-            WithdrawalLockReq request
-    ) {
-        Installment installment = findInstallmentWithProduct(userId, savingId);
-        installment.updateWithdrawalLock(request.lockYn(), request.reason());
-
-        return WithdrawalLockRes.fromInstallment(installment);
-    }
 
     private EarlyCancelRes cancelDeposit(Long userId, Long savingId) {
         Deposit deposit = depositRepository.findByIdAndUserIdWithAccountForUpdate(savingId, userId)
@@ -434,30 +393,15 @@ public class SavingDepositService {
                 .orElseThrow(() -> new BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
     }
 
-    private void validateUnlockReason(WithdrawalLockReq request) {
-        if (Boolean.FALSE.equals(request.lockYn())
-                && (request.reason() == null || request.reason().isBlank())) {
-            throw new BusinessException(SavingErrorCode.WITHDRAWAL_UNLOCK_REASON_REQUIRED);
-        }
-    }
-
     private void validateDepositCancelable(Deposit deposit) {
         if (deposit.getStatus() != DepositStatus.ACTIVE) {
             throw new BusinessException(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
-        }
-
-        if (deposit.isWithdrawalLocked()) {
-            throw new BusinessException(SavingErrorCode.SAVING_WITHDRAWAL_LOCKED);
         }
     }
 
     private void validateInstallmentCancelable(Installment installment) {
         if (installment.getStatus() != InstallmentStatus.ACTIVE) {
             throw new BusinessException(SavingErrorCode.SAVING_CANCEL_NOT_ALLOWED);
-        }
-
-        if (installment.isWithdrawalLocked()) {
-            throw new BusinessException(SavingErrorCode.SAVING_WITHDRAWAL_LOCKED);
         }
     }
 

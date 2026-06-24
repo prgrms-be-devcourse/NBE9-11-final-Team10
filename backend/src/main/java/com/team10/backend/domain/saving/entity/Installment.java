@@ -61,12 +61,6 @@ public class Installment extends BaseEntity {
     private InstallmentStatus status; // 적금 상태
 
     @Column(nullable = false)
-    private boolean withdrawalLocked; // 출금 제한 여부
-
-    @Column(length = 255)
-    private String withdrawalLockReason; // 출금 제한 사유
-
-    @Column(nullable = false)
     private int paymentRetryCount; // 자동이체 실패/재시도 횟수
 
     @Column
@@ -102,8 +96,6 @@ public class Installment extends BaseEntity {
         installment.maturityDate = maturityDate;
         installment.autoTransferYn = autoTransferYn;
         installment.status = InstallmentStatus.ACTIVE;
-        installment.withdrawalLocked = false;
-        installment.withdrawalLockReason = null;
         installment.paymentRetryCount = 0;
         installment.nextPaymentRetryDate = null;
         installment.lastPaymentFailedDate = null;
@@ -115,10 +107,6 @@ public class Installment extends BaseEntity {
         return paidAmount * 100 / targetAmount;
     }
 
-    public void updateWithdrawalLock(boolean lockYn, String reason) {
-        this.withdrawalLocked = lockYn;
-        this.withdrawalLockReason = reason;
-    }
 
     public void payMonthlyAmount() {
         this.paidAmount += this.monthlyAmount;
