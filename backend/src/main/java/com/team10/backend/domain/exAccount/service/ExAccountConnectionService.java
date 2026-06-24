@@ -16,10 +16,13 @@ import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.lock.DistributedLockTemplate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -36,33 +39,46 @@ public class ExAccountConnectionService {
     private final ExAccountSyncService exAccountSyncService;
     private final ExAccountRepository exAccountRepository;
     private final CodefExAccountCandidateStore candidateStore;
+    private final ExAccountCodefRateLimitService rateLimitService;
+    private final DistributedLockTemplate lockTemplate;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 사용자의 특정 금융기관 계정 인증 정보(connectedId)를 등록하고 DB에 저장(암호화)합니다.
      */
-    @Transactional
     public ExAccountConnectionRes register(
             Long userId,
             CodefExAccountConnectionCreateReq request
     ) {
-        // 1. 유저 검증
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+        String lockKey = "lock:ex-account:connection:" + userId + ":" + request.organization();
+        return lockTemplate.executeWithLock(
+                lockKey,
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(10),
+                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_CONCURRENT_REQUEST,
+                () -> {
+                    // 트랜잭션 외부에서 실행: Rate limit 체크 및 외부 API 호출 (커넥션 풀 고사 방지)
+                    rateLimitService.checkRegister(userId, request.organization());
+                    EncryptedConnectedId encryptedConnectedId = codefExAccountGateway.register(request);
 
-        // 2. CODEF API에 계정을 등록하고, 발급된 connectedId를 AES-GCM 알고리즘으로 양방향 암호화 처리
-        EncryptedConnectedId encryptedConnectedId = codefExAccountGateway.register(request);
+                    // 트랜잭션 내부에서 실행: DB 조회 및 저장
+                    return transactionTemplate.execute(status -> {
+                        User user = userRepository.findById(userId)
+                                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
 
-        // 3. 기존에 해당 기관 연결 정보가 있었다면 갱신하고, 없었다면 신규 저장 처리 (Upsert)
-        ExAccountConnection connection = connectionRepository
-                .findByUserIdAndOrganization(userId, request.organization())
-                .map(existing -> updateConnection(existing, encryptedConnectedId))
-                .orElseGet(() -> ExAccountConnection.create(
-                        user,
-                        request.organization(),
-                        encryptedConnectedId
-                ));
-        ExAccountConnection saved = connectionRepository.save(connection);
-        return new ExAccountConnectionRes(saved.getOrganization(), saved.getStatus());
+                        ExAccountConnection connection = connectionRepository
+                                .findByUserIdAndOrganization(userId, request.organization())
+                                .map(existing -> updateConnection(existing, encryptedConnectedId))
+                                .orElseGet(() -> ExAccountConnection.create(
+                                        user,
+                                        request.organization(),
+                                        encryptedConnectedId
+                                ));
+                        ExAccountConnection saved = connectionRepository.saveAndFlush(connection);
+                        return new ExAccountConnectionRes(saved.getOrganization(), saved.getStatus());
+                    });
+                }
+        );
     }
 
     /**
@@ -73,6 +89,8 @@ public class ExAccountConnectionService {
     public ExAccountCandidateListRes getLinkCandidates(Long userId, String organization) {
         // 1. 해당 기관의 연결 정보(ExAccountConnection)가 유효(ACTIVE)한 상태인지 확인
         ExAccountConnection connection = getActiveConnection(userId, organization);
+
+        rateLimitService.checkAccountList(userId, organization);
 
         // 2. 암호화된 connectedId를 복호화하여 CODEF API로부터 실시간 보유 계좌 스냅샷 데이터 획득
         List<CodefExAccountSnapshot> snapshots = codefExAccountGateway

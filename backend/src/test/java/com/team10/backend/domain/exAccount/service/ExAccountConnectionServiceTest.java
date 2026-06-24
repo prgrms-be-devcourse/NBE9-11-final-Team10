@@ -17,12 +17,16 @@ import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
+import com.team10.backend.global.lock.DistributedLockTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,6 +36,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,6 +56,12 @@ class ExAccountConnectionServiceTest {
     private ExAccountRepository exAccountRepository;
     @Mock
     private CodefExAccountCandidateStore candidateStore;
+    @Mock
+    private ExAccountCodefRateLimitService rateLimitService;
+    @Mock
+    private DistributedLockTemplate lockTemplate;
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     private ExAccountConnectionService service;
     private User user;
@@ -64,7 +75,10 @@ class ExAccountConnectionServiceTest {
                 codefExAccountGateway,
                 exAccountSyncService,
                 exAccountRepository,
-                candidateStore
+                candidateStore,
+                rateLimitService,
+                lockTemplate,
+                transactionTemplate
         );
         user = User.create(
                 "test@example.com",
@@ -76,9 +90,22 @@ class ExAccountConnectionServiceTest {
         createRequest = new CodefExAccountConnectionCreateReq(
                 "0004", "BK", "P", "1", "user123", "pass123", "990101"
         );
+
+        // Default mock behaviors for lockTemplate and transactionTemplate to run synchronously
+        org.mockito.Mockito.lenient().when(lockTemplate.executeWithLock(any(), any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.function.Supplier<?> supplier = invocation.getArgument(4);
+                    return supplier.get();
+                });
+        org.mockito.Mockito.lenient().when(transactionTemplate.execute(any()))
+                .thenAnswer(invocation -> {
+                    org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
+                    return callback.doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus());
+                });
     }
 
     @Test
+    @DisplayName("연결 등록은 사용자+기관 단위 CODEF 계정등록 호출 지점이다")
     void registersConnectionProperly() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         EncryptedConnectedId encryptedConnectedId = new EncryptedConnectedId(
@@ -89,7 +116,7 @@ class ExAccountConnectionServiceTest {
                 .thenReturn(Optional.empty());
 
         ExAccountConnection mockSaved = connection("ciphertext");
-        when(connectionRepository.save(any())).thenReturn(mockSaved);
+        when(connectionRepository.saveAndFlush(any())).thenReturn(mockSaved);
 
         ExAccountConnectionRes response = service.register(1L, createRequest);
 
@@ -98,14 +125,44 @@ class ExAccountConnectionServiceTest {
 
         ArgumentCaptor<ExAccountConnection> captor =
                 ArgumentCaptor.forClass(ExAccountConnection.class);
-        verify(connectionRepository).save(captor.capture());
+        verify(connectionRepository).saveAndFlush(captor.capture());
         ExAccountConnection captured = captor.getValue();
         assertThat(captured.getUser()).isEqualTo(user);
         assertThat(captured.getOrganization()).isEqualTo("0004");
         assertThat(captured.encryptedConnectedId()).isEqualTo(encryptedConnectedId);
+        verify(rateLimitService).checkRegister(1L, "0004");
+        verify(codefExAccountGateway).register(createRequest);
     }
 
     @Test
+    void registerThrowsExceptionWhenLockAcquisitionFails() {
+        org.mockito.Mockito.doThrow(new BusinessException(
+                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_CONCURRENT_REQUEST
+        )).when(lockTemplate).executeWithLock(any(), any(), any(), any(), any());
+
+        assertThatThrownBy(() -> service.register(1L, createRequest))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_CONCURRENT_REQUEST
+                        ));
+    }
+
+    @Test
+    void registerDoesNotCallCodefWhenUserOrganizationRateLimitIsExceeded() {
+        doThrow(new BusinessException(
+                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_REGISTER_RATE_LIMIT_EXCEEDED
+        )).when(rateLimitService).checkRegister(1L, "0004");
+
+        assertThatThrownBy(() -> service.register(1L, createRequest))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_REGISTER_RATE_LIMIT_EXCEEDED));
+
+        verify(codefExAccountGateway, never()).register(any());
+    }
+
+    @Test
+    @DisplayName("후보 조회는 사용자+기관 단위 CODEF 보유계좌 조회 호출 지점이다")
     void getsProviderAccountsAndReturnsMaskedCandidates() {
         ExAccountConnection connection = connection("ciphertext");
         CodefExAccountSnapshot snapshot = snapshot();
@@ -129,6 +186,25 @@ class ExAccountConnectionServiceTest {
         assertThat(result.accounts()).containsExactly(candidate);
         assertThat(result.accounts().getFirst().accountNoMasked()).doesNotContain("1234567890");
         assertThat(connection.getLastSyncedAt()).isNotNull();
+        verify(rateLimitService).checkAccountList(1L, "0004");
+        verify(codefExAccountGateway).getAccountSnapshots("0004", connection.encryptedConnectedId());
+    }
+
+    @Test
+    void getLinkCandidatesDoesNotCallCodefWhenUserOrganizationRateLimitIsExceeded() {
+        ExAccountConnection connection = connection("ciphertext");
+        when(connectionRepository.findByUserIdAndOrganization(1L, "0004"))
+                .thenReturn(Optional.of(connection));
+        doThrow(new BusinessException(
+                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_ACCOUNT_LIST_RATE_LIMIT_EXCEEDED
+        )).when(rateLimitService).checkAccountList(1L, "0004");
+
+        assertThatThrownBy(() -> service.getLinkCandidates(1L, "0004"))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_ACCOUNT_LIST_RATE_LIMIT_EXCEEDED));
+
+        verify(codefExAccountGateway, never()).getAccountSnapshots(any(), any());
     }
 
     @Test

@@ -12,8 +12,12 @@ import com.team10.backend.domain.exAccount.repository.ExAccountTransactionReposi
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import lombok.RequiredArgsConstructor;
+import com.team10.backend.global.lock.DistributedLockTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.time.Duration;
 
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -32,6 +36,8 @@ public class ExAccountTransactionService {
     private final ExAccountTransactionRepository transactionRepository;
     private final ExAccountRepository accountRepository;
     private final ExAccountService exAccountService;
+    private final DistributedLockTemplate lockTemplate;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 특정 사용자가 연동한 모든 외부 계좌들의 통합 거래내역 목록을 최신순으로 조회합니다.
@@ -53,38 +59,46 @@ public class ExAccountTransactionService {
      * @param transactions 외부기관으로부터 신규 수신한 거래내역 동기화 요청 DTO 리스트
      * @return 추가/변경 통계 및 업데이트된 계좌 상세 결과를 담은 갱신 응답 DTO
      */
-    @Transactional
     public ExAccountTransactionRefreshRes refreshTransactions(
             Long userId,
             Long exAccountId,
             List<ExAccountTransactionSyncReq> transactions
     ) {
-        validateTransactions(transactions);
+        String lockKey = "lock:ex-account:transactions:" + exAccountId;
+        return lockTemplate.executeWithLock(
+                lockKey,
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(10),
+                ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC,
+                () -> transactionTemplate.execute(status -> {
+                    validateTransactions(transactions);
 
-        ExAccount account = accountRepository.findByIdAndUserId(exAccountId, userId)
-                .orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
+                    ExAccount account = accountRepository.findByIdAndUserId(exAccountId, userId)
+                            .orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
 
-        int createdCount = 0;
-        int updatedCount = 0;
+                    int createdCount = 0;
+                    int updatedCount = 0;
 
-        for (ExAccountTransactionSyncReq transaction : transactions) {
-            if (upsertTransaction(account, transaction)) {
-                createdCount++;
-                continue;
-            }
+                    for (ExAccountTransactionSyncReq transaction : transactions) {
+                        if (upsertTransaction(account, transaction)) {
+                            createdCount++;
+                            continue;
+                        }
 
-            updatedCount++;
-        }
+                        updatedCount++;
+                    }
 
-        // 수신된 거래 내역들 중 가장 최신의 거래 일자로 계좌의 마지막 거래 시각 갱신
-        transactions.stream()
-                .map(ExAccountTransactionSyncReq::transactedAt)
-                .max(Comparator.naturalOrder())
-                .map(LocalDate::from)
-                .ifPresent(account::updateLastTransactionAt);
+                    // 수신된 거래 내역들 중 가장 최신의 거래 일자로 계좌의 마지막 거래 시각 갱신
+                    transactions.stream()
+                            .map(ExAccountTransactionSyncReq::transactedAt)
+                            .max(Comparator.naturalOrder())
+                            .map(LocalDate::from)
+                            .ifPresent(account::updateLastTransactionAt);
 
-        ExAccountDetailRes detail = exAccountService.getAccountDetail(userId, exAccountId);
-        return ExAccountTransactionRefreshRes.of(transactions.size(), createdCount, updatedCount, detail);
+                    ExAccountDetailRes detail = exAccountService.getAccountDetail(userId, exAccountId);
+                    return ExAccountTransactionRefreshRes.of(transactions.size(), createdCount, updatedCount, detail);
+                })
+        );
     }
 
     /**
@@ -118,16 +132,25 @@ public class ExAccountTransactionService {
      * @return 신규 등록(Insert)된 경우 true, 기존 내용 업데이트(Update)인 경우 false 반환
      */
     private boolean upsertTransaction(ExAccount account, ExAccountTransactionSyncReq request) {
-        ExAccountTransaction transaction = transactionRepository
+        boolean isNew = transactionRepository
                 .findByExAccountIdAndTransactionKey(account.getId(), request.transactionKey())
-                .orElse(null);
+                .isEmpty();
 
-        if (transaction == null) {
-            transactionRepository.save(request.toEntity(account));
-            return true;
-        }
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC);
+        transactionRepository.upsert(
+                account.getId(),
+                request.transactionKey(),
+                request.transactedAt(),
+                request.direction().name(),
+                request.amount() == null ? java.math.BigDecimal.ZERO : request.amount(),
+                request.balanceAfter(),
+                request.counterpartyName(),
+                request.memo(),
+                request.rawCategory(),
+                now,
+                now
+        );
 
-        request.applyTo(transaction);
-        return false;
+        return isNew;
     }
 }

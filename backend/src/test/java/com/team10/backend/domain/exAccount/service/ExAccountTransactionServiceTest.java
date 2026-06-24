@@ -22,6 +22,8 @@ import com.team10.backend.domain.exAccount.repository.ExAccountTransactionReposi
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
+import com.team10.backend.global.lock.DistributedLockTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -48,6 +50,12 @@ class ExAccountTransactionServiceTest {
     @Mock
     private ExAccountService exAccountService;
 
+    @Mock
+    private DistributedLockTemplate lockTemplate;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     @InjectMocks
     private ExAccountTransactionService exAccountTransactionService;
 
@@ -58,6 +66,17 @@ class ExAccountTransactionServiceTest {
     void setUp() {
         user = createUser(1L);
         account = createExAccount(10L);
+
+        org.mockito.Mockito.lenient().when(lockTemplate.executeWithLock(any(), any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.function.Supplier<?> supplier = invocation.getArgument(4);
+                    return supplier.get();
+                });
+        org.mockito.Mockito.lenient().when(transactionTemplate.execute(any()))
+                .thenAnswer(invocation -> {
+                    org.springframework.transaction.support.TransactionCallback<?> callback = invocation.getArgument(0);
+                    return callback.doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus());
+                });
     }
 
     @Test
@@ -82,7 +101,30 @@ class ExAccountTransactionServiceTest {
         assertThat(response.updatedCount()).isZero();
         assertThat(account.getLastTransactionAt()).isEqualTo(LocalDate.of(2026, 6, 18));
 
-        verify(transactionRepository).save(any(ExAccountTransaction.class));
+        verify(transactionRepository).upsert(
+                org.mockito.Mockito.eq(10L),
+                org.mockito.Mockito.eq("KB-20260618143000-0001"),
+                any(), any(), any(), any(), org.mockito.Mockito.eq("스타벅스"), any(), any(), any(), any()
+        );
+    }
+
+    @Test
+    @DisplayName("락 획득에 실패하면 거래내역 동기화가 실패한다")
+    void refreshTransactionsFailsWhenLockAcquisitionFails() {
+        ExAccountTransactionSyncReq request = createTransactionSyncReq("KB-20260618143000-0001", "스타벅스");
+        org.mockito.Mockito.reset(lockTemplate);
+        when(lockTemplate.executeWithLock(any(), any(), any(), any(), any()))
+                .thenThrow(new BusinessException(ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC));
+
+        assertThatThrownBy(() -> exAccountTransactionService.refreshTransactions(
+                1L,
+                10L,
+                List.of(request)
+        ))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC
+                        ));
     }
 
     @Test
@@ -106,9 +148,12 @@ class ExAccountTransactionServiceTest {
         assertThat(response.requestedCount()).isEqualTo(1);
         assertThat(response.createdCount()).isZero();
         assertThat(response.updatedCount()).isEqualTo(1);
-        assertThat(transaction.getCounterpartyName()).isEqualTo("편의점");
 
-        verify(transactionRepository, never()).save(any());
+        verify(transactionRepository).upsert(
+                org.mockito.Mockito.eq(10L),
+                org.mockito.Mockito.eq("KB-20260618143000-0001"),
+                any(), any(), any(), any(), org.mockito.Mockito.eq("편의점"), any(), any(), any(), any()
+        );
     }
 
     @Test
