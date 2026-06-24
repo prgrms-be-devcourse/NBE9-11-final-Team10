@@ -327,9 +327,7 @@ resource "aws_instance" "edge" {
     }
   )
 
-  # user_data가 변경되면 기존 EC2를 교체 생성합니다.
-  # user_data는 최초 부팅 시 실행되므로, 변경 내용을 확실히 반영하기 위해 재생성되도록 설정합니다.
-  user_data_replace_on_change = true
+  user_data_replace_on_change = false
 
   # 루트 EBS 볼륨 설정입니다.
   # Docker 이미지, Nginx Proxy Manager 데이터, 모니터링 데이터 등을 고려하여 30GiB로 설정합니다.
@@ -381,9 +379,7 @@ resource "aws_instance" "app_data" {
     }
   )
 
-  # user_data가 변경되면 기존 EC2를 교체 생성합니다.
-  # user_data는 최초 부팅 시 실행되므로, 변경 내용을 확실히 반영하기 위해 재생성되도록 설정합니다.
-  user_data_replace_on_change = true
+  user_data_replace_on_change = false
 
   # 루트 EBS 볼륨 설정입니다.
   # Spring 이미지, MySQL 데이터, Redis 데이터, 로그 저장을 고려하여 40GiB로 설정합니다.

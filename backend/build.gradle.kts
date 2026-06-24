@@ -78,6 +78,9 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter:1.21.3")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // actuator
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
 }
 
 tasks.withType<Test> {
