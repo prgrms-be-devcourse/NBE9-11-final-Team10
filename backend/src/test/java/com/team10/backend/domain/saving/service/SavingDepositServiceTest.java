@@ -106,7 +106,12 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
                 .thenReturn(Optional.of(depositProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
+            Account account = invocation.getArgument(0);
+            ReflectionTestUtils.setField(account, "id", 10L);
+            return account;
+        });
         when(depositRepository.save(any(Deposit.class))).thenAnswer(invocation -> {
             Deposit deposit = invocation.getArgument(0);
             ReflectionTestUtils.setField(deposit, "id", 1L);
@@ -121,6 +126,13 @@ class SavingDepositServiceTest {
         assertThat(response.maturityDate()).isEqualTo(TODAY.plusMonths(12));
         assertThat(response.expectedInterest()).isEqualTo(35000L);
         assertThat(activeAccount.getBalance()).isEqualTo(1000000L);
+
+        ArgumentCaptor<Account> accountCaptor = forClass(Account.class);
+        verify(accountRepository).save(accountCaptor.capture());
+        Account savingAccount = accountCaptor.getValue();
+        assertThat(savingAccount.getAccountType()).isEqualTo(AccountType.SAVING_DEPOSIT);
+        assertThat(savingAccount.getBalance()).isEqualTo(1000000L);
+
         verify(depositRepository).save(any(Deposit.class));
     }
 
@@ -160,7 +172,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
                 .thenReturn(Optional.of(depositProduct));
-        when(accountRepository.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
+        when(accountRepository.findByIdAndUserIdForUpdate(999L, 1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -177,7 +189,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
                 .thenReturn(Optional.of(depositProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(closedAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(closedAccount));
 
         assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -193,7 +205,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
                 .thenReturn(Optional.of(depositProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(activeAccount));
 
         assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -209,7 +221,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
                 .thenReturn(Optional.of(depositProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(activeAccount));
 
         assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -226,7 +238,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(1L, SavingProductType.DEPOSIT))
                 .thenReturn(Optional.of(depositProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(insufficientAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(insufficientAccount));
 
         assertThatThrownBy(() -> savingDepositService.createDeposit(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -498,6 +510,8 @@ class SavingDepositServiceTest {
         assertThat(response.refundAmount()).isEqualTo(1008750L);
         assertThat(response.status()).isEqualTo("CANCELLED");
         assertThat(activeAccount.getBalance()).isEqualTo(3008750L);
+        assertThat(deposit.getSavingAccount().getBalance()).isZero();
+        assertThat(deposit.getSavingAccount().getStatus()).isEqualTo(AccountStatus.CLOSED);
         assertThat(deposit.getStatus()).isEqualTo(DepositStatus.CANCELLED);
 
         ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
@@ -531,6 +545,8 @@ class SavingDepositServiceTest {
         assertThat(response.refundAmount()).isEqualTo(100750L);
         assertThat(response.status()).isEqualTo("CANCELLED");
         assertThat(activeAccount.getBalance()).isEqualTo(2100750L);
+        assertThat(installment.getSavingAccount().getBalance()).isZero();
+        assertThat(installment.getSavingAccount().getStatus()).isEqualTo(AccountStatus.CLOSED);
         assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.CANCELLED);
 
         ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
@@ -803,7 +819,12 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(2L, SavingProductType.INSTALLMENT))
                 .thenReturn(Optional.of(installmentProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
+            Account account = invocation.getArgument(0);
+            ReflectionTestUtils.setField(account, "id", 20L);
+            return account;
+        });
         when(installmentRepository.save(any(Installment.class))).thenAnswer(invocation -> {
             Installment installment = invocation.getArgument(0);
             ReflectionTestUtils.setField(installment, "id", 1L);
@@ -817,6 +838,13 @@ class SavingDepositServiceTest {
         assertThat(response.maturityDate()).isEqualTo(TODAY.plusMonths(12));
         assertThat(response.progressRate()).isEqualTo(8L);
         assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
+
+        ArgumentCaptor<Account> accountCaptor = forClass(Account.class);
+        verify(accountRepository).save(accountCaptor.capture());
+        Account savingAccount = accountCaptor.getValue();
+        assertThat(savingAccount.getAccountType()).isEqualTo(AccountType.SAVING_INSTALLMENT);
+        assertThat(savingAccount.getBalance()).isEqualTo(100000L);
+
         verify(installmentRepository).save(any(Installment.class));
     }
 
@@ -856,7 +884,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(2L, SavingProductType.INSTALLMENT))
                 .thenReturn(Optional.of(installmentProduct));
-        when(accountRepository.findByIdAndUserId(999L, 1L)).thenReturn(Optional.empty());
+        when(accountRepository.findByIdAndUserIdForUpdate(999L, 1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> savingDepositService.createInstallment(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -873,7 +901,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(2L, SavingProductType.INSTALLMENT))
                 .thenReturn(Optional.of(installmentProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(closedAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(closedAccount));
 
         assertThatThrownBy(() -> savingDepositService.createInstallment(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -889,7 +917,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(2L, SavingProductType.INSTALLMENT))
                 .thenReturn(Optional.of(installmentProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(activeAccount));
 
         assertThatThrownBy(() -> savingDepositService.createInstallment(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -905,7 +933,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(2L, SavingProductType.INSTALLMENT))
                 .thenReturn(Optional.of(installmentProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(activeAccount));
 
         assertThatThrownBy(() -> savingDepositService.createInstallment(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -921,7 +949,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(2L, SavingProductType.INSTALLMENT))
                 .thenReturn(Optional.of(installmentProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(activeAccount));
 
         assertThatThrownBy(() -> savingDepositService.createInstallment(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -938,7 +966,7 @@ class SavingDepositServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(savingProductRepository.findByIdAndTypeAndActiveTrue(2L, SavingProductType.INSTALLMENT))
                 .thenReturn(Optional.of(installmentProduct));
-        when(accountRepository.findByIdAndUserId(1L, 1L)).thenReturn(Optional.of(insufficientAccount));
+        when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(insufficientAccount));
 
         assertThatThrownBy(() -> savingDepositService.createInstallment(1L, request))
                 .isInstanceOf(BusinessException.class)
@@ -971,11 +999,19 @@ class SavingDepositServiceTest {
         return account;
     }
 
+    private Account createSavingAccount(Long id, AccountType accountType, Long balance) {
+        Account account = Account.create(user, "09141234567" + id, "예적금 계좌", accountType);
+        ReflectionTestUtils.setField(account, "id", id);
+        ReflectionTestUtils.setField(account, "balance", balance);
+        return account;
+    }
+
     private Deposit createDeposit(Long id, DepositStatus status) {
         Deposit deposit = Deposit.create(
                 user,
                 depositProduct,
                 activeAccount,
+                createSavingAccount(100L + id, AccountType.SAVING_DEPOSIT, 1000000L),
                 1000000L,
                 3.5,
                 TODAY.plusMonths(12),
@@ -991,6 +1027,7 @@ class SavingDepositServiceTest {
                 user,
                 installmentProduct,
                 activeAccount,
+                createSavingAccount(200L + id, AccountType.SAVING_INSTALLMENT, 100000L),
                 100000L,
                 1200000L,
                 3.0,

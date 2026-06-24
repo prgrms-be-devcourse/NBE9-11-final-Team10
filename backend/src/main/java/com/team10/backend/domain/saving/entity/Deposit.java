@@ -29,6 +29,10 @@ public class Deposit extends BaseEntity {
     @JoinColumn(name = "withdraw_account_id", nullable = false)
     private Account withdrawAccount; // 출금 계좌
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "saving_account_id", nullable = false)
+    private Account savingAccount; // 예금 전용 계좌
+
     @Column(nullable = false)
     private Long principal; // 예치 원금
 
@@ -55,6 +59,7 @@ public class Deposit extends BaseEntity {
             User user,
             SavingProduct savingProduct,
             Account withdrawAccount,
+            Account savingAccount,
             Long principal,
             Double interestRate,
             LocalDate maturityDate,
@@ -64,6 +69,7 @@ public class Deposit extends BaseEntity {
         deposit.user = user;
         deposit.savingProduct = savingProduct;
         deposit.withdrawAccount = withdrawAccount;
+        deposit.savingAccount = savingAccount;
         deposit.principal = principal;
         deposit.interestRate = interestRate;
         deposit.maturityDate = maturityDate;

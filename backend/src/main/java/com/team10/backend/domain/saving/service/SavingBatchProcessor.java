@@ -87,6 +87,7 @@ public class SavingBatchProcessor {
         Long balanceBefore = withdrawAccount.getBalance();
 
         withdrawAccount.withdraw(paymentAmount);
+        installment.getSavingAccount().deposit(paymentAmount);
 
         Long balanceAfter = withdrawAccount.getBalance();
 
@@ -140,6 +141,10 @@ public class SavingBatchProcessor {
 
         Long payoutAmount =
                 deposit.getPrincipal() + interestAmount;
+
+        Account savingAccount = deposit.getSavingAccount();
+        savingAccount.withdraw(deposit.getPrincipal());
+        savingAccount.close();
 
         Account withdrawAccount = deposit.getWithdrawAccount();
         Long balanceBefore = withdrawAccount.getBalance();
@@ -201,6 +206,10 @@ public class SavingBatchProcessor {
 
         Long payoutAmount =
                 installment.getPaidAmount() + interestAmount;
+
+        Account savingAccount = installment.getSavingAccount();
+        savingAccount.withdraw(installment.getPaidAmount());
+        savingAccount.close();
 
         Account withdrawAccount = installment.getWithdrawAccount();
         Long balanceBefore = withdrawAccount.getBalance();

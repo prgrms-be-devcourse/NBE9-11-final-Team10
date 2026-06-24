@@ -3,6 +3,8 @@ package com.team10.backend.domain.saving.service;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.repository.AccountRepository;
+import com.team10.backend.domain.account.type.AccountType;
+import com.team10.backend.domain.account.util.AccountNumberGenerator;
 import com.team10.backend.domain.saving.dto.req.*;
 import com.team10.backend.domain.saving.dto.res.*;
 import com.team10.backend.domain.saving.entity.Deposit;
@@ -40,6 +42,9 @@ public class SavingDepositService {
     private static final int MONTHS_IN_YEAR = 12;
     private static final int PERCENT_DIVISOR = 100;
     private static final int EARLY_CANCEL_INTEREST_RATE_DIVISOR = 2;
+    private static final int MAX_ACCOUNT_NUMBER_GENERATION_RETRY = 10;
+    private static final String DEPOSIT_ACCOUNT_NICKNAME = "예금 계좌";
+    private static final String INSTALLMENT_ACCOUNT_NICKNAME = "적금 계좌";
     private static final String DEPOSIT_CANCEL_REFUND_MEMO = "예금 중도 해지 반환";
     private static final String INSTALLMENT_CANCEL_REFUND_MEMO = "적금 중도 해지 반환";
 
@@ -63,7 +68,7 @@ public class SavingDepositService {
                 .orElseThrow(() -> new BusinessException(SavingErrorCode.SAVING_PRODUCT_NOT_FOUND));
 
         Account withdrawAccount = accountRepository
-                .findByIdAndUserId(request.withdrawAccountId(), userId)
+                .findByIdAndUserIdForUpdate(request.withdrawAccountId(), userId)
                 .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         if (!withdrawAccount.isActive()) {
@@ -84,6 +89,13 @@ public class SavingDepositService {
 
         withdrawAccount.withdraw(request.amount());
 
+        Account savingAccount = createSavingAccount(
+                user,
+                DEPOSIT_ACCOUNT_NICKNAME,
+                AccountType.SAVING_DEPOSIT,
+                request.amount()
+        );
+
         // 원금 × 연이율 × 가입개월수 ÷ 1년 개월수 ÷ 퍼센트 변환값
         Long expectedInterest = (long) (
                 request.amount()
@@ -97,6 +109,7 @@ public class SavingDepositService {
                 user,
                 savingProduct,
                 withdrawAccount,
+                savingAccount,
                 request.amount(),
                 savingProduct.getInterestRate(),
                 maturityDate,
@@ -119,7 +132,7 @@ public class SavingDepositService {
                 .orElseThrow(() -> new BusinessException(SavingErrorCode.SAVING_PRODUCT_NOT_FOUND));
 
         Account withdrawAccount = accountRepository
-                .findByIdAndUserId(request.withdrawAccountId(), userId)
+                .findByIdAndUserIdForUpdate(request.withdrawAccountId(), userId)
                 .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         if (!withdrawAccount.isActive()) {
@@ -148,10 +161,18 @@ public class SavingDepositService {
         // 적금 가입할 때 출금 계좌에서 1회차 월 납입액을 빼는 코드
         withdrawAccount.withdraw(request.monthlyAmount());
 
+        Account savingAccount = createSavingAccount(
+                user,
+                INSTALLMENT_ACCOUNT_NICKNAME,
+                AccountType.SAVING_INSTALLMENT,
+                request.monthlyAmount()
+        );
+
         Installment installment = Installment.create(
                 user,
                 savingProduct,
                 withdrawAccount,
+                savingAccount,
                 request.monthlyAmount(),
                 request.targetAmount(),
                 savingProduct.getInterestRate(),
@@ -313,6 +334,10 @@ public class SavingDepositService {
             Long refundAmount =
                     deposit.getPrincipal() + interestAmount;
 
+            Account savingAccount = deposit.getSavingAccount();
+            savingAccount.withdraw(deposit.getPrincipal());
+            savingAccount.close();
+
             Account withdrawAccount = deposit.getWithdrawAccount(); // 반환금을 받을 연결 계좌
             Long balanceBefore = withdrawAccount.getBalance(); // 입금 전 계좌 잔액
 
@@ -359,6 +384,10 @@ public class SavingDepositService {
             Long refundAmount =
                     installment.getPaidAmount() + interestAmount;
 
+            Account savingAccount = installment.getSavingAccount();
+            savingAccount.withdraw(installment.getPaidAmount());
+            savingAccount.close();
+
             Account withdrawAccount = installment.getWithdrawAccount(); // 반환금을 받을 연결 계좌
             Long balanceBefore = withdrawAccount.getBalance(); // 입금 전 계좌 잔액
 
@@ -384,6 +413,36 @@ public class SavingDepositService {
         }
 
         throw new BusinessException(SavingErrorCode.INVALID_SAVING_TYPE);
+    }
+
+    private Account createSavingAccount(
+            User user,
+            String nickname,
+            AccountType accountType,
+            Long initialBalance
+    ) {
+        Account savingAccount = Account.create(
+                user,
+                generateUniqueAccountNumber(),
+                nickname,
+                accountType
+        );
+        Account savedSavingAccount = accountRepository.save(savingAccount);
+        savedSavingAccount.deposit(initialBalance);
+
+        return savedSavingAccount;
+    }
+
+    private String generateUniqueAccountNumber() {
+        for (int i = 0; i < MAX_ACCOUNT_NUMBER_GENERATION_RETRY; i++) {
+            String accountNumber = AccountNumberGenerator.generate();
+
+            if (!accountRepository.existsByAccountNumber(accountNumber)) {
+                return accountNumber;
+            }
+        }
+
+        throw new BusinessException(AccountErrorCode.ACCOUNT_NUMBER_GENERATION_FAILED);
     }
 
     private Long calculateDepositEarlyCancelInterest(Deposit deposit) {

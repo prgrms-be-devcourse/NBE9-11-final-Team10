@@ -99,6 +99,8 @@ class SavingBatchProcessorTest {
         assertThat(response.payoutAmount()).isEqualTo(1035000L);
         assertThat(response.status()).isEqualTo("MATURED");
         assertThat(activeAccount.getBalance()).isEqualTo(3035000L);
+        assertThat(deposit.getSavingAccount().getBalance()).isZero();
+        assertThat(deposit.getSavingAccount().getStatus()).isEqualTo(AccountStatus.CLOSED);
         assertThat(deposit.getStatus()).isEqualTo(DepositStatus.MATURED);
 
         ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
@@ -130,6 +132,8 @@ class SavingBatchProcessorTest {
         assertThat(response.payoutAmount()).isEqualTo(119500L);
         assertThat(response.status()).isEqualTo("MATURED");
         assertThat(activeAccount.getBalance()).isEqualTo(2119500L);
+        assertThat(installment.getSavingAccount().getBalance()).isZero();
+        assertThat(installment.getSavingAccount().getStatus()).isEqualTo(AccountStatus.CLOSED);
         assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.MATURED);
 
         ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
@@ -183,6 +187,7 @@ class SavingBatchProcessorTest {
         savingBatchProcessor.processInstallmentPayment(1L);
 
         assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
+        assertThat(installment.getSavingAccount().getBalance()).isEqualTo(200000L);
         assertThat(installment.getPaidAmount()).isEqualTo(200000L);
         assertThat(installment.getNextPaymentDate()).isEqualTo(TODAY.plusMonths(1));
         assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
@@ -211,6 +216,7 @@ class SavingBatchProcessorTest {
         savingBatchProcessor.processInstallmentPayment(1L);
 
         assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
+        assertThat(installment.getSavingAccount().getBalance()).isEqualTo(200000L);
         assertThat(installment.getPaidAmount()).isEqualTo(200000L);
         assertThat(installment.getNextPaymentDate()).isEqualTo(TODAY.plusMonths(1));
         assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
@@ -289,11 +295,19 @@ class SavingBatchProcessorTest {
         return account;
     }
 
+    private Account createSavingAccount(Long id, AccountType accountType, Long balance) {
+        Account account = Account.create(user, "09141234567" + id, "예적금 계좌", accountType);
+        ReflectionTestUtils.setField(account, "id", id);
+        ReflectionTestUtils.setField(account, "balance", balance);
+        return account;
+    }
+
     private Deposit createDeposit(Long id, DepositStatus status) {
         Deposit deposit = Deposit.create(
                 user,
                 depositProduct,
                 activeAccount,
+                createSavingAccount(100L + id, AccountType.SAVING_DEPOSIT, 1000000L),
                 1000000L,
                 3.5,
                 TODAY.plusMonths(12),
@@ -309,6 +323,7 @@ class SavingBatchProcessorTest {
                 user,
                 installmentProduct,
                 activeAccount,
+                createSavingAccount(200L + id, AccountType.SAVING_INSTALLMENT, 100000L),
                 100000L,
                 1200000L,
                 3.0,
