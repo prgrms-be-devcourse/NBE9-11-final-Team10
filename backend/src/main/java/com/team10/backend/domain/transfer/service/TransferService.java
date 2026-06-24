@@ -31,10 +31,18 @@ public class TransferService {
             key = "#idempotencyKey",
             hashFields = {"#senderAccountId", "#receiverAccountNumber", "#amount", "#memo"}
     )
-    public TransferRes transfer(Long userId, String idempotencyKey, Long senderAccountId, String receiverAccountNumber, Long amount, String memo) {
+    public TransferRes transfer(
+            Long userId, String idempotencyKey,
+            Long senderAccountId,
+            String receiverAccountNumber,
+            String accountPassword,
+            Long amount,
+            String memo
+    ) {
         return transferBusinessService.executeTransfer(userId,
                 senderAccountId,
                 receiverAccountNumber,
+                accountPassword,
                 amount,
                 memo);
     }

@@ -23,6 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -75,6 +76,9 @@ class TransferIdempotencyE2ETest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @BeforeEach
     void setUp() {
         cleanDatabase();
@@ -100,6 +104,7 @@ class TransferIdempotencyE2ETest {
         TransferReq firstRequest = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "점심값"
         );
@@ -124,6 +129,7 @@ class TransferIdempotencyE2ETest {
         TransferReq laterRequest = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 20_000L,
                 "후속 송금"
         );
@@ -193,6 +199,7 @@ class TransferIdempotencyE2ETest {
         TransferReq firstRequest = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "점심값"
         );
@@ -214,6 +221,7 @@ class TransferIdempotencyE2ETest {
         TransferReq differentRequest = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 60_000L,
                 "점심값"
         );
@@ -269,6 +277,7 @@ class TransferIdempotencyE2ETest {
         TransferReq request = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
+                "123456",
                 50_000L,
                 "동시 동일 키 송금"
         );
@@ -531,6 +540,7 @@ class TransferIdempotencyE2ETest {
 
     private Account saveAccount(User user, String accountNumber, Long balance) {
         Account account = Account.create(user, accountNumber, "테스트 계좌", AccountType.DEPOSIT);
+        account.changePassword(passwordEncoder.encode("123456"));
         account.deposit(balance);
         return transactionTemplate.execute(status -> accountRepository.save(account));
     }

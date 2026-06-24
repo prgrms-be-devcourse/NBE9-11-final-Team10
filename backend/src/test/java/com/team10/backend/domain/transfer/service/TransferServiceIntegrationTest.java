@@ -23,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -60,6 +61,9 @@ class TransferServiceIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void setUp() {
@@ -174,7 +178,7 @@ class TransferServiceIntegrationTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferService.transfer(user.getId(), "invalid-amount-key", account.getId(), "100200300002", 0L, "잘못된 송금")
+                () -> transferService.transfer(user.getId(), "invalid-amount-key", account.getId(), "100200300002", "123456", 0L, "잘못된 송금")
         );
         flushAndClear();
 
@@ -232,9 +236,9 @@ class TransferServiceIntegrationTest {
                     int currentSequence = sequence.getAndIncrement();
                     String idempotencyKey = "opposite-direction-" + currentSequence;
                     if (currentSequence % 2 == 0) {
-                        transferService.transfer(owner.getId(), idempotencyKey, firstAccount.getId(), secondAccount.getAccountNumber(), amount, "교차 송금");
+                        transferService.transfer(owner.getId(), idempotencyKey, firstAccount.getId(), secondAccount.getAccountNumber(), "123456", amount, "교차 송금");
                     } else {
-                        transferService.transfer(owner.getId(), idempotencyKey, secondAccount.getId(), firstAccount.getAccountNumber(), amount, "교차 송금");
+                        transferService.transfer(owner.getId(), idempotencyKey, secondAccount.getId(), firstAccount.getAccountNumber(), "123456", amount, "교차 송금");
                     }
                 }
         );
@@ -252,6 +256,7 @@ class TransferServiceIntegrationTest {
 
     private Account saveAccount(User user, String accountNumber, Long balance) {
         Account account = Account.create(user, accountNumber, "테스트 계좌", AccountType.DEPOSIT);
+        account.changePassword(passwordEncoder.encode("123456"));
         account.deposit(balance);
         return transactionTemplate.execute(status -> accountRepository.save(account));
     }

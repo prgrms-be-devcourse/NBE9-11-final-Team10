@@ -15,6 +15,11 @@ public record TransferReq(
         @Pattern(regexp = "^[0-9-]+$") // 숫자(0~9)와 하이픈(-)으로만 이루어진 문자열
         String receiverAccountNumber,
 
+        @Schema(description = "출금 계좌 비밀번호. 숫자 6자리", example = "123456")
+        @NotBlank(message = "계좌 비밀번호는 필수입니다.")
+        @Pattern(regexp = "\\d{6}", message = "계좌 비밀번호는 숫자 6자리여야 합니다.")
+        String accountPassword,
+
         @Schema(description = "송금 금액", example = "50000")
         @NotNull
         @Positive
