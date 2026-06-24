@@ -67,11 +67,7 @@ public class CodefOcrClient {
         return new IdCardOcrResult(name, residentNumber, issueDate);
     }
 
-    /**
-     * OCR API 호출 + 응답 디코딩. 실패 시 전부 OCR_FAILED로 변환한다.
-     * CODEF 응답 바디는 URL-인코딩되어 와서 RestClient의 메시지 컨버터가 바로 JSON으로 풀 수 없으므로,
-     * Exchange는 String을 그대로 받고 여기서 디코딩한 뒤에야 DTO로 역직렬화한다.
-     */
+    /** OCR API 호출 + 응답 디코딩(URL-인코딩 바디라 String으로 받아 직접 디코딩). 실패 시 OCR_FAILED. */
     private CodefOcrResponse requestOcr(byte[] imageBytes) {
         String base64Image = Base64.getEncoder().encodeToString(imageBytes);
         CodefOcrRequest body = new CodefOcrRequest("0", "0", base64Image, "0", "0");
