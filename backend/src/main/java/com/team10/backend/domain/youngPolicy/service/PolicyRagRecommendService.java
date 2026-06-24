@@ -73,7 +73,7 @@ public class PolicyRagRecommendService {
                 request.category(),
                 null
         );
-        Pageable pageable = PageRequest.of(0, 50);
+        Pageable pageable = PageRequest.of(0, 1000);
         List<YoungPolicy> filteredPolicies = youngPolicyRepository.search(searchFilter, pageable).getContent();
 
         if (filteredPolicies.isEmpty()) {
