@@ -2,6 +2,7 @@ package com.team10.backend.global.security;
 
 import com.team10.backend.global.jwt.JwtProvider;
 import com.team10.backend.global.jwt.TokenBlocklistService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -20,8 +21,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.List;
-
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -33,7 +32,9 @@ public class SecurityConfig {
     private final JwtAccessDeniedHandler accessDeniedHandler;
     private final Environment environment;
 
-    /** 허용할 Origin 목록. 환경변수 CORS_ALLOWED_ORIGINS로 주입, 기본값은 로컬 개발 서버. */
+    /**
+     * 허용할 Origin 목록. 환경변수 CORS_ALLOWED_ORIGINS로 주입, 기본값은 로컬 개발 서버.
+     */
     @Value("${cors.allowed-origins:http://localhost:3000}")
     private List<String> allowedOrigins;
 
@@ -90,6 +91,13 @@ public class SecurityConfig {
                             "/swagger-ui/**",
                             "/v3/api-docs/**",
                             "/swagger-ui.html"
+                    ).permitAll();
+
+                    // actuator
+                    auth.requestMatchers(
+                            HttpMethod.GET,
+                            "/actuator/health",
+                            "/actuator/health/**"
                     ).permitAll();
 
                     // H2 Console (dev/test 전용)
