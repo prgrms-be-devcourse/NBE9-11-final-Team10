@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { ArrowLeft, BarChart3, Edit2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -35,9 +36,10 @@ import {
   getInvestmentAccount,
   updateInvestmentAccount,
 } from '@/lib/api/investments'
+import { getHoldings } from '@/lib/api/portfolio'
 import { ApiRequestError } from '@/lib/api'
-import { formatCurrency, formatDate } from '@/lib/format'
-import type { InvestmentAccount } from '@/lib/types'
+import { formatCurrency, formatDate, formatNumber } from '@/lib/format'
+import type { InvestmentAccount, InvestmentHolding } from '@/lib/types'
 
 const statusLabel: Record<string, string> = {
   ACTIVE: '정상',
@@ -61,6 +63,10 @@ export default function InvestmentAccountDetailPage() {
   const [closePassword, setClosePassword] = useState('')
   const [closeLoading, setCloseLoading] = useState(false)
 
+  const [holdings, setHoldings] = useState<InvestmentHolding[]>([])
+  const [holdingsLoading, setHoldingsLoading] = useState(true)
+  const [holdingsError, setHoldingsError] = useState('')
+
   useEffect(() => {
     getInvestmentAccount(id)
       .then((response) => {
@@ -69,6 +75,13 @@ export default function InvestmentAccountDetailPage() {
       })
       .catch(() => setError('투자 계좌 정보를 불러오지 못했습니다.'))
       .finally(() => setLoading(false))
+  }, [id])
+
+  useEffect(() => {
+    getHoldings(id)
+      .then((response) => setHoldings(response.content))
+      .catch(() => setHoldingsError('보유 종목을 불러오지 못했습니다.'))
+      .finally(() => setHoldingsLoading(false))
   }, [id])
 
   async function handleUpdate() {
@@ -193,6 +206,52 @@ export default function InvestmentAccountDetailPage() {
               <InfoRow label="상태" value={statusLabel[account.status] ?? account.status} />
               <InfoRow label="개설일" value={account.createdAt ? formatDate(account.createdAt) : '-'} />
               {account.updatedAt && <InfoRow label="수정일" value={formatDate(account.updatedAt)} />}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-muted-foreground">보유 종목</CardTitle>
+                <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/stocks" />}>
+                  주식 거래
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {holdingsLoading ? (
+                <div className="flex flex-col gap-3">
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                  <Skeleton className="h-16 w-full rounded-lg" />
+                </div>
+              ) : holdingsError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{holdingsError}</AlertDescription>
+                </Alert>
+              ) : holdings.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">보유 종목이 없습니다.</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {holdings.map((holding) => (
+                    <Link
+                      key={holding.id}
+                      href={`/stocks/${holding.stockCode}?accountId=${account.id}`}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-3 hover:border-primary/40 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{holding.stockName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{holding.stockCode}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold tabular-nums">{formatNumber(holding.quantity)}주</p>
+                        <p className="text-xs text-muted-foreground">
+                          평단 {formatCurrency(Number(holding.averagePrice))}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

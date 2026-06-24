@@ -246,6 +246,111 @@ export interface InvestmentAccountCloseResult {
 }
 
 // ──────────────────────────────────────────────
+// Investment Stock
+// ──────────────────────────────────────────────
+export type StockMarket = 'KOSPI'
+export type StockStatus = 'ACTIVE' | 'SUSPENDED' | 'DELISTED'
+export type StockSortType = 'STOCK_NAME' | 'MARKET_CAP' | 'SALES_AMOUNT' | 'NET_INCOME'
+
+export interface StockSummary {
+  id: number
+  stockCode: string
+  stockName: string
+  market: StockMarket
+  status: StockStatus
+  marketCap: number | null
+  previousVolume: number | null
+}
+
+export interface StockDetail {
+  id: number
+  stockCode: string
+  standardCode: string
+  stockName: string
+  market: StockMarket
+  currencyCode: CurrencyCode
+  status: StockStatus
+  listedDate: string | null
+  capitalAmount: number | null
+  salesAmount: number | null
+  netIncome: number | null
+  marketCap: number | null
+  previousVolume: number | null
+  updatedAt: string | null
+}
+
+// ──────────────────────────────────────────────
+// Investment Portfolio
+// ──────────────────────────────────────────────
+export interface InvestmentHolding {
+  id: number
+  stockId: number
+  stockCode: string
+  stockName: string
+  market: StockMarket
+  status: StockStatus
+  quantity: number
+  averagePrice: number
+  marketCap: number | null
+  previousVolume: number | null
+}
+
+// ──────────────────────────────────────────────
+// Investment Trade
+// ──────────────────────────────────────────────
+export type InvestmentTradeType = 'BUY' | 'SELL'
+
+export interface MarketOrderRequest {
+  accountId: number
+  stockId: number
+  streamId: string
+  tradeType: InvestmentTradeType
+  quantity: number
+  accountPassword: string
+  expectedPrice: number
+}
+
+export interface InvestmentTradeResult {
+  id: number
+  accountId: number
+  stockId: number
+  stockCode: string
+  stockName: string
+  tradeType: InvestmentTradeType
+  quantity: number
+  executionPrice: number
+  totalAmount: number
+  requestedPrice: number
+  priceDeviationBps: number
+  snapshotAt: string
+  executedAt: string
+}
+
+// ──────────────────────────────────────────────
+// Realtime Orderbook
+// ──────────────────────────────────────────────
+export interface RealtimeOrderbookLevel {
+  level: number
+  price: number
+  quantity: number
+}
+
+export interface RealtimeOrderbookSnapshot {
+  stockCode: string
+  businessTime: string
+  timeType: string
+  asks: RealtimeOrderbookLevel[]
+  bids: RealtimeOrderbookLevel[]
+  totalAskQuantity: number
+  totalBidQuantity: number
+}
+
+export interface RealtimeOrderbookStreamCreated {
+  streamId: string
+  stockCode: string
+}
+
+// ──────────────────────────────────────────────
 // API Error
 // ──────────────────────────────────────────────
 export interface ApiError {

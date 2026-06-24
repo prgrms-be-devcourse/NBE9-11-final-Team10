@@ -12,6 +12,7 @@ import {
   PiggyBank,
   Send,
   ShieldCheck,
+  TrendingUp,
   User,
   X,
 } from 'lucide-react'
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { href: '/transactions', label: '거래내역', icon: ClipboardList },
   { href: '/savings', label: '예적금', icon: PiggyBank },
   { href: '/investment-accounts', label: '투자계좌', icon: BarChart3 },
+  { href: '/stocks', label: '주식', icon: TrendingUp },
   { href: '/youth-policies', label: '청년정책', icon: Building2 },
   { href: '/mypage', label: '마이페이지', icon: User },
 ]

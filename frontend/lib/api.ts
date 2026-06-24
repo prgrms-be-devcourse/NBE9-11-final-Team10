@@ -1,7 +1,9 @@
 import { clearAccessToken, getAccessToken, setAccessToken } from './token'
 
-const BASE_URL =
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8080'
+
+const BASE_URL = API_BASE_URL
 
 export class ApiRequestError extends Error {
   constructor(
