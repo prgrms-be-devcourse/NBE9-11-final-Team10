@@ -1,6 +1,7 @@
 package com.team10.backend.domain.youngPolicy.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -9,16 +10,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicyReq;
+import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicyRecommendReq;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyDetailRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySummaryRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySyncRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyRecommendRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyRecommendItem;
 import com.team10.backend.domain.youngPolicy.repository.YoungPolicyRepositoryTest;
 import com.team10.backend.domain.youngPolicy.service.YoungPolicyService;
+import com.team10.backend.domain.youngPolicy.service.PolicyRagRecommendService;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,6 +37,9 @@ class YoungPolicyControllerTest {
 
     @MockitoBean
     private YoungPolicyService youngPolicyService;
+
+    @MockitoBean
+    private PolicyRagRecommendService policyRagRecommendService;
 
     @Test
     @DisplayName("청년 정책 목록 조회 API는 정책 요약 목록을 반환한다")
@@ -99,5 +108,32 @@ class YoungPolicyControllerTest {
                 .andExpect(jsonPath("$.skippedCount").value(0));
 
         verify(youngPolicyService).syncPolicies(new YoungPolicyReq(1, 10));
+    }
+
+    @Test
+    @DisplayName("RAG 기반 청년 정책 추천 API는 맞춤 정책 카드 목록을 반환한다")
+    void recommendPolicies_returnsMockedRecommendResult() throws Exception {
+        YoungPolicyRecommendRes response = new YoungPolicyRecommendRes(List.of(
+                new YoungPolicyRecommendItem(100L, "PL001", "청년 월세 지원", "주거지원", "주거비", 19, 39, "003002001", "2026", "주거비 부담을 덜어주기 위해 지원 대상으로 추천합니다.")
+        ));
+        when(policyRagRecommendService.recommend(any(YoungPolicyRecommendReq.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/youth-policies/recommend")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "age": 25,
+                                  "region": "서울",
+                                  "category": "주거지원",
+                                  "query": "월세 지원을 받고 싶어요."
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recommendedPolicies[0].id").value(100L))
+                .andExpect(jsonPath("$.recommendedPolicies[0].policyId").value("PL001"))
+                .andExpect(jsonPath("$.recommendedPolicies[0].title").value("청년 월세 지원"))
+                .andExpect(jsonPath("$.recommendedPolicies[0].recommendReason").value("주거비 부담을 덜어주기 위해 지원 대상으로 추천합니다."));
+
+        verify(policyRagRecommendService).recommend(any(YoungPolicyRecommendReq.class));
     }
 }

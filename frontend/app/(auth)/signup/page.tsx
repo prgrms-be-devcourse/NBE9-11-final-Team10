@@ -94,13 +94,8 @@ export default function SignupPage() {
       toast.error('본인인증 모듈을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.')
       return
     }
-
     const storeId = 'store-bb65e821-eeb0-4a12-bd80-4e036a770949'
     const channelKey = 'channel-key-bcd683d9-77a5-406d-866e-7262a8df00d0'
-    if (!storeId || !channelKey) {
-      toast.error('본인인증 설정이 누락되었습니다. 관리자에게 문의해 주세요.')
-      return
-    }
 
     setVerifying(true)
     try {
