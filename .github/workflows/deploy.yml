@@ -120,6 +120,10 @@ jobs:
 
               sudo docker rm -f "$name" || true
               sudo docker rename "$new_name" "$name"
+            
+              if sudo docker ps --format '{{.Names}}' | grep -q '^nginx-lb$'; then
+                sudo docker exec nginx-lb nginx -s reload
+              fi
             }
 
             sudo docker login ghcr.io \
