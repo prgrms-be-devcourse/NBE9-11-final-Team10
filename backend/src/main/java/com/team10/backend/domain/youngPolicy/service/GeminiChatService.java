@@ -2,8 +2,13 @@ package com.team10.backend.domain.youngPolicy.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.client.RestClient;
+import jakarta.annotation.PostConstruct;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Slf4j
@@ -13,12 +18,31 @@ public class GeminiChatService {
     private final RestClient restClient;
     private final String apiKey;
 
+    @Value("classpath:prompts/fallback-response.txt")
+    private Resource fallbackResponseResource;
+
+    private String fallbackResponse;
+
     public GeminiChatService(
             RestClient restClient,
             @Value("${gemini.api-key:}") String apiKey
     ) {
         this.restClient = restClient;
         this.apiKey = apiKey;
+    }
+
+    @PostConstruct
+    public void init() {
+        try {
+            this.fallbackResponse = StreamUtils.copyToString(
+                    fallbackResponseResource.getInputStream(),
+                    StandardCharsets.UTF_8
+            );
+            log.info("Successfully loaded Gemini fallback response message from resources.");
+        } catch (IOException e) {
+            log.error("Failed to load Gemini fallback response message from resources.", e);
+            throw new IllegalStateException("Gemini fallback response file is missing or unreadable.", e);
+        }
     }
 
     public String generateContent(String systemInstruction, String promptText) {
@@ -61,10 +85,7 @@ public class GeminiChatService {
     }
 
     private String generateFallbackResponse() {
-        return "### ⚠️ [안내] AI API 연동 대기 중 (필터링 기반 추천 작동)\n" +
-                "현재 AI 추천 엔진(Gemini API) 키가 설정되지 않았거나 호출에 실패하였습니다.\n" +
-                "하지만 데이터베이스 필터링 검색을 통해 사용자의 연령 및 지역 조건에 맞는 맞춤형 청년 정책들을 엄선하였습니다. " +
-                "추천 목록에서 각 정책의 상세 정보를 확인해 보세요.";
+        return this.fallbackResponse;
     }
 
     // Gemini API Request/Response DTOs
