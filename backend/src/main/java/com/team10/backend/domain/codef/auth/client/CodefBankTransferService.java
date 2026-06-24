@@ -2,6 +2,8 @@ package com.team10.backend.domain.codef.auth.client;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team10.backend.domain.codef.auth.client.CodefBankTransferExchange.CodefBankTransferRequest;
+import com.team10.backend.domain.codef.auth.client.CodefBankTransferExchange.CodefBankTransferResponse;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.verification.BankTransferService;
 import com.team10.backend.global.exception.BusinessException;
@@ -12,8 +14,6 @@ import org.springframework.web.client.RestClientException;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
 
 /** CODEF API 기반 1원 계좌인증 송금 서비스. */
 @Slf4j
@@ -34,25 +34,15 @@ public class CodefBankTransferService implements BankTransferService {
 
     @Override
     public void sendOneWon(String organization, String accountNumber, String verificationCode) {
-        Map<?, ?> responseMap = requestTransfer(organization, accountNumber, verificationCode);
+        CodefBankTransferResponse response = requestTransfer(organization, accountNumber, verificationCode);
 
-        Map<?, ?> result;
-        String code;
-        try {
-            result = (responseMap != null) ? (Map<?, ?>) responseMap.get("result") : null;
-            code = (result != null) ? (String) result.get("code") : null;
-        } catch (ClassCastException e) {
-            // CODEF가 200 OK이지만 예상과 다른 모양(필드 타입 불일치 등)으로 응답한 경우.
-            // 캐스팅 실패를 그대로 흘리면 GlobalExceptionHandler의 일반 500으로 새어나간다.
-            log.error("[CODEF] 1원 송금 응답 형식이 예상과 다름 — org={}, account={}",
-                    organization, maskAccountNumber(accountNumber), e);
-            throw new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED);
-        }
+        CodefApiResult result = (response != null) ? response.result() : null;
+        String code = (result != null) ? result.code() : null;
 
         if (!"CF-00000".equals(code)) {
             // 계좌번호는 마스킹, 인증코드(verificationCode)는 시연 목적상 의도적으로 평문 노출
             log.error("[CODEF] 1원 송금 실패 — org={}, account={}, code={}, message={}",
-                    organization, maskAccountNumber(accountNumber), code, result != null ? result.get("message") : null);
+                    organization, maskAccountNumber(accountNumber), code, result != null ? result.message() : null);
             throw new BusinessException(UserErrorCode.ONE_WON_TRANSFER_FAILED);
         }
 
@@ -61,18 +51,19 @@ public class CodefBankTransferService implements BankTransferService {
                 organization, maskAccountNumber(accountNumber), verificationCode);
     }
 
-    /** 1원 송금 인증 API 호출 + 응답 디코딩. 실패 시 전부 ONE_WON_TRANSFER_FAILED로 변환한다. */
-    private Map<?, ?> requestTransfer(String organization, String accountNumber, String verificationCode) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("organization", organization);
-        body.put("account", accountNumber);
-        body.put("inPrintType", IN_PRINT_TYPE_CUSTOM);
-        body.put("inPrintContent", verificationCode);
+    /**
+     * 1원 송금 인증 API 호출 + 응답 디코딩. 실패 시 전부 ONE_WON_TRANSFER_FAILED로 변환한다.
+     * CODEF 응답 바디는 URL-인코딩되어 와서 RestClient의 메시지 컨버터가 바로 JSON으로 풀 수 없으므로,
+     * Exchange는 String을 그대로 받고 여기서 디코딩한 뒤에야 DTO로 역직렬화한다.
+     */
+    private CodefBankTransferResponse requestTransfer(String organization, String accountNumber, String verificationCode) {
+        CodefBankTransferRequest body = new CodefBankTransferRequest(
+                organization, accountNumber, IN_PRINT_TYPE_CUSTOM, verificationCode);
 
         try {
             String response = codefBankTransferExchange.requestTransfer(body);
             String decoded = URLDecoder.decode(response != null ? response : "", StandardCharsets.UTF_8);
-            return OBJECT_MAPPER.readValue(decoded, Map.class);
+            return OBJECT_MAPPER.readValue(decoded, CodefBankTransferResponse.class);
 
         } catch (CodefAuthException | RestClientException | IllegalArgumentException | JsonProcessingException e) {
             log.error("[CODEF] 1원 송금 중 오류 — org={}, account={}", organization, maskAccountNumber(accountNumber), e);

@@ -9,23 +9,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 
-/** {@link CodefAuthClient}를 용도별({@code accountInquiry}/{@code oneWonTransfer}) 빈 두 개로 분리 등록한다. */
+/**
+ * {@link CodefAuthClient}를 {@code oneWonTransfer} 자격증명으로 등록한다.
+ * OCR/1원송금이 모두 이 자격증명을 공유해서 쓴다({@link CodefHttpServiceConfig} 참고).
+ */
 @Configuration
 public class CodefAuthClientConfig {
-
-    @Bean
-    @Qualifier("accountInquiry")
-    public CodefAuthClient accountInquiryAuthClient(
-            @Value("${codef.account-inquiry.client-id}") String clientId,
-            @Value("${codef.account-inquiry.client-secret}") String clientSecret,
-            CodefOAuthExchange codefOAuthExchange,
-            StringRedisTemplate redisTemplate,
-            RedisScript<Long> getAndDeleteIfMatchScript
-    ) {
-        return new CodefAuthClient(
-                "account-inquiry", clientId, clientSecret,
-                codefOAuthExchange, redisTemplate, getAndDeleteIfMatchScript);
-    }
 
     @Bean
     @Qualifier("oneWonTransfer")
