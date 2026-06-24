@@ -66,7 +66,7 @@ public class InvestmentAccount extends BaseEntity {
         account.accountNumber = accountNumber;
         account.nickname = nickname;
         account.accountPasswordHash = accountPasswordHash;
-        account.cashBalance = 0L;
+        account.cashBalance = 5_000_000L;
         account.currencyCode = currencyCode;
         account.status = InvestmentAccountStatus.ACTIVE;
         return account;
