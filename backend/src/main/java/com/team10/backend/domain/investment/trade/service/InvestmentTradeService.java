@@ -13,18 +13,6 @@ public class InvestmentTradeService {
 
     private final InvestmentTradeBusinessService investmentTradeBusinessService;
 
-    @Idempotent(
-            operationType = IdempotencyOperationType.INVESTMENT_MARKET_ORDER,
-            userId = "#userId",
-            key = "#idempotencyKey",
-            hashFields = {
-                    "#request.accountId",
-                    "#request.stockId",
-                    "#request.tradeType",
-                    "#request.quantity",
-                    "#request.expectedPrice"
-            }
-    )
     public InvestmentTradeRes createMarketOrder(
             Long userId,
             String idempotencyKey,

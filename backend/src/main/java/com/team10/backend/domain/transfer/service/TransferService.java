@@ -14,31 +14,18 @@ public class TransferService {
     private final TransferBusinessService transferBusinessService;
 
     // 오케스트레이터 패턴 -> @Transactional 제거
-    @Idempotent(
-            operationType = IdempotencyOperationType.TOPUP,
-            userId = "#userId",
-            key = "#idempotencyKey",
-            hashFields = {"#accountId", "#amount", "#memo"}
-    )
     public TopUpRes topUp(Long userId, String idempotencyKey, Long accountId, Long amount, String memo) {
         return transferBusinessService.executeTopUp(userId, accountId, amount, memo);
     }
 
     // 오케스트레이터 패턴 -> @Transactional 제거
-    @Idempotent(
-            operationType = IdempotencyOperationType.TRANSFER,
-            userId = "#userId",
-            key = "#idempotencyKey",
-            hashFields = {"#senderAccountId", "#receiverAccountNumber", "#amount", "#memo"}
-    )
     public TransferRes transfer(
-            Long userId, String idempotencyKey,
+            Long userId,
             Long senderAccountId,
             String receiverAccountNumber,
             String accountPassword,
             Long amount,
-            String memo
-    ) {
+            String memo) {
         return transferBusinessService.executeTransfer(userId,
                 senderAccountId,
                 receiverAccountNumber,

@@ -93,12 +93,6 @@ public class ExchangeService {
         return ExchangeQuoteRes.from(exchangeQuoteRepository.save(quote));
     }
 
-    @Idempotent(
-            operationType = IdempotencyOperationType.EXCHANGE_ORDER,
-            userId = "#userId",
-            key = "#idempotencyKey",
-            hashFields = {"#exchangeQuoteId", "#krwAccountId", "#fxWalletId"}
-    )
     public ExchangeOrderRes createExchangeOrder(
             Long userId,
             String idempotencyKey,
