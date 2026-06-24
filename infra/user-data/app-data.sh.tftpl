@@ -13,7 +13,7 @@ curl -SL https://github.com/docker/compose/releases/download/v2.29.7/docker-comp
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 if [ ! -f /swapfile ]; then
-  fallocate -l 4G /swapfile
+  dd if=/dev/zero of=/swapfile bs=1M count=4096
   chmod 600 /swapfile
   mkswap /swapfile
   swapon /swapfile
