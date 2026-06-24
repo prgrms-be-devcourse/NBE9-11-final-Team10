@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   PiggyBank,
   Send,
+  TrendingUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +21,7 @@ const navItems = [
   { href: '/transactions', label: '거래', icon: ClipboardList },
   { href: '/savings', label: '예적금', icon: PiggyBank },
   { href: '/investment-accounts', label: '투자', icon: BarChart3 },
+  { href: '/stocks', label: '주식', icon: TrendingUp },
 ]
 
 export function BottomNav() {
