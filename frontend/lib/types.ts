@@ -174,11 +174,6 @@ export interface InvestmentAccount {
   updatedAt?: string
 }
 
-export interface InvestmentAccountOpenVerification {
-  verificationKey: string
-  expiresInSeconds: number
-}
-
 export interface InvestmentAccountUpdateResult {
   nickname: string | null
   updatedAt: string
