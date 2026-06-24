@@ -1,10 +1,13 @@
 package com.team10.backend.domain.youngPolicy.controller;
 
 import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicyReq;
+import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicyRecommendReq;
 import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicySearchReq;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyDetailRes;
+import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyRecommendRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySummaryRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySyncRes;
+import com.team10.backend.domain.youngPolicy.service.PolicyRagRecommendService;
 import com.team10.backend.domain.youngPolicy.service.YoungPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class YoungPolicyController {
 
     private final YoungPolicyService youngPolicyService;
+    private final PolicyRagRecommendService policyRagRecommendService;
 
     // DB에 저장된 청년 정책 목록 조회
     @GetMapping
@@ -75,5 +79,17 @@ public class YoungPolicyController {
     )
     public ResponseEntity<YoungPolicySyncRes> syncAllPolicies() {
         return ResponseEntity.ok(youngPolicyService.syncAllPolicies());
+    }
+
+    // RAG 기반 정책 추천
+    @PostMapping("/recommend")
+    @Operation(
+            summary = "RAG 기반 맞춤 청년정책 추천",
+            description = "사용자의 정보(나이, 지역, 질문 등)를 입력받아 AI(LLM) RAG 탐색을 통해 알맞은 정책 3가지와 맞춤 사유를 생성하여 추천합니다."
+    )
+    public ResponseEntity<YoungPolicyRecommendRes> recommendPolicies(
+            @Valid @RequestBody YoungPolicyRecommendReq request
+    ) {
+        return ResponseEntity.ok(policyRagRecommendService.recommend(request));
     }
 }
