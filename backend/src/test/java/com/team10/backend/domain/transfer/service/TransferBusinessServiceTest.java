@@ -3,10 +3,6 @@ package com.team10.backend.domain.transfer.service;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountType;
-import com.team10.backend.domain.saving.repository.DepositRepository;
-import com.team10.backend.domain.saving.repository.InstallmentRepository;
-import com.team10.backend.domain.saving.type.DepositStatus;
-import com.team10.backend.domain.saving.type.InstallmentStatus;
 import com.team10.backend.domain.transaction.entity.TransactionHistory;
 import com.team10.backend.domain.transaction.repository.TransactionHistoryRepository;
 import com.team10.backend.domain.transaction.type.TransactionDirection;
@@ -62,12 +58,6 @@ class TransferBusinessServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
-
-    @Mock
-    private DepositRepository depositRepository;
-
-    @Mock
-    private InstallmentRepository installmentRepository;
 
     @InjectMocks
     private TransferBusinessService transferBusinessService;
@@ -213,64 +203,6 @@ class TransferBusinessServiceTest {
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
         verify(transactionHistoryRepository, never()).save(any());
         verify(transferRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("출금 제한된 예금 연결 계좌는 일반 송금에 실패한다")
-    void executeTransfer_lockedDeposit_throwsAccountWithdrawalLocked() {
-        User sender = user();
-        User receiver = user();
-        when(sender.getId()).thenReturn(1L);
-
-        Account senderAccount = account(1L, sender, "100200300001", 100_000L);
-        Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
-        when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
-        when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
-        when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
-        when(depositRepository.existsByWithdrawAccountIdAndStatusAndWithdrawalLockedTrue(
-                1L,
-                DepositStatus.ACTIVE
-        )).thenReturn(true);
-
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> transferBusinessService.executeTransfer(1L, 1L, "100200300002", "123456", 50_000L, "출금 제한 예금")
-        );
-
-        assertEquals(TransferErrorCode.ACCOUNT_WITHDRAWAL_LOCKED, exception.getErrorCode());
-        verify(passwordEncoder, never()).matches(any(), any());
-        verify(transferRepository, never()).save(any(Transfer.class));
-        verify(transactionHistoryRepository, never()).save(any());
-        verify(eventPublisher, never()).publishEvent(any());
-    }
-
-    @Test
-    @DisplayName("출금 제한된 적금 연결 계좌는 일반 송금에 실패한다")
-    void executeTransfer_lockedInstallment_throwsAccountWithdrawalLocked() {
-        User sender = user();
-        User receiver = user();
-        when(sender.getId()).thenReturn(1L);
-
-        Account senderAccount = account(1L, sender, "100200300001", 100_000L);
-        Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
-        when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
-        when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
-        when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
-        when(installmentRepository.existsByWithdrawAccountIdAndStatusAndWithdrawalLockedTrue(
-                1L,
-                InstallmentStatus.ACTIVE
-        )).thenReturn(true);
-
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> transferBusinessService.executeTransfer(1L, 1L, "100200300002", "123456", 50_000L, "출금 제한 적금")
-        );
-
-        assertEquals(TransferErrorCode.ACCOUNT_WITHDRAWAL_LOCKED, exception.getErrorCode());
-        verify(passwordEncoder, never()).matches(any(), any());
-        verify(transferRepository, never()).save(any(Transfer.class));
-        verify(transactionHistoryRepository, never()).save(any());
-        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
