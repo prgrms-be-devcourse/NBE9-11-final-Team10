@@ -33,3 +33,11 @@ ALTER TABLE transaction_histories
     'SAVING_MATURITY',
     'INSTALLMENT_PAYMENT'
     ) NOT NULL;
+
+ALTER TABLE deposits
+    DROP COLUMN withdrawal_locked,
+    DROP COLUMN withdrawal_lock_reason;
+
+ALTER TABLE installments
+    DROP COLUMN withdrawal_locked,
+    DROP COLUMN withdrawal_lock_reason;
