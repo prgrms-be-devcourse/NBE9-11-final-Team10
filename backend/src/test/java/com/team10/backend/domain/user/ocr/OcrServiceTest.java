@@ -91,7 +91,8 @@ class OcrServiceTest {
         @Test
         @DisplayName("OCR 성공 + 행안부 인증 성공 → saveGovSuccess 호출")
         void ocrSuccess_govVerified() {
-            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verificationWithMatchingUser());
+            IdentityVerification verification = verificationWithMatchingUser();
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verification);
             IdCardOcrResult result = new IdCardOcrResult("홍길동", "901201-1234567", "2023-01-15");
             when(codefOcrClient.extractIdCard(any())).thenReturn(result);
             when(mockGovernmentVerifyService.verify("홍길동", "901201-1234567", "2023-01-15"))
@@ -107,7 +108,8 @@ class OcrServiceTest {
         @Test
         @DisplayName("행안부 발급일자 불일치 → saveFailure(분실·도난 의심)")
         void govIssueDateMismatch_savesFailure() {
-            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verificationWithMatchingUser());
+            IdentityVerification verification = verificationWithMatchingUser();
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verification);
             IdCardOcrResult result = new IdCardOcrResult("홍길동", "901201-1234567", "2023-01-15");
             when(codefOcrClient.extractIdCard(any())).thenReturn(result);
             when(mockGovernmentVerifyService.verify(any(), any(), any()))
@@ -122,7 +124,8 @@ class OcrServiceTest {
         @Test
         @DisplayName("행안부 존재하지 않는 명의 → saveFailure(위조 의심)")
         void govIdentityNotFound_savesFailure() {
-            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verificationWithMatchingUser());
+            IdentityVerification verification = verificationWithMatchingUser();
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verification);
             IdCardOcrResult result = new IdCardOcrResult("홍길동", "901201-1234567", "2023-01-15");
             when(codefOcrClient.extractIdCard(any())).thenReturn(result);
             when(mockGovernmentVerifyService.verify(any(), any(), any()))
@@ -137,7 +140,8 @@ class OcrServiceTest {
         @Test
         @DisplayName("행안부 타임아웃 → 별도 트랜잭션에 FAILED 기록, saveFailure는 호출되지 않음")
         void govTimeout_recordsInNewTransaction() {
-            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verificationWithMatchingUser());
+            IdentityVerification verification = verificationWithMatchingUser();
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verification);
             IdCardOcrResult result = new IdCardOcrResult("홍길동", "901201-1234567", "2023-01-15");
             when(codefOcrClient.extractIdCard(any())).thenReturn(result);
             when(mockGovernmentVerifyService.verify(any(), any(), any()))
@@ -167,7 +171,8 @@ class OcrServiceTest {
         @Test
         @DisplayName("처리 완료 후 임시파일을 삭제한다")
         void deletesTempFileAfterProcessing() {
-            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verificationWithMatchingUser());
+            IdentityVerification verification = verificationWithMatchingUser();
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verification);
             IdCardOcrResult result = new IdCardOcrResult("홍길동", "901201-1234567", "2023-01-15");
             when(codefOcrClient.extractIdCard(any())).thenReturn(result);
             when(mockGovernmentVerifyService.verify(any(), any(), any()))
@@ -252,7 +257,8 @@ class OcrServiceTest {
         @Test
         @DisplayName("OCR 1단계 완료 로그 — 이름(PII)은 로그에 남지 않는다")
         void ocrSuccess_doesNotLogName() {
-            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verificationWithMatchingUser());
+            IdentityVerification verification = verificationWithMatchingUser();
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verification);
             IdCardOcrResult result = new IdCardOcrResult("홍길동", "901201-1234567", "2023-01-15");
             when(codefOcrClient.extractIdCard(any())).thenReturn(result);
             when(mockGovernmentVerifyService.verify(any(), any(), any()))
