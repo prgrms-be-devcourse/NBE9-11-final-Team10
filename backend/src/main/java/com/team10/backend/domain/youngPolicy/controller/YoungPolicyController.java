@@ -1,6 +1,7 @@
 package com.team10.backend.domain.youngPolicy.controller;
 
 import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicyReq;
+import com.team10.backend.domain.youngPolicy.dto.req.YoungPolicySearchReq;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyDetailRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySummaryRes;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicySyncRes;
@@ -11,6 +12,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +37,16 @@ public class YoungPolicyController {
         return ResponseEntity.ok(youngPolicyService.getPolicies());
     }
 
+    // DB에 저장된 청년 정책 필터링 검색
+    @GetMapping("/search")
+    @Operation(summary = "청년정책 필터링 검색", description = "나이, 지역, 카테고리, 키워드로 청년정책을 필터링하여 검색합니다.")
+    public ResponseEntity<Page<YoungPolicySummaryRes>> searchPolicies(
+            YoungPolicySearchReq filter,
+            Pageable pageable
+    ) {
+        return ResponseEntity.ok(youngPolicyService.searchPolicies(filter, pageable));
+    }
+
     // DB에 저장된 청년 정책 상세 조회
     @GetMapping("/{id}")
     @Operation(summary = "청년정책 상세 조회", description = "DB에 저장된 청년정책을 ID로 조회합니다.")
@@ -52,5 +65,15 @@ public class YoungPolicyController {
     )
     public ResponseEntity<YoungPolicySyncRes> syncPolicies(@Valid @RequestBody YoungPolicyReq request) {
         return ResponseEntity.ok(youngPolicyService.syncPolicies(request));
+    }
+
+    // 모든 외부 청년 정책을 페이지별로 가져와서 DB에 저장/갱신
+    @PostMapping("/sync-all")
+    @Operation(
+            summary = "전체 청년정책 동기화",
+            description = "청년센터 공식 OpenAPI의 모든 페이지를 순회하며 전체 청년정책을 DB에 저장하거나 갱신합니다."
+    )
+    public ResponseEntity<YoungPolicySyncRes> syncAllPolicies() {
+        return ResponseEntity.ok(youngPolicyService.syncAllPolicies());
     }
 }

@@ -69,7 +69,8 @@ public class SecurityConfig {
                     auth.requestMatchers(
                             "/api/v1/auth/signup",
                             "/api/v1/auth/login",
-                            "/api/v1/auth/refresh"
+                            "/api/v1/auth/refresh",
+                            "/api/v1/youth-policies/**"
                     ).permitAll();
 
                     // 주식 종목 조회
