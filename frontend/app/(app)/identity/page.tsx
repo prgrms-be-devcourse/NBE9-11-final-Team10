@@ -82,9 +82,14 @@ export default function IdentityPage() {
         throw new Error('UNMOUNTED')
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
-      const res = await getVerificationStatus()
-      if (res.status === 'FAILED' || readyStatuses.includes(res.status)) {
-        return res
+      try {
+        const res = await getVerificationStatus()
+        if (res.status === 'FAILED' || readyStatuses.includes(res.status)) {
+          return res
+        }
+      } catch (err) {
+        // 일시적 네트워크/서버 오류로 한 번 실패해도 전체 인증 흐름을 끝내지 않고 다음 폴링에서 재시도한다.
+        console.error('[polling] 상태 조회 실패, 다음 시도에서 재시도합니다.', err)
       }
     }
     throw new Error('POLL_TIMEOUT')
