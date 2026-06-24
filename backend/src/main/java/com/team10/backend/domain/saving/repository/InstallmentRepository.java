@@ -151,5 +151,4 @@ public interface InstallmentRepository extends JpaRepository<Installment, Long> 
             @Param("installmentId") Long installmentId,
             @Param("userId") Long userId
     );
-
 }

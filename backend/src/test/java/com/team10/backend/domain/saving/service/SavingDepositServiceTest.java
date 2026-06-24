@@ -561,6 +561,46 @@ class SavingDepositServiceTest {
     }
 
     @Test
+    @DisplayName("출금 제한된 예금은 중도 해지에 실패한다")
+    void cancelDepositWithWithdrawalLock() {
+        Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
+        deposit.updateWithdrawalLock(true, "목표 저축을 위해 제한");
+        EarlyCancelReq request = new EarlyCancelReq(SavingProductType.DEPOSIT);
+
+        when(depositRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
+                .thenReturn(Optional.of(deposit));
+
+        assertThatThrownBy(() -> savingDepositService.cancelSaving(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.SAVING_WITHDRAWAL_LOCKED);
+
+        assertThat(deposit.getStatus()).isEqualTo(DepositStatus.ACTIVE);
+        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
+        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+    }
+
+    @Test
+    @DisplayName("출금 제한된 적금은 중도 해지에 실패한다")
+    void cancelInstallmentWithWithdrawalLock() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        installment.updateWithdrawalLock(true, "목표 저축을 위해 제한");
+        EarlyCancelReq request = new EarlyCancelReq(SavingProductType.INSTALLMENT);
+
+        when(installmentRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
+                .thenReturn(Optional.of(installment));
+
+        assertThatThrownBy(() -> savingDepositService.cancelSaving(1L, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(SavingErrorCode.SAVING_WITHDRAWAL_LOCKED);
+
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
+        assertThat(activeAccount.getBalance()).isEqualTo(2000000L);
+        verify(transactionHistoryRepository, never()).save(any(TransactionHistory.class));
+    }
+
+    @Test
     @DisplayName("만기일이 지난 가입중 예금을 만기 처리한다")
     void matureDeposit() {
         MaturityReq request = new MaturityReq(SavingProductType.DEPOSIT);
