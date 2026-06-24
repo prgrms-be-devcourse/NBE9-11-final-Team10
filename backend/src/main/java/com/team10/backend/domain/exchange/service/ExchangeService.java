@@ -93,6 +93,7 @@ public class ExchangeService {
 
     public ExchangeOrderRes createExchangeOrder(
             Long userId,
+            String idempotencyKey,
             Long exchangeQuoteId,
             Long krwAccountId,
             Long fxWalletId

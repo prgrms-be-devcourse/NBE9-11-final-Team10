@@ -31,7 +31,7 @@ class IdempotencyReservationFacadeTest {
         TopUpRes storedResponse = topUpResponse();
         when(idempotencyService.reserve(1L, IdempotencyOperationType.TOPUP, "deposit-key", "request-hash", TopUpRes.class))
                 .thenThrow(duplicateKeyException)
-                .thenReturn(IdempotencyReserveResult.replay(storedResponse));
+                .thenReturn(IdempotencyReserveResult.replay(storedResponse, 200));
 
         IdempotencyReserveResult<TopUpRes> result = facade.reserveOrResolveDuplicate(
                 1L,

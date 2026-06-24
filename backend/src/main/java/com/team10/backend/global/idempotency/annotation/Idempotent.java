@@ -11,4 +11,10 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Idempotent {
     IdempotencyOperationType operationType();
+
+    String key() default "";
+
+    String userId() default "";
+
+    String[] hashFields() default {};
 }

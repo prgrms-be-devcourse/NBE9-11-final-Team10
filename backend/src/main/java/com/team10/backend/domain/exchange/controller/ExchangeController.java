@@ -76,6 +76,7 @@ public class ExchangeController {
     ) {
         ExchangeOrderRes response = exchangeService.createExchangeOrder(
                 userId,
+                idempotencyKey,
                 request.exchangeQuoteId(),
                 request.krwAccountId(),
                 request.fxWalletId()

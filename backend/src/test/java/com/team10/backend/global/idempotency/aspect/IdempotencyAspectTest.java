@@ -20,6 +20,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -29,6 +34,7 @@ import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -60,8 +66,16 @@ class IdempotencyAspectTest {
         Idempotent idempotent = method.getAnnotation(Idempotent.class);
         Idempotency idempotency = idempotency(9L);
         TopUpRes response = topUpResponse();
+        ResponseEntity<TopUpRes> responseEntity = ResponseEntity.status(HttpStatus.CREATED).body(response);
         givenJoinPoint(method);
-        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TOPUP, 1L, 5_000L, "입금 메모"))
+        givenAuthentication();
+        when(idempotencyRequestHasher.generate(
+                IdempotencyOperationType.TOPUP,
+                "POST",
+                "/api/v1/transfers/topUp",
+                null,
+                ""
+        ))
                 .thenReturn("request-hash");
         when(idempotencyReservationService.reserveOrResolveDuplicate(
                 1L,
@@ -70,12 +84,12 @@ class IdempotencyAspectTest {
                 "request-hash",
                 TopUpRes.class
         )).thenReturn(IdempotencyReserveResult.reserved(idempotency));
-        when(joinPoint.proceed()).thenReturn(response);
+        when(joinPoint.proceed()).thenReturn(responseEntity);
         executeTransactionCallback();
 
         Object result = aspect.handle(joinPoint, idempotent);
 
-        assertSame(response, result);
+        assertSame(responseEntity, result);
         InOrder inOrder = inOrder(idempotencyReservationService, joinPoint, idempotencyService);
         inOrder.verify(idempotencyReservationService).reserveOrResolveDuplicate(
                 1L,
@@ -85,8 +99,9 @@ class IdempotencyAspectTest {
                 TopUpRes.class
         );
         inOrder.verify(joinPoint).proceed();
-        inOrder.verify(idempotencyService).completeSuccess(9L, response);
+        inOrder.verify(idempotencyService).completeSuccess(9L, response, HttpStatus.CREATED.value());
         verify(idempotencyService, never()).completeFailure(any());
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -97,7 +112,14 @@ class IdempotencyAspectTest {
         Idempotent idempotent = method.getAnnotation(Idempotent.class);
         TopUpRes storedResponse = topUpResponse();
         givenJoinPoint(method);
-        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TOPUP, 1L, 5_000L, "입금 메모"))
+        givenAuthentication();
+        when(idempotencyRequestHasher.generate(
+                IdempotencyOperationType.TOPUP,
+                "POST",
+                "/api/v1/transfers/topUp",
+                null,
+                ""
+        ))
                 .thenReturn("request-hash");
         when(idempotencyReservationService.reserveOrResolveDuplicate(
                 1L,
@@ -105,14 +127,17 @@ class IdempotencyAspectTest {
                 "deposit-key",
                 "request-hash",
                 TopUpRes.class
-        )).thenReturn(IdempotencyReserveResult.replay(storedResponse));
+        )).thenReturn(IdempotencyReserveResult.replay(storedResponse, HttpStatus.CREATED.value()));
 
         Object result = aspect.handle(joinPoint, idempotent);
 
-        assertSame(storedResponse, result);
+        ResponseEntity<?> response = (ResponseEntity<?>) result;
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        assertSame(storedResponse, response.getBody());
         verify(joinPoint, never()).proceed();
-        verify(idempotencyService, never()).completeSuccess(any(), any());
+        verify(idempotencyService, never()).completeSuccess(any(), any(), any());
         verify(idempotencyService, never()).completeFailure(any());
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -124,7 +149,14 @@ class IdempotencyAspectTest {
         Idempotency idempotency = idempotency(10L);
         BusinessException businessException = new BusinessException(TransferErrorCode.INVALID_INPUT_VALUE);
         givenJoinPoint(method);
-        when(idempotencyRequestHasher.generate(IdempotencyOperationType.TOPUP, 1L, 5_000L, "입금 메모"))
+        givenAuthentication();
+        when(idempotencyRequestHasher.generate(
+                IdempotencyOperationType.TOPUP,
+                "POST",
+                "/api/v1/transfers/topUp",
+                null,
+                ""
+        ))
                 .thenReturn("request-hash");
         when(idempotencyReservationService.reserveOrResolveDuplicate(
                 1L,
@@ -143,7 +175,8 @@ class IdempotencyAspectTest {
 
         assertSame(businessException, result);
         verify(idempotencyService).completeFailure(10L);
-        verify(idempotencyService, never()).completeSuccess(any(), any());
+        verify(idempotencyService, never()).completeSuccess(any(), any(), any());
+        SecurityContextHolder.clearContext();
     }
 
     private IdempotencyAspect aspect() {
@@ -151,8 +184,20 @@ class IdempotencyAspectTest {
                 idempotencyService,
                 idempotencyRequestHasher,
                 idempotencyReservationService,
-                transactionTemplate
+                transactionTemplate,
+                request()
         );
+    }
+
+    private MockHttpServletRequest request() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/transfers/topUp");
+        request.addHeader("Idempotency-Key", "deposit-key");
+        return request;
+    }
+
+    private void givenAuthentication() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken(1L, null));
     }
 
     @SuppressWarnings("unchecked")
@@ -167,18 +212,12 @@ class IdempotencyAspectTest {
     private void givenJoinPoint(Method method) {
         when(joinPoint.getSignature()).thenReturn(methodSignature);
         when(methodSignature.getMethod()).thenReturn(method);
-        when(methodSignature.getReturnType()).thenReturn(TopUpRes.class);
-        when(joinPoint.getArgs()).thenReturn(new Object[]{1L, "deposit-key", 1L, 5_000L, "입금 메모"});
+        when(methodSignature.getReturnType()).thenReturn(ResponseEntity.class);
     }
 
     private Method fixtureMethod() throws NoSuchMethodException {
         return Fixture.class.getMethod(
-                "topUp",
-                Long.class,
-                String.class,
-                Long.class,
-                Long.class,
-                String.class
+                "topUp"
         );
     }
 
@@ -209,18 +248,9 @@ class IdempotencyAspectTest {
     private static class Fixture {
 
         @Idempotent(
-                operationType = IdempotencyOperationType.TOPUP,
-                userId = "#userId",
-                key = "#idempotencyKey",
-                hashFields = {"#accountId", "#amount", "#memo"}
+                operationType = IdempotencyOperationType.TOPUP
         )
-        public TopUpRes topUp(
-                Long userId,
-                String idempotencyKey,
-                Long accountId,
-                Long amount,
-                String memo
-        ) {
+        public ResponseEntity<TopUpRes> topUp() {
             return null;
         }
     }
