@@ -1,5 +1,6 @@
 package com.team10.backend.domain.account.entity;
 
+import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.transfer.exception.TransferErrorCode;
