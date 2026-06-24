@@ -12,14 +12,13 @@ public class TransferService {
     private final TransferBusinessService transferBusinessService;
 
     // 오케스트레이터 패턴 -> @Transactional 제거
-    public TopUpRes topUp(Long userId, String idempotencyKey, Long accountId, Long amount, String memo) {
+    public TopUpRes topUp(Long userId, Long accountId, Long amount, String memo) {
         return transferBusinessService.executeTopUp(userId, accountId, amount, memo);
     }
 
     // 오케스트레이터 패턴 -> @Transactional 제거
     public TransferRes transfer(
             Long userId,
-            String idempotencyKey,
             Long senderAccountId,
             String receiverAccountNumber,
             String accountPassword,

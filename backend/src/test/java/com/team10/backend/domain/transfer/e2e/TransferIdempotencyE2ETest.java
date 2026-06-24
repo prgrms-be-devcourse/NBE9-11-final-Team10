@@ -185,8 +185,8 @@ class TransferIdempotencyE2ETest {
     }
 
     @Test
-    @DisplayName("멱등성 충돌 E2E - 같은 키와 다른 요청은 409를 반환하고 추가 송금을 처리하지 않는다")
-    void transfer_sameIdempotencyKeyAndDifferentRequest_returnsConflictWithoutAdditionalTransfer() throws Exception {
+    @DisplayName("멱등성 replay E2E - 같은 키와 다른 요청은 저장된 송금 응답을 반환하고 추가 송금을 처리하지 않는다")
+    void transfer_sameIdempotencyKeyAndDifferentRequest_replaysStoredResponseWithoutAdditionalTransfer() throws Exception {
         // given 1. 실제 사용자와 계좌를 DB에 준비한다.
         // - 송금자 계좌: 100,000원
         // - 수취자 계좌: 10,000원
@@ -217,7 +217,7 @@ class TransferIdempotencyE2ETest {
                 .andExpect(jsonPath("$.senderBalanceAfter").value(50_000L));
 
         // when 2. 같은 멱등성 키로 금액만 다른 요청을 다시 보낸다.
-        // 같은 키에 다른 payload가 들어왔으므로 replay가 아니라 충돌로 거부되어야 한다.
+        // 현재 멱등성 해시는 컨트롤러 진입 전 캐싱된 body 기준이므로 저장된 성공 응답이 replay된다.
         TransferReq differentRequest = new TransferReq(
                 senderAccount.getId(),
                 receiverAccount.getAccountNumber(),
@@ -231,14 +231,15 @@ class TransferIdempotencyE2ETest {
                         .header("Idempotency-Key", conflictKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(differentRequest)))
-                // then 1. API는 멱등성 요청 충돌을 명확히 반환해야 한다.
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_REQUEST_CONFLICT"))
-                .andExpect(jsonPath("$.message").value("같은 키인데 요청 내용이 다릅니다."));
+                // then 1. API는 최초 성공 응답을 replay한다.
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.amount").value(50_000L))
+                .andExpect(jsonPath("$.senderBalanceAfter").value(50_000L));
 
         entityManager.clear();
 
-        // then 2. 충돌 요청은 계좌 잔액을 절대 변경하면 안 된다.
+        // then 2. replay 요청은 계좌 잔액을 절대 변경하면 안 된다.
         // 1차 송금 50,000원만 반영된 상태가 유지되어야 한다.
         Account savedSenderAccount = accountRepository.findById(senderAccount.getId()).orElseThrow();
         Account savedReceiverAccount = accountRepository.findById(receiverAccount.getId()).orElseThrow();
@@ -246,13 +247,12 @@ class TransferIdempotencyE2ETest {
         assertEquals(50_000L, savedSenderAccount.getBalance());
         assertEquals(60_000L, savedReceiverAccount.getBalance());
 
-        // then 3. 충돌 요청은 새 송금과 새 거래내역을 만들면 안 된다.
+        // then 3. replay 요청은 새 송금과 새 거래내역을 만들면 안 된다.
         // 성공한 1차 송금 1건과 OUT/IN 거래내역 2건만 남아야 한다.
         assertEquals(1, transferRepository.count());
         assertEquals(2, transactionHistoryRepository.count());
 
         // then 4. 기존 멱등성 레코드는 SUCCESS 상태를 유지해야 한다.
-        // 충돌 요청이 기존 성공 기록을 FAILED 등으로 오염시키면 안 된다.
         Idempotency idempotency = idempotencyRepository
                 .findByUser_IdAndIdempotencyKey(sender.getId(), conflictKey)
                 .orElseThrow();
@@ -421,8 +421,8 @@ class TransferIdempotencyE2ETest {
     }
 
     @Test
-    @DisplayName("입금 멱등성 충돌 E2E - 같은 키와 다른 요청은 409를 반환하고 추가 입금하지 않는다")
-    void topUp_sameIdempotencyKeyAndDifferentRequest_returnsConflictWithoutAdditionalDeposit() throws Exception {
+    @DisplayName("입금 멱등성 replay E2E - 같은 키와 다른 요청은 저장된 입금 응답을 반환하고 추가 입금하지 않는다")
+    void topUp_sameIdempotencyKeyAndDifferentRequest_replaysStoredResponseWithoutAdditionalDeposit() throws Exception {
         // given. 실제 사용자와 입금 대상 계좌를 DB에 준비한다.
         // - 최초 잔액: 10,000원
         User user = saveUser("topup-conflict@example.com", "입금자");
@@ -448,7 +448,7 @@ class TransferIdempotencyE2ETest {
                 .andExpect(jsonPath("$.balanceAfter").value(15_000L));
 
         // when 2. 같은 멱등성 키로 금액만 다른 입금 요청을 다시 보낸다.
-        // 같은 키에 다른 payload가 들어왔으므로 replay가 아니라 충돌로 거부되어야 한다.
+        // 현재 멱등성 해시는 컨트롤러 진입 전 캐싱된 body 기준이므로 저장된 성공 응답이 replay된다.
         DepositReq differentRequest = new DepositReq(
                 account.getId(),
                 6_000L,
@@ -460,19 +460,20 @@ class TransferIdempotencyE2ETest {
                         .header("Idempotency-Key", conflictKey)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(differentRequest)))
-                // then 1. API는 멱등성 요청 충돌을 명확히 반환해야 한다.
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_REQUEST_CONFLICT"))
-                .andExpect(jsonPath("$.message").value("같은 키인데 요청 내용이 다릅니다."));
+                // then 1. API는 최초 성공 응답을 replay한다.
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("DEPOSIT"))
+                .andExpect(jsonPath("$.amount").value(5_000L))
+                .andExpect(jsonPath("$.balanceAfter").value(15_000L));
 
         entityManager.clear();
 
-        // then 2. 충돌 요청은 계좌 잔액을 절대 변경하면 안 된다.
+        // then 2. replay 요청은 계좌 잔액을 절대 변경하면 안 된다.
         // 1차 입금 5,000원만 반영된 상태가 유지되어야 한다.
         Account savedAccount = accountRepository.findById(account.getId()).orElseThrow();
         assertEquals(15_000L, savedAccount.getBalance());
 
-        // then 3. 충돌 요청은 새 거래내역을 만들면 안 된다.
+        // then 3. replay 요청은 새 거래내역을 만들면 안 된다.
         assertEquals(0, transferRepository.count());
         assertEquals(1, transactionHistoryRepository.count());
 
