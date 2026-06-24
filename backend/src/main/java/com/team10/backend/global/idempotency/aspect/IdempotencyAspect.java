@@ -1,15 +1,9 @@
 package com.team10.backend.global.idempotency.aspect;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import com.team10.backend.global.idempotency.annotation.Idempotent;
 import com.team10.backend.global.idempotency.entity.Idempotency;
-import com.team10.backend.global.idempotency.filter.RequestCachingFilter;
 import com.team10.backend.global.idempotency.service.IdempotencyRequestHasher;
 import com.team10.backend.global.idempotency.service.IdempotencyReservationService;
 import com.team10.backend.global.idempotency.service.IdempotencyReserveResult;
@@ -21,24 +15,18 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
-import org.springframework.context.expression.MethodBasedEvaluationContext;
-import org.springframework.core.DefaultParameterNameDiscoverer;
-import org.springframework.core.ParameterNameDiscoverer;
-import org.springframework.expression.Expression;
-import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.util.ContentCachingRequestWrapper;
-import tools.jackson.databind.exc.JsonNodeException;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 
 @Aspect
@@ -51,7 +39,6 @@ public class IdempotencyAspect {
     private final IdempotencyReservationService idempotencyReservationService;
     private final TransactionTemplate transactionTemplate;
     private final HttpServletRequest httpServletRequest;
-    private final ObjectMapper objectMapper;
 
 
     // @Around: 메서드 실행 전, 후, 예외 발생 시점까지 전부 감쌀 수 있는 AOP 방식
@@ -67,11 +54,14 @@ public class IdempotencyAspect {
                         idempotent.operationType(),
                         idempotencyKey,
                         requestHash,
-                        getReturnType(joinPoint)
+                        getResponseBodyType(joinPoint)
                 );
 
+        // 최초 응답이 201 CREATED면 replay도 201 CREATED로 반환
         if (reserveResult.replay()) {
-            return reserveResult.storedResponse();
+            return ResponseEntity
+                    .status(resolveReplayStatusCode(reserveResult.responseStatusCode()))
+                    .body(reserveResult.storedResponse());
         }
 
         Idempotency idempotency = reserveResult.idempotency();
@@ -82,6 +72,10 @@ public class IdempotencyAspect {
             idempotencyService.completeFailure(idempotency.getId());
             throw e;
         }
+    }
+
+    private int resolveReplayStatusCode(Integer statusCode) {
+        return statusCode == null ? HttpStatus.OK.value() : statusCode;
     }
 
     private Long resolveUserId() {
@@ -132,15 +126,6 @@ public class IdempotencyAspect {
         return new String(content, StandardCharsets.UTF_8);
     }
 
-    private String normalizeJsonBody(String rawBody) {
-        try {
-            JsonNode jsonNode = objectMapper.readTree(rawBody);
-            return objectMapper.writeValueAsString(jsonNode);
-        } catch (JsonProcessingException e) {
-            return rawBody;
-        }
-    }
-
     private Object executeBusinessAndCompleteSuccess(
             ProceedingJoinPoint joinPoint,
             Idempotency idempotency
@@ -150,7 +135,16 @@ public class IdempotencyAspect {
             return transactionTemplate.execute(status -> {
                 try {
                     Object response = joinPoint.proceed(); // @Idempotent가 붙은 메서드 전체를 실행
-                    idempotencyService.completeSuccess(idempotency.getId(), response);
+
+                    Object responseBody = extractBody(response);
+                    Integer responseStatusCode = extractStatusCode(response);
+
+                    idempotencyService.completeSuccess(
+                            idempotency.getId(),
+                            responseBody,
+                            responseStatusCode
+                    );
+
                     return response;
                 } catch (RuntimeException | Error e) {
                     throw e;
@@ -163,10 +157,52 @@ public class IdempotencyAspect {
         }
     }
 
+    private Integer extractStatusCode(Object response) {
+        if (response instanceof ResponseEntity<?> responseEntity) {
+            return responseEntity.getStatusCode().value();
+        }
+
+        return HttpStatus.OK.value(); // ResponseEntity 형태 아니면 200 OK로 저장
+    }
+
+    // 컨트롤러 반환값: ResponseEntity<TransferRes>
+    // DB에 저장할 값: TransferRes
+    private Object extractBody(Object response) {
+        if (response instanceof ResponseEntity<?> responseEntity) {
+            return responseEntity.getBody();
+        }
+
+        return response;
+    }
+
     // IdempotencyService.reserve()는 저장된 JSON 응답을 다시 DTO로 복원해야 하므로 반환 타입이 필요함
-    // TransferService.transfer() 반환 타입이 TransferRes -> TransferRes.class
-    private Class<?> getReturnType(ProceedingJoinPoint joinPoint) {
+    // 컨트롤러가 ResponseEntity<TransferRes>를 반환할 때, 실제 body 타입인 TransferRes.class를 찾아내는 메서드
+    private Class<?> getResponseBodyType(ProceedingJoinPoint joinPoint) {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
+
+        // 반환 타입이 ResponseEntity인지 확인
+        if (ResponseEntity.class.isAssignableFrom(signature.getReturnType())) {
+            Type genericReturnType = method.getGenericReturnType(); // ResponseEntity<TransferRes>
+
+            // ResponseEntity<TransferRes>처럼 제네릭 타입이면 ParameterizedType이다.
+            if (genericReturnType instanceof ParameterizedType parameterizedType) {
+                Type bodyType = parameterizedType.getActualTypeArguments()[0]; // 제네릭 안쪽 타입 추출(TransferRes)
+
+                // 안쪽 타입이 일반 클래스면 그대로 반환
+                if (bodyType instanceof Class<?> bodyClass) {
+                    return bodyClass;
+                }
+
+                // ResponseEntity<List<AccountSummaryRes>> 인 경우 -> 그냥 List 반환
+                // 현재 멱등성 대상이 단건 DTO만이므로 문제없음
+                if (bodyType instanceof ParameterizedType bodyParameterizedType
+                        && bodyParameterizedType.getRawType() instanceof Class<?> rawClass) {
+                    return rawClass;
+                }
+            }
+        }
+
         return signature.getReturnType();
     }
 
