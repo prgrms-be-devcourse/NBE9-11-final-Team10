@@ -18,7 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
- * HTTP 호출 자체는 {@link CodefOcrExchange}로 위임됐다(검증은 {@code CodefOcrHttpServiceConfigTest} 참고).
+ * HTTP 호출 자체는 {@link CodefOcrExchange}로 위임됐다(검증은 {@code CodefHttpServiceConfigTest} 참고).
  * 여기서는 CodefOcrClient의 URL-decode + result.code 판정 + 필드 검증 로직만 검증한다.
  */
 @ExtendWith(MockitoExtension.class)

@@ -26,6 +26,18 @@ spring:
   main:
     banner-mode: console
 
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
 # Swagger default MediaType 지정
 springdoc:
   default-produces-media-type: application/json;charset=UTF-8

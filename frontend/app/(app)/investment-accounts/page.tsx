@@ -38,10 +38,15 @@ export default function InvestmentAccountsPage() {
             주식 거래에 사용할 투자 계좌를 관리합니다.
           </p>
         </div>
-        <Button size="sm" nativeButton={false} render={<Link href="/investment-accounts/new" />}>
-          <Plus data-icon="inline-start" />
-          개설
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/stocks" />}>
+            주식 거래
+          </Button>
+          <Button size="sm" nativeButton={false} render={<Link href="/investment-accounts/new" />}>
+            <Plus data-icon="inline-start" />
+            개설
+          </Button>
+        </div>
       </div>
 
       {error && (
