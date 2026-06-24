@@ -82,11 +82,11 @@ public class YoungPolicyController {
     }
 
     // RAG 기반 정책 추천
-    @PostMapping("/recommend")
     @Operation(
             summary = "RAG 기반 맞춤 청년정책 추천",
-            description = "사용자의 정보(나이, 지역, 질문 등)를 입력받아 AI(LLM) RAG 탐색을 통해 알맞은 정책 3가지와 맞춤 사유를 생성하여 추천합니다."
+            description = "사용자의 정보(나이, 지역, 질문 등)를 입력받아 AI(LLM) RAG 탐색을 통해 알맞은 정책 4가지와 맞춤 사유를 생성하여 추천합니다."
     )
+    @PostMapping("/recommend")
     public ResponseEntity<YoungPolicyRecommendRes> recommendPolicies(
             @Valid @RequestBody YoungPolicyRecommendReq request
     ) {

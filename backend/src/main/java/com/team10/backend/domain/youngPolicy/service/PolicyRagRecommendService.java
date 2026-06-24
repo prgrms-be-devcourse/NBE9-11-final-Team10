@@ -10,10 +10,16 @@ import com.team10.backend.domain.youngPolicy.entity.YoungPolicy;
 import com.team10.backend.domain.youngPolicy.repository.YoungPolicyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StreamUtils;
+import jakarta.annotation.PostConstruct;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -25,12 +31,42 @@ import java.util.Map;
 @Transactional(readOnly = true)
 public class PolicyRagRecommendService {
 
+    private static final TypeReference<List<Map<String, Object>>> RECOMMENDATION_TYPE_REF =
+            new TypeReference<>() {};
+
     private final YoungPolicyRepository youngPolicyRepository;
     private final GeminiChatService geminiChatService;
     private final ObjectMapper objectMapper;
 
+    @Value("classpath:prompts/system-instruction.txt")
+    private Resource systemInstructionResource;
+
+    @Value("classpath:prompts/user-prompt.txt")
+    private Resource userPromptResource;
+
+    private String systemInstruction;
+    private String userPromptTemplate;
+
+    @PostConstruct
+    public void init() {
+        try {
+            this.systemInstruction = StreamUtils.copyToString(
+                    systemInstructionResource.getInputStream(),
+                    StandardCharsets.UTF_8
+            );
+            this.userPromptTemplate = StreamUtils.copyToString(
+                    userPromptResource.getInputStream(),
+                    StandardCharsets.UTF_8
+            );
+            log.info("Successfully loaded RAG prompt templates from classpath resources.");
+        } catch (IOException e) {
+            log.error("Failed to load RAG prompt templates from classpath resources.", e);
+            throw new IllegalStateException("RAG prompt templates are missing or unreadable.", e);
+        }
+    }
+
     public YoungPolicyRecommendRes recommend(YoungPolicyRecommendReq request) {
-        // 1. 1차 메타데이터 필터링 (나이, 지역, 카테고리 적용)
+        // 1차 메타데이터 필터링 (나이, 지역, 카테고리 적용)
         YoungPolicySearchReq searchFilter = new YoungPolicySearchReq(
                 request.age(),
                 request.region(),
@@ -44,34 +80,14 @@ public class PolicyRagRecommendService {
             return new YoungPolicyRecommendRes(List.of());
         }
 
-        // 2. 키워드 매칭 가중치를 이용해 상위 10개 후보군 선별 (LLM 입력 토큰 최적화 및 1차 Rerank)
+        // 키워드 매칭 가중치를 이용해 상위 10개 후보군 선별 (LLM 입력 토큰 최적화 및 1차 Rerank)
         String query = request.query();
         List<YoungPolicy> rerankedCandidates = filteredPolicies.stream()
                 .sorted(Comparator.comparingDouble((YoungPolicy p) -> calculateMatchScore(p, query)).reversed())
                 .limit(10)
                 .toList();
 
-        // 3. AI 추천을 위한 프롬프트 가공 (4가지 카드 추천에 특화된 구조)
-        String systemInstruction = """
-            당신은 대한민국 청년정책 추천 전문 상담사입니다.
-            제공된 사용자 정보(나이, 지역, 요구사항)와 엄선된 10개의 청년정책 후보 리스트를 분석하여 다음을 수행해 주세요.
-            1. 제공된 후보 정책 중 사용자의 요구사항(질문/고민)에 가장 도움이 되고 부합하는 정책 4가지를 골라주세요.
-            2. 반드시 아래 제공되는 JSON 형식으로만 답변하고, 다른 서론이나 설명은 일체 포함하지 마십시오.
-            3. 마크다운 코드 블록(```json ... ```) 내에 결과를 넣어주세요.
-            
-            [응답 JSON 형식 예시]
-            ```json
-            [
-              {"candidateIndex": 1, "reason": "임차료 지원 혜택이 포함되어 있어 초기 창업 비용 부담을 크게 줄일 수 있습니다."},
-              {"candidateIndex": 3, "reason": "1인 예비 창업자도 지원이 가능해 1인 기업 시작에 매우 적합합니다."}
-            ]
-            ```
-            
-            [주의 사항]
-            - candidateIndex는 제공된 후보군 번호(1 ~ 10)를 나타내며, 반드시 정수여야 합니다.
-            - reason은 해당 사용자에게 왜 이 정책을 골라주었는지 나타내는 1~2문장의 간결한 맞춤형 추천 사유여야 합니다.
-            """;
-
+        // AI 추천을 위한 프롬프트 가공 (4가지 카드 추천에 특화된 구조)
         StringBuilder policiesContext = new StringBuilder();
         for (int i = 0; i < rerankedCandidates.size(); i++) {
             YoungPolicy p = rerankedCandidates.get(i);
@@ -79,23 +95,19 @@ public class PolicyRagRecommendService {
                     i + 1, p.getTitle(), p.getCategory(), p.getSubCategory(), p.getDescription(), p.getMinAge(), p.getMaxAge()));
         }
 
-        String userPrompt = String.format("""
-            [사용자 정보]
-            - 나이: 만 %d세
-            - 거주지역: %s
-            - 관심 카테고리: %s
-            - 요구사항 및 고민: "%s"
-            
-            [추천 정책 후보군]
-            %s
-            
-            위 후보군 중 가장 알맞은 4개의 정책을 골라 JSON 형식으로만 답해주세요.
-            """, request.age(), request.region(), request.category() != null ? request.category() : "전체", query, policiesContext);
+        String userPrompt = String.format(
+                userPromptTemplate,
+                request.age(),
+                request.region(),
+                request.category() != null ? request.category() : "전체",
+                query,
+                policiesContext.toString()
+        );
 
-        // 4. Gemini LLM API 호출
+        // Gemini LLM API 호출
         String adviceJson = geminiChatService.generateContent(systemInstruction, userPrompt);
 
-        // 5. LLM 결과 파싱 및 DTO 매핑
+        // LLM 결과 파싱 및 DTO 매핑
         List<YoungPolicyRecommendItem> recommendedItems = parseLlmRecommendation(adviceJson, rerankedCandidates);
 
         return new YoungPolicyRecommendRes(recommendedItems);
@@ -123,10 +135,7 @@ public class PolicyRagRecommendService {
             }
             cleanJson = cleanJson.trim();
 
-            List<Map<String, Object>> llmResults = objectMapper.readValue(
-                    cleanJson,
-                    new TypeReference<List<Map<String, Object>>>() {}
-            );
+            List<Map<String, Object>> llmResults = objectMapper.readValue(cleanJson, RECOMMENDATION_TYPE_REF);
 
             for (Map<String, Object> res : llmResults) {
                 Object indexObj = res.get("candidateIndex");
@@ -146,9 +155,8 @@ public class PolicyRagRecommendService {
             if (!items.isEmpty()) {
                 return items;
             }
-
         } catch (Exception e) {
-            log.warn("Failed to parse Gemini RAG JSON response. Falling back to default list. Error: {}", e.getMessage());
+            log.warn("Failed to parse Gemini RAG JSON response. Falling back to default list.", e);
         }
 
         // Fallback: 1차 키워드 랭킹 상위 4개를 뽑고 기본 사유를 적용합니다.
