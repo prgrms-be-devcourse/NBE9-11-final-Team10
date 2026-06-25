@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowRightLeft, Clock3, Plus, ReceiptText, Trash2, WalletCards } from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getAccounts } from '@/lib/api/accounts'
 import {
   closeFxWallet,
+  createExchangeOrder,
   createFxWallet,
   createExchangeQuote,
   getExchangeCurrencies,
@@ -27,12 +28,14 @@ import {
   getFxWallets,
   type ExchangeCurrency,
   type ExchangeCurrencyCode,
+  type ExchangeOrder,
   type ExchangeQuote,
   type ExchangeRate,
   type FxWallet,
 } from '@/lib/api/exchanges'
 import { ApiRequestError } from '@/lib/api'
 import { formatCurrency } from '@/lib/format'
+import { createIdempotencyKey } from '@/lib/idempotency'
 import type { Account } from '@/lib/types'
 
 const orderPreview = [
@@ -98,9 +101,12 @@ function ExchangeFormTab() {
   const [krwAccountId, setKrwAccountId] = useState('')
   const [fxWalletId, setFxWalletId] = useState('')
   const [quote, setQuote] = useState<ExchangeQuote | null>(null)
+  const [order, setOrder] = useState<ExchangeOrder | null>(null)
   const [loading, setLoading] = useState(true)
   const [quoting, setQuoting] = useState(false)
+  const [ordering, setOrdering] = useState(false)
   const [error, setError] = useState('')
+  const idempotencyKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     loadExchangeFormData()
@@ -137,8 +143,10 @@ function ExchangeFormTab() {
     }
   }
 
-  function resetQuote() {
+  function resetExchangeAttempt() {
     setQuote(null)
+    setOrder(null)
+    idempotencyKeyRef.current = null
   }
 
   async function handleCreateQuote() {
@@ -156,11 +164,45 @@ function ExchangeFormTab() {
         toCurrencyCode,
         fromAmount: parsedAmount,
       })
+      idempotencyKeyRef.current = null
+      setOrder(null)
       setQuote(nextQuote)
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : '환전 견적 생성에 실패했습니다.')
     } finally {
       setQuoting(false)
+    }
+  }
+
+  async function handleCreateOrder() {
+    if (!quote || !krwAccountId || !fxWalletId) return
+
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = createIdempotencyKey('exchange-order')
+    }
+
+    setOrdering(true)
+    setError('')
+    try {
+      const nextOrder = await createExchangeOrder(
+        {
+          exchangeQuoteId: quote.exchangeQuoteId,
+          krwAccountId: Number(krwAccountId),
+          fxWalletId: Number(fxWalletId),
+        },
+        idempotencyKeyRef.current,
+      )
+      const [accountData, walletData] = await Promise.all([getAccounts(), getFxWallets()])
+
+      setAccounts(accountData.filter((account) => account.status === 'ACTIVE'))
+      setWallets(walletData)
+      setOrder(nextOrder)
+      idempotencyKeyRef.current = null
+      toast.success('환전 주문이 완료되었습니다.')
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : '환전 주문 실행에 실패했습니다.')
+    } finally {
+      setOrdering(false)
     }
   }
 
@@ -176,6 +218,7 @@ function ExchangeFormTab() {
   const canCreateQuote = Boolean(
     toCurrencyCode && krwAccountId && fxWalletId && Number(amount) > 0 && !quoting,
   )
+  const canCreateOrder = Boolean(quote && !order && !ordering)
 
   useEffect(() => {
     if (!toCurrencyCode) return
@@ -183,8 +226,8 @@ function ExchangeFormTab() {
       (wallet) => wallet.status === 'ACTIVE' && wallet.currencyCode === toCurrencyCode,
     )
     setFxWalletId(matchingWallet ? String(matchingWallet.walletId) : '')
-    resetQuote()
-  }, [toCurrencyCode, wallets])
+    resetExchangeAttempt()
+  }, [toCurrencyCode])
 
   if (loading) {
     return (
@@ -227,7 +270,7 @@ function ExchangeFormTab() {
                 value={toCurrencyCode}
                 onValueChange={(value) => {
                   setToCurrencyCode(value as ExchangeCurrencyCode)
-                  resetQuote()
+                  resetExchangeAttempt()
                 }}
               >
                 <SelectTrigger id="to-currency">
@@ -255,7 +298,7 @@ function ExchangeFormTab() {
               value={amount}
               onChange={(event) => {
                 setAmount(event.target.value)
-                resetQuote()
+                resetExchangeAttempt()
               }}
             />
             {selectedRate && (
@@ -273,7 +316,7 @@ function ExchangeFormTab() {
                 onValueChange={(value) => {
                   if (value == null) return
                   setKrwAccountId(value)
-                  resetQuote()
+                  resetExchangeAttempt()
                 }}
               >
                 <SelectTrigger id="krw-account">
@@ -296,7 +339,7 @@ function ExchangeFormTab() {
                 onValueChange={(value) => {
                   if (value == null) return
                   setFxWalletId(value)
-                  resetQuote()
+                  resetExchangeAttempt()
                 }}
                 disabled={!toCurrencyCode || selectableWallets.length === 0}
               >
@@ -345,8 +388,24 @@ function ExchangeFormTab() {
             value={quote ? `${formatFxBalance(quote.expectedToAmount)} ${quote.toCurrencyCode}` : '-'}
             strong
           />
-          <Button type="button" variant="outline" className="mt-1" disabled>
-            환전 실행
+          {order && (
+            <>
+              <SummaryRow label="주문 상태" value={exchangeOrderStatusLabel[order.status]} />
+              <SummaryRow
+                label="완료 금액"
+                value={`${formatFxBalance(order.toAmount)} ${quote?.toCurrencyCode ?? ''}`}
+                strong
+              />
+            </>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-1"
+            disabled={!canCreateOrder}
+            onClick={handleCreateOrder}
+          >
+            {ordering ? '환전 실행 중...' : order ? '환전 완료' : '환전 실행'}
           </Button>
         </CardContent>
       </Card>
@@ -589,6 +648,13 @@ const fxWalletStatusLabel = {
   ACTIVE: '활성',
   SUSPENDED: '거래 제한',
   CLOSED: '해지',
+}
+
+const exchangeOrderStatusLabel = {
+  REQUESTED: '요청',
+  COMPLETED: '완료',
+  FAILED: '실패',
+  CANCELED: '취소',
 }
 
 function formatFxBalance(value: number) {
