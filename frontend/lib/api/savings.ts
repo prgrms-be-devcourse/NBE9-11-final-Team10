@@ -36,6 +36,7 @@ export async function createDeposit(data: {
   productId: number
   withdrawAccountId: number
   amount: number
+  accountPassword: string
 }) {
   return apiFetch('/api/v1/savings/deposits', {
     method: 'POST',
@@ -49,6 +50,7 @@ export async function createInstallment(data: {
   monthlyAmount: number
   targetAmount: number
   autoTransferYn: boolean
+  accountPassword: string
 }) {
   return apiFetch('/api/v1/savings/installments', {
     method: 'POST',

@@ -14,7 +14,7 @@ export async function getAccount(accountId: string | number): Promise<Account> {
 }
 
 export async function createAccount(
-  data: { nickname: string; accountType: string },
+  data: { nickname: string; accountType: string; accountPassword: string },
 ): Promise<Account> {
   return apiFetch<Account>('/api/v1/accounts', {
     method: 'POST',

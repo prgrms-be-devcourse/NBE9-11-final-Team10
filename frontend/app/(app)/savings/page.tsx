@@ -61,6 +61,7 @@ export default function SavingsPage() {
   const [joinProduct, setJoinProduct] = useState<SavingsProduct | null>(null)
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [amount, setAmount] = useState('')
+  const [accountPassword, setAccountPassword] = useState('')
   const [autoTransfer, setAutoTransfer] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
@@ -98,6 +99,7 @@ export default function SavingsPage() {
     setJoinProduct(product)
     setSelectedAccountId(activeAccounts[0]?.id ? String(activeAccounts[0].id) : '')
     setAmount('')
+    setAccountPassword('')
     setAutoTransfer(true)
   }
 
@@ -112,6 +114,10 @@ export default function SavingsPage() {
       toast.error(joinProduct.type === 'DEPOSIT' ? '가입 금액을 입력해 주세요.' : '월 납입액을 입력해 주세요.')
       return
     }
+    if (!/^\d{6}$/.test(accountPassword)) {
+      toast.error('출금 계좌 비밀번호는 숫자 6자리여야 합니다.')
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -120,6 +126,7 @@ export default function SavingsPage() {
           productId: joinProduct.id,
           withdrawAccountId: Number(selectedAccountId),
           amount: parsedAmount,
+          accountPassword,
         })
         toast.success('예금 가입이 완료되었습니다.')
       } else {
@@ -129,6 +136,7 @@ export default function SavingsPage() {
           monthlyAmount: parsedAmount,
           targetAmount: parsedAmount * joinProduct.periodMonth,
           autoTransferYn: autoTransfer,
+          accountPassword,
         })
         toast.success('적금 가입이 완료되었습니다.')
       }
@@ -237,6 +245,19 @@ export default function SavingsPage() {
                   목표 금액은 {formatCurrency(Number(amount) * joinProduct.periodMonth)}로 계산됩니다.
                 </p>
               )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="savingAccountPassword">출금 계좌 비밀번호</Label>
+              <Input
+                id="savingAccountPassword"
+                type="password"
+                inputMode="numeric"
+                placeholder="숫자 6자리"
+                value={accountPassword}
+                onChange={(e) => setAccountPassword(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                maxLength={6}
+              />
+              <p className="text-xs text-muted-foreground">예적금 전용 계좌가 아니라 선택한 출금 계좌의 비밀번호입니다.</p>
             </div>
             {joinProduct?.type === 'INSTALLMENT' && (
               <label className="flex items-center gap-2 text-sm text-foreground">

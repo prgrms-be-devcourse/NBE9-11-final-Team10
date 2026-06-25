@@ -53,6 +53,7 @@ public class AccountService {
                 request.nickname(),
                 request.accountType()
         );
+        account.changePassword(passwordEncoder.encode(request.accountPassword()));
 
         Account savedAccount = accountRepository.save(account);
 

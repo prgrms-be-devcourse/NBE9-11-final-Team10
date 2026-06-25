@@ -50,7 +50,7 @@ class SavingDepositControllerTest {
     @Test
     @DisplayName("예금 가입 API는 인증 사용자와 요청 본문을 받아 201을 반환한다")
     void createDeposit() throws Exception {
-        DepositCreateReq request = new DepositCreateReq(1L, 1L, 1000000L);
+        DepositCreateReq request = new DepositCreateReq(1L, 1L, 1000000L, "123456");
         DepositCreateRes response = new DepositCreateRes(
                 1L,
                 DepositStatus.ACTIVE,
@@ -133,7 +133,7 @@ class SavingDepositControllerTest {
     @Test
     @DisplayName("예금 가입 API는 필수값이 없으면 400을 반환한다")
     void createDepositWithoutRequiredValue() throws Exception {
-        DepositCreateReq request = new DepositCreateReq(null, 1L, 1000000L);
+        DepositCreateReq request = new DepositCreateReq(null, 1L, 1000000L, "123456");
 
         mockMvc.perform(post("/api/v1/savings/deposits")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -149,7 +149,8 @@ class SavingDepositControllerTest {
                 1L,
                 100000L,
                 1200000L,
-                true
+                true,
+                "123456"
         );
         InstallmentCreateRes response = new InstallmentCreateRes(
                 1L,
@@ -354,7 +355,8 @@ class SavingDepositControllerTest {
                 1L,
                 100000L,
                 1200000L,
-                true
+                true,
+                "123456"
         );
 
         mockMvc.perform(post("/api/v1/savings/installments")

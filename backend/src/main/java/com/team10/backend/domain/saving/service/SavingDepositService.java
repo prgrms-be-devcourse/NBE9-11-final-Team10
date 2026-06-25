@@ -25,6 +25,7 @@ import com.team10.backend.domain.user.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,6 +63,7 @@ public class SavingDepositService {
     private final UserRepository userRepository;
     private final InstallmentRepository installmentRepository;
     private final SavingBatchProcessor savingBatchProcessor;
+    private final PasswordEncoder passwordEncoder;
     private final Clock clock;
 
     @Transactional
@@ -71,6 +73,7 @@ public class SavingDepositService {
         Account withdrawAccount = findActiveWithdrawAccountForUpdate(request.withdrawAccountId(), userId);
 
         validateDepositAmount(request.amount(), savingProduct);
+        withdrawAccount.verifyPassword(passwordEncoder, request.accountPassword());
 
         LocalDate maturityDate = LocalDate.now(clock)
                 .plusMonths(savingProduct.getPeriodMonth());
@@ -125,6 +128,7 @@ public class SavingDepositService {
         Account withdrawAccount = findActiveWithdrawAccountForUpdate(request.withdrawAccountId(), userId);
 
         validateInstallmentAmount(request.monthlyAmount(), request.targetAmount(), savingProduct);
+        withdrawAccount.verifyPassword(passwordEncoder, request.accountPassword());
 
         LocalDate maturityDate = LocalDate.now(clock)
                 .plusMonths(savingProduct.getPeriodMonth());
