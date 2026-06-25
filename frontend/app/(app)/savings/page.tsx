@@ -4,6 +4,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { Building2, Calendar, Percent, TrendingUp, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,9 +36,11 @@ import {
   cancelSaving,
   createDeposit,
   createInstallment,
+  getDepositProduct,
   getDepositProducts,
   getDeposits,
   getInstallments,
+  getInstallmentProduct,
   getInstallmentProducts,
   getInterestPreview,
   matureSaving,
@@ -59,6 +72,8 @@ export default function SavingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [joinProduct, setJoinProduct] = useState<SavingsProduct | null>(null)
+  const [detailProduct, setDetailProduct] = useState<SavingsProduct | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [amount, setAmount] = useState('')
   const [accountPassword, setAccountPassword] = useState('')
@@ -97,10 +112,28 @@ export default function SavingsPage() {
 
   function openJoin(product: SavingsProduct) {
     setJoinProduct(product)
+    setDetailProduct(null)
     setSelectedAccountId(activeAccounts[0]?.id ? String(activeAccounts[0].id) : '')
     setAmount('')
     setAccountPassword('')
     setAutoTransfer(true)
+  }
+
+  async function openDetail(product: SavingsProduct) {
+    setDetailLoading(true)
+    setDetailProduct(product)
+    try {
+      const detail =
+        product.type === 'DEPOSIT'
+          ? await getDepositProduct(product.id)
+          : await getInstallmentProduct(product.id)
+      setDetailProduct(detail)
+    } catch (err) {
+      toast.error(err instanceof ApiRequestError ? err.message : '상품 상세 정보를 불러오지 못했습니다.')
+      setDetailProduct(null)
+    } finally {
+      setDetailLoading(false)
+    }
   }
 
   async function handleJoin() {
@@ -116,6 +149,18 @@ export default function SavingsPage() {
     }
     if (!/^\d{6}$/.test(accountPassword)) {
       toast.error('출금 계좌 비밀번호는 숫자 6자리여야 합니다.')
+      return
+    }
+    if (parsedAmount < joinProduct.minAmount) {
+      toast.error(`최소 가입 금액은 ${formatCurrency(joinProduct.minAmount)}입니다.`)
+      return
+    }
+    if (joinProduct.type === 'DEPOSIT' && joinProduct.maxAmount && parsedAmount > joinProduct.maxAmount) {
+      toast.error(`최대 가입 금액은 ${formatCurrency(joinProduct.maxAmount)}입니다.`)
+      return
+    }
+    if (joinProduct.type === 'INSTALLMENT' && joinProduct.monthlyLimit && parsedAmount > joinProduct.monthlyLimit) {
+      toast.error(`월 납입 한도는 ${formatCurrency(joinProduct.monthlyLimit)}입니다.`)
       return
     }
 
@@ -186,10 +231,10 @@ export default function SavingsPage() {
               <TabsTrigger value="installment" className="flex-1">적금</TabsTrigger>
             </TabsList>
             <TabsContent value="deposit" className="mt-4">
-              <ProductList products={deposits} loading={loading} onJoin={openJoin} />
+              <ProductList products={deposits} loading={loading} onDetail={openDetail} onJoin={openJoin} />
             </TabsContent>
             <TabsContent value="installment" className="mt-4">
-              <ProductList products={installments} loading={loading} onJoin={openJoin} />
+              <ProductList products={installments} loading={loading} onDetail={openDetail} onJoin={openJoin} />
             </TabsContent>
           </Tabs>
         </TabsContent>
@@ -203,6 +248,47 @@ export default function SavingsPage() {
           />
         </TabsContent>
       </Tabs>
+
+      <Dialog open={!!detailProduct} onOpenChange={(open) => !open && setDetailProduct(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{detailProduct?.name ?? '상품 상세'}</DialogTitle>
+          </DialogHeader>
+          {detailProduct && (
+            <div className="flex flex-col gap-4 py-2">
+              <div className="rounded-lg bg-muted p-3">
+                <p className="text-sm font-medium text-foreground">
+                  {detailProduct.bankName}
+                  {detailProduct.bankCode ? ` · ${detailProduct.bankCode}` : ''}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {detailProduct.type === 'DEPOSIT' ? '정기예금' : '적금'} · {detailProduct.periodMonth}개월 · 연 {detailProduct.interestRate.toFixed(1)}%
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <DetailItem label="최소 가입 금액" value={formatCurrency(detailProduct.minAmount)} />
+                {detailProduct.type === 'DEPOSIT' ? (
+                  <DetailItem label="최대 가입 금액" value={detailProduct.maxAmount ? formatCurrency(detailProduct.maxAmount) : '제한 없음'} />
+                ) : (
+                  <DetailItem label="월 납입 한도" value={detailProduct.monthlyLimit ? formatCurrency(detailProduct.monthlyLimit) : '제한 없음'} />
+                )}
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1">상품 설명</p>
+                <p className="text-sm leading-relaxed text-foreground">
+                  {detailLoading ? '상세 정보를 불러오는 중입니다.' : detailProduct.terms ?? '가입 조건을 확인해 주세요.'}
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailProduct(null)}>닫기</Button>
+            {detailProduct && (
+              <Button onClick={() => openJoin(detailProduct)} disabled={detailLoading}>가입하기</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!joinProduct} onOpenChange={(open) => !open && setJoinProduct(null)}>
         <DialogContent>
@@ -282,18 +368,44 @@ export default function SavingsPage() {
   )
 }
 
-function ProductList({ products, loading, onJoin }: { products: SavingsProduct[]; loading: boolean; onJoin: (product: SavingsProduct) => void }) {
+function ProductList({
+  products,
+  loading,
+  onDetail,
+  onJoin,
+}: {
+  products: SavingsProduct[]
+  loading: boolean
+  onDetail: (product: SavingsProduct) => void
+  onJoin: (product: SavingsProduct) => void
+}) {
   if (loading) {
     return <div className="flex flex-col gap-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-40 w-full rounded-lg" />)}</div>
   }
   if (products.length === 0) {
     return <p className="text-center text-sm text-muted-foreground py-10">상품 정보가 없습니다.</p>
   }
-  return <div className="flex flex-col gap-3">{products.map((p) => <ProductCard key={p.id} product={p} onJoin={onJoin} />)}</div>
+  return <div className="flex flex-col gap-3">{products.map((p) => <ProductCard key={p.id} product={p} onDetail={onDetail} onJoin={onJoin} />)}</div>
 }
 
-function ProductCard({ product: p, onJoin }: { product: SavingsProduct; onJoin: (product: SavingsProduct) => void }) {
+function ProductCard({
+  product: p,
+  onDetail,
+  onJoin,
+}: {
+  product: SavingsProduct
+  onDetail: (product: SavingsProduct) => void
+  onJoin: (product: SavingsProduct) => void
+}) {
   const isHighRate = p.interestRate >= 5
+  const amountLabel = p.type === 'DEPOSIT' ? '최소금액' : '월 한도'
+  const amountValue =
+    p.type === 'DEPOSIT'
+      ? formatCurrency(p.minAmount)
+      : p.monthlyLimit
+        ? formatCurrency(p.monthlyLimit)
+        : '상세 확인'
+
   return (
     <Card className="border-border hover:border-primary/30 transition-colors">
       <CardContent className="pt-4 pb-4">
@@ -315,11 +427,14 @@ function ProductCard({ product: p, onJoin }: { product: SavingsProduct; onJoin: 
         </div>
         <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-border">
           <InfoChip icon={Calendar} label="기간" value={`${p.periodMonth}개월`} />
-          <InfoChip icon={Wallet} label={p.type === 'DEPOSIT' ? '최소금액' : '월 한도'} value={formatCurrency(p.type === 'DEPOSIT' ? p.minAmount : p.monthlyLimit ?? 0)} compact />
+          <InfoChip icon={Wallet} label={amountLabel} value={amountValue} compact />
           <InfoChip icon={Percent} label="유형" value={p.type === 'DEPOSIT' ? '예금' : '적금'} />
         </div>
         {p.terms && <p className="text-xs text-muted-foreground mt-3 leading-relaxed border-t border-border pt-3">{p.terms}</p>}
-        <Button size="sm" className="w-full mt-4" onClick={() => onJoin(p)}>가입하기</Button>
+        <div className="grid grid-cols-2 gap-2 mt-4">
+          <Button size="sm" variant="outline" onClick={() => onDetail(p)}>상세보기</Button>
+          <Button size="sm" onClick={() => onJoin(p)}>가입하기</Button>
+        </div>
       </CardContent>
     </Card>
   )
@@ -406,10 +521,47 @@ function SavingCard({ id, type, title, bankName, amount, status, progressRate, o
         <div className="grid grid-cols-3 gap-2">
           <Button size="sm" variant="outline" onClick={() => run('preview')} disabled={loading}>이자조회</Button>
           <Button size="sm" variant="outline" onClick={() => run('maturity')} disabled={loading || status !== 'ACTIVE'}>만기</Button>
-          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => run('cancel')} disabled={loading || status !== 'ACTIVE'}>해지</Button>
+          <AlertDialog>
+            <AlertDialogTrigger>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="w-full text-destructive hover:text-destructive"
+                disabled={loading || status !== 'ACTIVE'}
+              >
+                해지
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>정말 해지하시겠습니까?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  중도해지는 되돌릴 수 없습니다. 해지하면 예적금 전용 계좌가 닫히고 원금과 중도해지 이자가 입출금계좌로 반환됩니다.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>취소</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => run('cancel')}
+                >
+                  해지하기
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 font-semibold text-foreground">{value}</p>
+    </div>
   )
 }
 

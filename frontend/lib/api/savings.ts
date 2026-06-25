@@ -11,17 +11,11 @@ import type {
 } from '../types'
 
 export async function getDepositProducts(): Promise<SavingsProduct[]> {
-  const products = await apiFetch<Omit<SavingsProduct, 'type' | 'minAmount'>[]>(
-    '/api/v1/savings/deposit-products',
-  )
-  return products.map((product) => ({ ...product, type: 'DEPOSIT', minAmount: 0 }))
+  return apiFetch<SavingsProduct[]>('/api/v1/savings/deposit-products')
 }
 
 export async function getInstallmentProducts(): Promise<SavingsProduct[]> {
-  const products = await apiFetch<Omit<SavingsProduct, 'type' | 'minAmount'>[]>(
-    '/api/v1/savings/installment-products',
-  )
-  return products.map((product) => ({ ...product, type: 'INSTALLMENT', minAmount: 0 }))
+  return apiFetch<SavingsProduct[]>('/api/v1/savings/installment-products')
 }
 
 export async function getDepositProduct(productId: string | number): Promise<SavingsProduct> {
