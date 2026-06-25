@@ -17,22 +17,23 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { getAccounts } from '@/lib/api/accounts'
 import {
   closeFxWallet,
   createFxWallet,
+  createExchangeQuote,
   getExchangeCurrencies,
+  getExchangeRates,
   getFxWallets,
   type ExchangeCurrency,
   type ExchangeCurrencyCode,
+  type ExchangeQuote,
+  type ExchangeRate,
   type FxWallet,
 } from '@/lib/api/exchanges'
 import { ApiRequestError } from '@/lib/api'
-
-const currencies = [
-  { code: 'USD', name: '미국 달러' },
-  { code: 'JPY', name: '일본 엔' },
-  { code: 'EUR', name: '유로' },
-]
+import { formatCurrency } from '@/lib/format'
+import type { Account } from '@/lib/types'
 
 const orderPreview = [
   {
@@ -72,7 +73,7 @@ export default function ExchangePage() {
         </TabsList>
 
         <TabsContent value="exchange" className="mt-4">
-          <ExchangeFormSkeleton />
+          <ExchangeFormTab />
         </TabsContent>
 
         <TabsContent value="wallets" className="mt-4">
@@ -87,7 +88,113 @@ export default function ExchangePage() {
   )
 }
 
-function ExchangeFormSkeleton() {
+function ExchangeFormTab() {
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [currencies, setCurrencies] = useState<ExchangeCurrency[]>([])
+  const [rates, setRates] = useState<ExchangeRate[]>([])
+  const [wallets, setWallets] = useState<FxWallet[]>([])
+  const [amount, setAmount] = useState('')
+  const [toCurrencyCode, setToCurrencyCode] = useState<ExchangeCurrencyCode | ''>('')
+  const [krwAccountId, setKrwAccountId] = useState('')
+  const [fxWalletId, setFxWalletId] = useState('')
+  const [quote, setQuote] = useState<ExchangeQuote | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [quoting, setQuoting] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    loadExchangeFormData()
+  }, [])
+
+  async function loadExchangeFormData() {
+    setLoading(true)
+    setError('')
+    try {
+      const [accountData, currencyData, rateData, walletData] = await Promise.all([
+        getAccounts(),
+        getExchangeCurrencies(),
+        getExchangeRates(),
+        getFxWallets(),
+      ])
+
+      const activeAccounts = accountData.filter((account) => account.status === 'ACTIVE')
+      const activeTargetCurrencies = currencyData.filter(
+        (currency) => currency.status === 'ACTIVE' && currency.currencyCode !== 'KRW',
+      )
+      const activeWallets = walletData.filter((wallet) => wallet.status === 'ACTIVE')
+
+      setAccounts(activeAccounts)
+      setCurrencies(currencyData)
+      setRates(rateData)
+      setWallets(walletData)
+      if (activeAccounts[0]) setKrwAccountId(String(activeAccounts[0].id))
+      if (activeTargetCurrencies[0]) setToCurrencyCode(activeTargetCurrencies[0].currencyCode)
+      if (activeWallets[0]) setFxWalletId(String(activeWallets[0].walletId))
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : '환전 정보를 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function resetQuote() {
+    setQuote(null)
+  }
+
+  async function handleCreateQuote() {
+    const parsedAmount = Number(amount)
+    if (!toCurrencyCode || !krwAccountId || !fxWalletId || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError('환전 정보를 모두 입력해 주세요.')
+      return
+    }
+
+    setQuoting(true)
+    setError('')
+    try {
+      const nextQuote = await createExchangeQuote({
+        fromCurrencyCode: 'KRW',
+        toCurrencyCode,
+        fromAmount: parsedAmount,
+      })
+      setQuote(nextQuote)
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : '환전 견적 생성에 실패했습니다.')
+    } finally {
+      setQuoting(false)
+    }
+  }
+
+  const targetCurrencies = currencies.filter(
+    (currency) => currency.status === 'ACTIVE' && currency.currencyCode !== 'KRW',
+  )
+  const selectableWallets = wallets.filter(
+    (wallet) => wallet.status === 'ACTIVE' && wallet.currencyCode === toCurrencyCode,
+  )
+  const selectedRate = rates.find((rate) => rate.currencyCode === toCurrencyCode)
+  const selectedAccount = accounts.find((account) => String(account.id) === krwAccountId)
+  const selectedWallet = wallets.find((wallet) => String(wallet.walletId) === fxWalletId)
+  const canCreateQuote = Boolean(
+    toCurrencyCode && krwAccountId && fxWalletId && Number(amount) > 0 && !quoting,
+  )
+
+  useEffect(() => {
+    if (!toCurrencyCode) return
+    const matchingWallet = wallets.find(
+      (wallet) => wallet.status === 'ACTIVE' && wallet.currencyCode === toCurrencyCode,
+    )
+    setFxWalletId(matchingWallet ? String(matchingWallet.walletId) : '')
+    resetQuote()
+  }, [toCurrencyCode, wallets])
+
+  if (loading) {
+    return (
+      <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
+        <Skeleton className="h-80 w-full rounded-lg" />
+        <Skeleton className="h-56 w-full rounded-lg" />
+      </div>
+    )
+  }
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
       <Card className="border-border">
@@ -95,6 +202,12 @@ function ExchangeFormSkeleton() {
           <CardTitle className="text-sm font-medium text-muted-foreground">환전 정보</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="from-currency">출금 통화</Label>
@@ -110,14 +223,20 @@ function ExchangeFormSkeleton() {
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="to-currency">입금 통화</Label>
-              <Select defaultValue="USD">
+              <Select
+                value={toCurrencyCode}
+                onValueChange={(value) => {
+                  setToCurrencyCode(value as ExchangeCurrencyCode)
+                  resetQuote()
+                }}
+              >
                 <SelectTrigger id="to-currency">
-                  <SelectValue />
+                  <SelectValue placeholder="통화 선택" />
                 </SelectTrigger>
                 <SelectContent>
-                  {currencies.map((currency) => (
-                    <SelectItem key={currency.code} value={currency.code}>
-                      {currency.code} {currency.name}
+                  {targetCurrencies.map((currency) => (
+                    <SelectItem key={currency.currencyId} value={currency.currencyCode}>
+                      {currency.currencyCode} {currency.currencyName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -127,31 +246,81 @@ function ExchangeFormSkeleton() {
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="exchange-amount">환전 금액</Label>
-            <Input id="exchange-amount" type="number" inputMode="numeric" min={1} placeholder="0" />
+            <Input
+              id="exchange-amount"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              placeholder="0"
+              value={amount}
+              onChange={(event) => {
+                setAmount(event.target.value)
+                resetQuote()
+              }}
+            />
+            {selectedRate && (
+              <p className="text-xs text-muted-foreground">
+                기준 환율 {selectedRate.currencyUnit} {selectedRate.currencyCode} = {formatCurrency(selectedRate.basePrice)}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="krw-account">원화 계좌</Label>
-              <Select disabled>
+              <Select
+                value={krwAccountId}
+                onValueChange={(value) => {
+                  if (value == null) return
+                  setKrwAccountId(value)
+                  resetQuote()
+                }}
+              >
                 <SelectTrigger id="krw-account">
                   <SelectValue placeholder="계좌 선택" />
                 </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={String(account.id)}>
+                      {account.nickname} {formatCurrency(account.balance)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="fx-wallet">외화 지갑</Label>
-              <Select disabled>
+              <Select
+                value={fxWalletId}
+                onValueChange={(value) => {
+                  if (value == null) return
+                  setFxWalletId(value)
+                  resetQuote()
+                }}
+                disabled={!toCurrencyCode || selectableWallets.length === 0}
+              >
                 <SelectTrigger id="fx-wallet">
                   <SelectValue placeholder="지갑 선택" />
                 </SelectTrigger>
+                <SelectContent>
+                  {selectableWallets.map((wallet) => (
+                    <SelectItem key={wallet.walletId} value={String(wallet.walletId)}>
+                      {wallet.currencyCode} {formatFxBalance(wallet.balance)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
+              {toCurrencyCode && selectableWallets.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  먼저 {toCurrencyCode} 외화 지갑을 만들어 주세요.
+                </p>
+              )}
             </div>
           </div>
 
-          <Button type="button" className="w-full" disabled>
-            견적 확인
+          <Button type="button" className="w-full" disabled={!canCreateQuote} onClick={handleCreateQuote}>
+            {quoting ? '견적 확인 중...' : '견적 확인'}
           </Button>
         </CardContent>
       </Card>
@@ -161,9 +330,21 @@ function ExchangeFormSkeleton() {
           <CardTitle className="text-sm font-medium text-muted-foreground">견적 요약</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <SummaryRow label="적용 환율" value="-" />
-          <SummaryRow label="예상 수수료" value="-" />
-          <SummaryRow label="예상 입금액" value="-" strong />
+          <SummaryRow label="출금 계좌" value={selectedAccount?.nickname ?? '-'} />
+          <SummaryRow label="입금 지갑" value={selectedWallet ? selectedWallet.currencyCode : '-'} />
+          <SummaryRow
+            label="적용 환율"
+            value={quote ? `${formatNumber(quote.rate)}원` : '-'}
+          />
+          <SummaryRow
+            label="예상 수수료"
+            value={quote ? formatCurrency(quote.fee) : '-'}
+          />
+          <SummaryRow
+            label="예상 입금액"
+            value={quote ? `${formatFxBalance(quote.expectedToAmount)} ${quote.toCurrencyCode}` : '-'}
+            strong
+          />
           <Button type="button" variant="outline" className="mt-1" disabled>
             환전 실행
           </Button>
@@ -414,5 +595,12 @@ function formatFxBalance(value: number) {
   return new Intl.NumberFormat('ko-KR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 8,
+  }).format(value)
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('ko-KR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 4,
   }).format(value)
 }
