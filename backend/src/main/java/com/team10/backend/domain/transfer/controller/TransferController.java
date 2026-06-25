@@ -42,6 +42,7 @@ public class TransferController {
                 idempotencyKey,
                 request.senderAccountId(),
                 request.receiverAccountNumber(),
+                request.accountPassword(),
                 request.amount(),
                 request.memo());
         return ResponseEntity.ok(response);

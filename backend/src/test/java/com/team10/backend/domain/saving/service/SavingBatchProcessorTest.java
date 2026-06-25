@@ -199,6 +199,34 @@ class SavingBatchProcessorTest {
     }
 
     @Test
+    @DisplayName("출금 제한된 적금도 정기 자동이체는 허용한다")
+    void processInstallmentPaymentWithWithdrawalLock() {
+        Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
+        installment.updateWithdrawalLock(true, "목표 저축을 위해 제한");
+        ReflectionTestUtils.setField(installment, "nextPaymentDate", TODAY);
+
+        when(installmentRepository.findByIdWithAccountForUpdate(1L))
+                .thenReturn(Optional.of(installment));
+
+        savingBatchProcessor.processInstallmentPayment(1L);
+
+        assertThat(activeAccount.getBalance()).isEqualTo(1900000L);
+        assertThat(installment.getPaidAmount()).isEqualTo(200000L);
+        assertThat(installment.getNextPaymentDate()).isEqualTo(TODAY.plusMonths(1));
+        assertThat(installment.getStatus()).isEqualTo(InstallmentStatus.ACTIVE);
+
+        ArgumentCaptor<TransactionHistory> captor = forClass(TransactionHistory.class);
+        verify(transactionHistoryRepository).save(captor.capture());
+        TransactionHistory history = captor.getValue();
+        assertThat(history.getType()).isEqualTo(TransactionType.INSTALLMENT_PAYMENT);
+        assertThat(history.getDirection()).isEqualTo(TransactionDirection.OUT);
+        assertThat(history.getAmount()).isEqualTo(100000L);
+        assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
+        assertThat(history.getBalanceAfter()).isEqualTo(1900000L);
+        assertThat(history.getMemo()).isEqualTo("적금 월 납입 자동이체");
+    }
+
+    @Test
     @DisplayName("잔액이 부족하면 납입 실패 상태로 변경한다")
     void processInstallmentPaymentWithInsufficientBalance() {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);

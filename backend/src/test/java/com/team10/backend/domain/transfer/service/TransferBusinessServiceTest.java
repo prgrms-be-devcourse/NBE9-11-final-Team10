@@ -24,6 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -54,6 +55,9 @@ class TransferBusinessServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @InjectMocks
     private TransferBusinessService transferBusinessService;
@@ -133,6 +137,7 @@ class TransferBusinessServiceTest {
 
         Account senderAccount = account(1L, sender, "100200300001", 100_000L);
         Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
         when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
         when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
         when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
@@ -145,7 +150,7 @@ class TransferBusinessServiceTest {
         when(transactionHistoryRepository.save(any(TransactionHistory.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        TransferRes response = transferBusinessService.executeTransfer(1L, 1L, "100200300002", 50_000L, "점심값");
+        TransferRes response = transferBusinessService.executeTransfer(1L, 1L, "100200300002", "123456", 50_000L, "점심값");
 
         assertEquals(50_000L, senderAccount.getBalance());
         assertEquals(60_000L, receiverAccount.getBalance());
@@ -192,12 +197,63 @@ class TransferBusinessServiceTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferBusinessService.executeTransfer(1L, 1L, "100200300001", 50_000L, "점심값")
+                () -> transferBusinessService.executeTransfer(1L, 1L, "100200300001", "123456", 50_000L, "점심값")
         );
 
         assertEquals(TransferErrorCode.INVALID_INPUT_VALUE, exception.getErrorCode());
         verify(transactionHistoryRepository, never()).save(any());
         verify(transferRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("출금 계좌 비밀번호가 일치하지 않으면 송금에 실패한다")
+    void executeTransfer_passwordMismatch_throwsAccountPasswordMismatch() {
+        User sender = user();
+        User receiver = user();
+        when(sender.getId()).thenReturn(1L);
+
+        Account senderAccount = account(1L, sender, "100200300001", 100_000L);
+        Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
+        when(passwordEncoder.matches("000000", "encoded-password")).thenReturn(false);
+        when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
+        when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
+        when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> transferBusinessService.executeTransfer(1L, 1L, "100200300002", "000000", 50_000L, "비밀번호 불일치")
+        );
+
+        assertEquals(TransferErrorCode.ACCOUNT_PASSWORD_MISMATCH, exception.getErrorCode());
+        verify(transferRepository, never()).save(any(Transfer.class));
+        verify(transactionHistoryRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("출금 계좌 비밀번호가 설정되지 않으면 송금에 실패한다")
+    void executeTransfer_passwordNotSet_throwsAccountPasswordNotSet() {
+        User sender = user();
+        User receiver = user();
+        when(sender.getId()).thenReturn(1L);
+
+        Account senderAccount = account(1L, sender, "100200300001", 100_000L);
+        ReflectionTestUtils.setField(senderAccount, "accountPasswordHash", null);
+        Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
+        when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
+        when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
+        when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> transferBusinessService.executeTransfer(1L, 1L, "100200300002", "123456", 50_000L, "비밀번호 미설정")
+        );
+
+        assertEquals(TransferErrorCode.ACCOUNT_PASSWORD_NOT_SET, exception.getErrorCode());
+        verify(passwordEncoder, never()).matches(any(), any());
+        verify(transferRepository, never()).save(any(Transfer.class));
+        verify(transactionHistoryRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -209,13 +265,14 @@ class TransferBusinessServiceTest {
 
         Account senderAccount = account(1L, sender, "100200300001", 10_000L);
         Account receiverAccount = account(2L, receiver, "100200300002", 10_000L);
+        when(passwordEncoder.matches("123456", "encoded-password")).thenReturn(true);
         when(accountRepository.findIdByAccountNumber("100200300002")).thenReturn(Optional.of(2L));
         when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(senderAccount));
         when(accountRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(receiverAccount));
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> transferBusinessService.executeTransfer(1L, 1L, "100200300002", 50_000L, "잔액 부족")
+                () -> transferBusinessService.executeTransfer(1L, 1L, "100200300002", "123456", 50_000L, "잔액 부족")
         );
 
         ArgumentCaptor<TransferFailedEvent> eventCaptor = ArgumentCaptor.forClass(TransferFailedEvent.class);
@@ -233,6 +290,7 @@ class TransferBusinessServiceTest {
 
     private Account account(Long id, User user, String accountNumber, Long balance) {
         Account account = Account.create(user, accountNumber, "테스트 계좌", AccountType.DEPOSIT);
+        account.changePassword("encoded-password");
         account.deposit(balance);
         ReflectionTestUtils.setField(account, "id", id);
         return account;

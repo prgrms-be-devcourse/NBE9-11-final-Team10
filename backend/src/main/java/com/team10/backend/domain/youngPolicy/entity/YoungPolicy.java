@@ -25,9 +25,13 @@ public class YoungPolicy extends BaseEntity {
 
     private Integer minAge;     // 지원대상최소연령 (sprtTrgtMinAge)
     private Integer maxAge;     // 지원대상최대연령 (sprtTrgtMaxAge)
+    @Column(columnDefinition = "TEXT")
     private String regionCode;  // 정책거주지역코드 (zipCd)
+
+    @Column(columnDefinition = "TEXT")
     private String jobCode;     // 정책취업요건코드 (jobCd)
 
+    @Column(columnDefinition = "TEXT")
     private String applyPeriod; // 신청기간 (aplyYmd)
 
     @Column(columnDefinition = "TEXT")

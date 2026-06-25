@@ -16,12 +16,12 @@ public class RestClientConfig {
     public RestClient restClient() {
 
         HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
+                .connectTimeout(Duration.ofSeconds(10))
                 .build();
 
-        // 무한 대기 방지를 위한 읽기 타임아웃 설정 (5초)
+        // 무한 대기 방지를 위한 읽기 타임아웃 설정 (30초로 변경하여 LLM 응답 수용)
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-        factory.setReadTimeout(Duration.ofSeconds(5));
+        factory.setReadTimeout(Duration.ofSeconds(30));
 
         // 설정을 적용하여 RestClient 생성 및 등록
         return RestClient.builder()
