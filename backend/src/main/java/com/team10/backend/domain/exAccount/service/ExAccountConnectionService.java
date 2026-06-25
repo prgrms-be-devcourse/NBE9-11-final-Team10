@@ -24,6 +24,7 @@ import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.lock.DistributedLockTemplate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -54,6 +55,7 @@ public class ExAccountConnectionService {
     /**
      * 사용자의 특정 금융기관 계정 인증 정보(connectedId)를 등록하고 DB에 저장(암호화)합니다.
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ExAccountConnectionRes register(
             Long userId,
             CodefExAccountConnectionCreateReq request
