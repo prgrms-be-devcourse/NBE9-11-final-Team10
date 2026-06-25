@@ -4,7 +4,7 @@
 
 예금/적금 가입 정보를 단순 Saving 엔티티의 금액 필드로만 관리하지 않고, 별도 `Account`와 연결해 실제 돈의 이동 흐름을 계좌 단위로 추적한다.
 
-예/적금 전용 계좌는 일반 입금/송금 계좌가 아니라 Saving 도메인의 가입, 자동이체, 중도해지, 만기 흐름에서만 금액이 이동하는 계좌로 사용한다.
+예/적금 전용 계좌는 일반 입금/송금 계좌가 아니라 **Saving 도메인의 가입, 자동이체, 중도해지, 만기 흐름에서만** 금액이 이동하는 계좌로 사용한다.
 
 ## 적용 범위
 
@@ -129,11 +129,11 @@ Installment = 적금 상품, 월 납입액, 납입 누계, 만기일, 상태 관
 | 상황 | 허용 여부 | 실패 코드 |
 | --- | --- | --- |
 | `DEPOSIT` 계좌에서 송금 출금 | 허용 | - |
-| `SAVING_DEPOSIT`, `SAVING_INSTALLMENT` 계좌에서 송금 출금 | 차단 | `INVALID_SENDER_ACCOUNT_TYPE` |
+| `SAVING_DEPOSIT`, `SAVING_INSTALLMENT` 계좌에서 송금 출금 | 차단 | `INVALID_ACCOUNT_TYPE` |
 | `DEPOSIT` 계좌로 송금 수취 | 허용 | - |
-| `SAVING_DEPOSIT`, `SAVING_INSTALLMENT` 계좌로 송금 수취 | 차단 | `INVALID_RECEIVER_ACCOUNT_TYPE` |
+| `SAVING_DEPOSIT`, `SAVING_INSTALLMENT` 계좌로 송금 수취 | 차단 | `INVALID_ACCOUNT_TYPE` |
 | `DEPOSIT` 계좌로 일반 입금(topUp) | 허용 | - |
-| `SAVING_DEPOSIT`, `SAVING_INSTALLMENT` 계좌로 일반 입금(topUp) | 차단 | `INVALID_RECEIVER_ACCOUNT_TYPE` |
+| `SAVING_DEPOSIT`, `SAVING_INSTALLMENT` 계좌로 일반 입금(topUp) | 차단 | `INVALID_ACCOUNT_TYPE` |
 
 ## 거래내역 정책
 
@@ -185,8 +185,8 @@ Installment = 적금 상품, 월 납입액, 납입 누계, 만기일, 상태 관
 Transfer 도메인은 일반 송금/입금 가능 여부를 `Account.accountType`으로 판단한다.
 
 ```java
-validateSenderCanTransferOut(senderAccount);
-validateReceiverCanTransferIn(receiverAccount);
+validateDepositAccount(senderAccount);
+validateDepositAccount(receiverAccount);
 ```
 
 현재 Transfer 도메인은 일반 송금 가능 여부 판단을 위해 `Deposit` 또는 `Installment` 상태를 조회하지 않는다.

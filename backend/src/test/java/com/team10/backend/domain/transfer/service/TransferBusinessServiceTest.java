@@ -128,7 +128,7 @@ class TransferBusinessServiceTest {
 
     @Test
     @DisplayName("예금 계좌는 일반 입금할 수 없다")
-    void executeTopUp_savingDepositAccount_throwsReceiverAccountType() {
+    void executeTopUp_savingDepositAccount_throwsInvalidAccountType() {
         Account account = account(1L, user(), "100200300001", 10_000L, AccountType.SAVING_DEPOSIT);
         when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
 
@@ -137,14 +137,14 @@ class TransferBusinessServiceTest {
                 () -> transferBusinessService.executeTopUp(1L, 1L, 5_000L, "예금 입금")
         );
 
-        assertEquals(TransferErrorCode.INVALID_RECEIVER_ACCOUNT_TYPE, exception.getErrorCode());
+        assertEquals(TransferErrorCode.INVALID_ACCOUNT_TYPE, exception.getErrorCode());
         assertEquals(10_000L, account.getBalance());
         verify(transactionHistoryRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("적금 계좌는 일반 입금할 수 없다")
-    void executeTopUp_savingInstallmentAccount_throwsReceiverAccountType() {
+    void executeTopUp_savingInstallmentAccount_throwsInvalidAccountType() {
         Account account = account(1L, user(), "100200300001", 10_000L, AccountType.SAVING_INSTALLMENT);
         when(accountRepository.findByIdAndUserIdForUpdate(1L, 1L)).thenReturn(Optional.of(account));
 
@@ -153,7 +153,7 @@ class TransferBusinessServiceTest {
                 () -> transferBusinessService.executeTopUp(1L, 1L, 5_000L, "적금 입금")
         );
 
-        assertEquals(TransferErrorCode.INVALID_RECEIVER_ACCOUNT_TYPE, exception.getErrorCode());
+        assertEquals(TransferErrorCode.INVALID_ACCOUNT_TYPE, exception.getErrorCode());
         assertEquals(10_000L, account.getBalance());
         verify(transactionHistoryRepository, never()).save(any());
     }
@@ -264,7 +264,7 @@ class TransferBusinessServiceTest {
 
     @Test
     @DisplayName("입출금계좌가 아닌 계좌는 송금 출금 계좌로 사용할 수 없다")
-    void executeTransfer_savingSenderAccount_throwsTransferOutNotAllowed() {
+    void executeTransfer_savingSenderAccount_throwsInvalidAccountType() {
         User sender = user();
         User receiver = user();
         when(sender.getId()).thenReturn(1L);
@@ -280,7 +280,7 @@ class TransferBusinessServiceTest {
                 () -> transferBusinessService.executeTransfer(1L, 1L, "100200300002", "123456", 50_000L, "예적금 출금")
         );
 
-        assertEquals(TransferErrorCode.INVALID_SENDER_ACCOUNT_TYPE, exception.getErrorCode());
+        assertEquals(TransferErrorCode.INVALID_ACCOUNT_TYPE, exception.getErrorCode());
         verify(passwordEncoder, never()).matches(any(), any());
         verify(transferRepository, never()).save(any(Transfer.class));
         verify(transactionHistoryRepository, never()).save(any());
@@ -290,7 +290,7 @@ class TransferBusinessServiceTest {
 
     @Test
     @DisplayName("예금/적금 계좌는 일반 송금으로 입금받을 수 없다")
-    void executeTransfer_savingReceiverAccount_throwsTransferInNotAllowed() {
+    void executeTransfer_savingReceiverAccount_throwsInvalidAccountType() {
         User sender = user();
         User receiver = user();
         when(sender.getId()).thenReturn(1L);
@@ -306,7 +306,7 @@ class TransferBusinessServiceTest {
                 () -> transferBusinessService.executeTransfer(1L, 1L, "100200300002", "123456", 50_000L, "예적금 입금")
         );
 
-        assertEquals(TransferErrorCode.INVALID_RECEIVER_ACCOUNT_TYPE, exception.getErrorCode());
+        assertEquals(TransferErrorCode.INVALID_ACCOUNT_TYPE, exception.getErrorCode());
         verify(passwordEncoder, never()).matches(any(), any());
         verify(transferRepository, never()).save(any(Transfer.class));
         verify(transactionHistoryRepository, never()).save(any());

@@ -47,7 +47,7 @@ public class TransferBusinessService {
         }
 
         // 일반 입금 대상 계좌도 입출금계좌만 허용
-        validateReceiverCanTransferIn(account);
+        validateDepositAccount(account);
 
         // 입금 전 잔액 캡쳐
         Long balanceBefore = account.getBalance();
@@ -96,10 +96,10 @@ public class TransferBusinessService {
         validateDifferentAccounts(senderAccount, receiverAccount);
         // 두 계좌 모두 ACTIVE인지 확인
         validateAccountsActive(senderAccount, receiverAccount);
-        // 일반 송금 출금 계좌는 입출금계좌만 허용
-        validateSenderCanTransferOut(senderAccount);
-        // 일반 송금 수취 계좌도 입출금계좌만 허용
-        validateReceiverCanTransferIn(receiverAccount);
+        // 보내는 계좌는 입출금계좌만 가능
+        validateDepositAccount(senderAccount);
+        // 받는 계좌도 입출금계좌만 가능
+        validateDepositAccount(receiverAccount);
         // 출금 계좌 비밀번호 일치 여부 확인
         validateAccountPassword(senderAccount, accountPassword);
 
@@ -218,15 +218,9 @@ public class TransferBusinessService {
         }
     }
 
-    private void validateSenderCanTransferOut(Account senderAccount) {
-        if (!senderAccount.getAccountType().canTransferOut()) {
-            throw new BusinessException(TransferErrorCode.INVALID_SENDER_ACCOUNT_TYPE);
-        }
-    }
-
-    private void validateReceiverCanTransferIn(Account receiverAccount) {
-        if (receiverAccount.getAccountType() != AccountType.DEPOSIT) {
-            throw new BusinessException(TransferErrorCode.INVALID_RECEIVER_ACCOUNT_TYPE);
+    private void validateDepositAccount(Account account) {
+        if (account.getAccountType() != AccountType.DEPOSIT) {
+            throw new BusinessException(TransferErrorCode.INVALID_ACCOUNT_TYPE);
         }
     }
 
