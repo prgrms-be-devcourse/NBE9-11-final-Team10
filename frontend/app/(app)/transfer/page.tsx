@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ArrowDownLeft, Check, Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -22,6 +22,7 @@ import { getAccounts } from '@/lib/api/accounts'
 import { deposit, transfer } from '@/lib/api/transfers'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 import { ApiRequestError } from '@/lib/api'
+import { createIdempotencyKey } from '@/lib/idempotency'
 import type { Account, TransferResult } from '@/lib/types'
 
 export default function TransferPage() {
@@ -88,8 +89,13 @@ function TransferForm({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState('')
+  const idempotencyKeyRef = useRef<string | null>(null)
 
   const activeAccounts = accounts.filter((a) => a.status === 'ACTIVE')
+
+  function resetIdempotencyKey() {
+    idempotencyKeyRef.current = null
+  }
 
   function validate() {
     const e: Record<string, string> = {}
@@ -114,14 +120,23 @@ function TransferForm({
     if (Object.keys(errs).length > 0) return
 
     setLoading(true)
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = createIdempotencyKey('transfer')
+    }
+
     try {
-      const res = await transfer({
-        senderAccountId,
-        receiverAccountNumber,
-        amount: Number(amount),
-        accountPassword,
-        memo: memo || undefined,
-      })
+      const idempotencyKey = idempotencyKeyRef.current
+      const res = await transfer(
+        {
+          senderAccountId,
+          receiverAccountNumber,
+          amount: Number(amount),
+          accountPassword,
+          memo: memo || undefined,
+        },
+        idempotencyKey,
+      )
+      idempotencyKeyRef.current = null
       onSuccess({
         ...res,
         amount: Number(amount),
@@ -154,7 +169,10 @@ function TransferForm({
             <Select
               value={senderAccountId}
               onValueChange={(value) => {
-                if (value != null) setSenderAccountId(value)
+                if (value != null) {
+                  resetIdempotencyKey()
+                  setSenderAccountId(value)
+                }
               }}
             >
               <SelectTrigger id="sender" aria-invalid={!!errors.senderAccountId}>
@@ -179,9 +197,10 @@ function TransferForm({
               id="receiver"
               placeholder="000-0000-000000"
               value={receiverAccountNumber}
-              onChange={(e) =>
+              onChange={(e) => {
+                resetIdempotencyKey()
                 setReceiverAccountNumber(e.target.value.replace(/[^0-9\-]/g, ''))
-              }
+              }}
               aria-invalid={!!errors.receiverAccountNumber}
             />
             {errors.receiverAccountNumber && (
@@ -198,7 +217,10 @@ function TransferForm({
               placeholder="0"
               min={1}
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                resetIdempotencyKey()
+                setAmount(e.target.value)
+              }}
               aria-invalid={!!errors.amount}
             />
             {amount && !isNaN(Number(amount)) && Number(amount) > 0 && (
@@ -216,7 +238,10 @@ function TransferForm({
               maxLength={6}
               placeholder="숫자 6자리"
               value={accountPassword}
-              onChange={(e) => setAccountPassword(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => {
+                resetIdempotencyKey()
+                setAccountPassword(e.target.value.replace(/\D/g, ''))
+              }}
               aria-invalid={!!errors.accountPassword}
             />
             {errors.accountPassword && (
@@ -230,7 +255,10 @@ function TransferForm({
               id="memo"
               placeholder="메모 입력"
               value={memo}
-              onChange={(e) => setMemo(e.target.value)}
+              onChange={(e) => {
+                resetIdempotencyKey()
+                setMemo(e.target.value)
+              }}
               maxLength={50}
             />
           </div>
@@ -267,8 +295,13 @@ function DepositForm({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState('')
+  const idempotencyKeyRef = useRef<string | null>(null)
 
   const activeAccounts = accounts.filter((a) => a.status === 'ACTIVE')
+
+  function resetIdempotencyKey() {
+    idempotencyKeyRef.current = null
+  }
 
   function validate() {
     const e: Record<string, string> = {}
@@ -287,12 +320,21 @@ function DepositForm({
     if (Object.keys(errs).length > 0) return
 
     setLoading(true)
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = createIdempotencyKey('top-up')
+    }
+
     try {
-      const res = await deposit({
-        accountId,
-        amount: Number(amount),
-        memo: memo || undefined,
-      })
+      const idempotencyKey = idempotencyKeyRef.current
+      const res = await deposit(
+        {
+          accountId,
+          amount: Number(amount),
+          memo: memo || undefined,
+        },
+        idempotencyKey,
+      )
+      idempotencyKeyRef.current = null
       onSuccess({
         ...res,
         amount: Number(amount),
@@ -324,7 +366,10 @@ function DepositForm({
             <Select
               value={accountId}
               onValueChange={(value) => {
-                if (value != null) setAccountId(value)
+                if (value != null) {
+                  resetIdempotencyKey()
+                  setAccountId(value)
+                }
               }}
             >
               <SelectTrigger id="deposit-account" aria-invalid={!!errors.accountId}>
@@ -350,7 +395,10 @@ function DepositForm({
               placeholder="0"
               min={1}
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                resetIdempotencyKey()
+                setAmount(e.target.value)
+              }}
               aria-invalid={!!errors.amount}
             />
             {amount && !isNaN(Number(amount)) && Number(amount) > 0 && (
@@ -365,7 +413,10 @@ function DepositForm({
               id="deposit-memo"
               placeholder="메모 입력"
               value={memo}
-              onChange={(e) => setMemo(e.target.value)}
+              onChange={(e) => {
+                resetIdempotencyKey()
+                setMemo(e.target.value)
+              }}
               maxLength={50}
             />
           </div>
