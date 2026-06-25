@@ -199,11 +199,9 @@ export default function AccountDetailPage() {
           <div className="flex flex-col gap-2">
             {/* Edit nickname */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-              <DialogTrigger>
-                <Button variant="outline" className="w-full justify-start">
-                  <Edit2 data-icon="inline-start" />
-                  별칭 수정
-                </Button>
+              <DialogTrigger render={<Button variant="outline" className="w-full justify-start" />}>
+                <Edit2 data-icon="inline-start" />
+                별칭 수정
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -234,11 +232,9 @@ export default function AccountDetailPage() {
             {/* Account password */}
             {account.status === 'ACTIVE' && (
               <Dialog open={passwordOpen} onOpenChange={setPasswordOpen}>
-                <DialogTrigger>
-                  <Button variant="outline" className="w-full justify-start">
-                    <KeyRound data-icon="inline-start" />
-                    계좌 비밀번호 변경
-                  </Button>
+                <DialogTrigger render={<Button variant="outline" className="w-full justify-start" />}>
+                  <KeyRound data-icon="inline-start" />
+                  계좌 비밀번호 변경
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
@@ -253,7 +249,7 @@ export default function AccountDetailPage() {
                         inputMode="numeric"
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-                        placeholder="변경할 때만 입력"
+                        placeholder="현재 비밀번호 입력"
                         maxLength={6}
                       />
                     </div>
