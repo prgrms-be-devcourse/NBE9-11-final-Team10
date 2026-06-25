@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Edit2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Edit2, KeyRound, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,7 +30,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { useAuth } from '@/contexts/AuthContext'
-import { closeAccount, getAccount, updateAccountNickname } from '@/lib/api/accounts'
+import {
+  changeAccountPassword,
+  closeAccount,
+  getAccount,
+  setAccountPassword,
+  updateAccountNickname,
+} from '@/lib/api/accounts'
 import { formatCurrency, formatDate } from '@/lib/format'
 import type { Account } from '@/lib/types'
 import { ApiRequestError } from '@/lib/api'
@@ -51,6 +57,10 @@ export default function AccountDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [closeLoading, setCloseLoading] = useState(false)
+  const [passwordOpen, setPasswordOpen] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -84,6 +94,46 @@ export default function AccountDetailPage() {
       toast.error(err instanceof ApiRequestError ? err.message : '오류가 발생했습니다.')
     } finally {
       setEditLoading(false)
+    }
+  }
+
+
+  async function handlePasswordSet() {
+    if (!user || !account) return
+    if (!/^\d{6}$/.test(newPassword)) {
+      toast.error('계좌 비밀번호는 숫자 6자리여야 합니다.')
+      return
+    }
+    setPasswordLoading(true)
+    try {
+      await setAccountPassword(account.id, newPassword)
+      setPasswordOpen(false)
+      setNewPassword('')
+      toast.success('계좌 비밀번호가 설정되었습니다.')
+    } catch (err) {
+      toast.error(err instanceof ApiRequestError ? err.message : '오류가 발생했습니다.')
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
+
+  async function handlePasswordChange() {
+    if (!user || !account) return
+    if (!/^\d{6}$/.test(currentPassword) || !/^\d{6}$/.test(newPassword)) {
+      toast.error('계좌 비밀번호는 숫자 6자리여야 합니다.')
+      return
+    }
+    setPasswordLoading(true)
+    try {
+      await changeAccountPassword(account.id, currentPassword, newPassword)
+      setPasswordOpen(false)
+      setCurrentPassword('')
+      setNewPassword('')
+      toast.success('계좌 비밀번호가 변경되었습니다.')
+    } catch (err) {
+      toast.error(err instanceof ApiRequestError ? err.message : '오류가 발생했습니다.')
+    } finally {
+      setPasswordLoading(false)
     }
   }
 
@@ -199,6 +249,66 @@ export default function AccountDetailPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+
+
+            {/* Account password */}
+            {account.status === 'ACTIVE' && (
+              <Dialog open={passwordOpen} onOpenChange={setPasswordOpen}>
+                <DialogTrigger>
+                  <Button variant="outline" className="w-full justify-start">
+                    <KeyRound data-icon="inline-start" />
+                    계좌 비밀번호 설정/변경
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>계좌 비밀번호 설정/변경</DialogTitle>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-3 py-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="currentPassword">현재 비밀번호</Label>
+                      <Input
+                        id="currentPassword"
+                        type="password"
+                        inputMode="numeric"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                        placeholder="변경할 때만 입력"
+                        maxLength={6}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        처음 설정하는 경우 현재 비밀번호는 비워두세요.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="newPassword">새 비밀번호</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        inputMode="numeric"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                        placeholder="숫자 6자리"
+                        maxLength={6}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setPasswordOpen(false)}>취소</Button>
+                    <Button
+                      variant="outline"
+                      onClick={handlePasswordSet}
+                      disabled={passwordLoading}
+                    >
+                      처음 설정
+                    </Button>
+                    <Button onClick={handlePasswordChange} disabled={passwordLoading}>
+                      변경
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
 
             {/* Close account */}
             {account.status === 'ACTIVE' && (
