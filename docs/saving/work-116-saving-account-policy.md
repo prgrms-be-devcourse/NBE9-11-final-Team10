@@ -30,6 +30,25 @@
 
 예금/적금 전용 계좌는 Saving 가입 로직에서만 생성한다.
 
+## Account / Saving 역할 분리 정책
+
+`Account`는 실제 돈과 계좌 상태를 관리한다.
+
+```text
+Account.balance = 실제 현재 잔액
+Account.status = ACTIVE / CLOSED 등 계좌 상태
+Account.accountType = 일반 계좌인지 예/적금 전용 계좌인지 구분
+```
+
+`Deposit`, `Installment`는 예/적금 가입 정보를 관리한다.
+
+```text
+Deposit = 예금 상품, 원금, 금리, 만기일, 상태 관리
+Installment = 적금 상품, 월 납입액, 납입 누계, 만기일, 상태 관리
+```
+
+따라서 실제 잔액은 Account에 있고, 예/적금 계약 정보는 Deposit/Installment에 있다.
+
 ## 예금 가입 흐름
 
 ```text
@@ -75,12 +94,12 @@
 ```text
 1. Deposit 또는 Installment를 조회하고 입출금계좌/예적금 전용 Account를 함께 락 처리한다.
 2. 상태가 ACTIVE인지 확인한다.
-4. 중도해지 이자를 계산한다.
-5. 예적금 전용 Account에서 원금 또는 납입금을 출금한다.
-6. 예적금 전용 Account를 CLOSED 상태로 변경한다.
-7. 연결 입출금계좌에 원금/납입금 + 이자를 입금한다.
-8. 양쪽 계좌 거래내역을 저장한다.
-9. Saving 상태를 CANCELLED로 변경한다.
+3. 중도해지 이자를 계산한다.
+4. 예적금 전용 Account에서 원금 또는 납입금을 출금한다.
+5. 예적금 전용 Account를 CLOSED 상태로 변경한다.
+6. 연결 입출금계좌에 원금/납입금 + 이자를 입금한다.
+7. 양쪽 계좌 거래내역을 저장한다.
+8. Saving 상태를 CANCELLED로 변경한다.
 ```
 
 ## 만기 처리 흐름
@@ -101,9 +120,11 @@
 
 ## Transfer 제한 정책
 
-예금/적금은 추가 입금 불가 상품으로 정의한다.
+예금/적금은 자동이체되는 적금 납입 흐름 이외에 추가 입금 불가 상품으로 정의한다.
 
-따라서 일반 입금/송금 API에서는 입출금계좌만 사용할 수 있다.
+따라서 일반 송금을 통한 예/적금 전용 Account 수취를 허용하지 않는다.
+
+이 정책을 코드에 반영하기 위해 일반 입금/송금 API에서는 입출금계좌만 사용할 수 있다.
 
 | 상황 | 허용 여부 | 실패 코드 |
 | --- | --- | --- |
@@ -135,6 +156,7 @@
 3. `installments.saving_account_id` 컬럼 추가
 4. 각 Saving 엔티티와 Account 간 FK/UNIQUE 제약 추가
 5. `transaction_histories.type` enum에 Saving 거래 타입 추가
+6. 사용하지 않는 `withdrawal_locked`, `withdrawal_lock_reason` 컬럼 제거
 
 주의:
 
@@ -158,8 +180,114 @@
 - 만기 시 예/적금 전용 Account 출금 및 CLOSED 처리
 - 만기 시 연결 입출금계좌로 지급
 
-## 후속 작업
+## Transfer 락 구조 상세
 
+Transfer 도메인은 일반 송금/입금 가능 여부를 `Account.accountType`으로 판단한다.
+
+```java
+validateSenderCanTransferOut(senderAccount);
+validateReceiverCanTransferIn(receiverAccount);
+```
+
+현재 Transfer 도메인은 일반 송금 가능 여부 판단을 위해 `Deposit` 또는 `Installment` 상태를 조회하지 않는다.
+중도해지/만기 가능 여부는 Saving 도메인에서 `DepositStatus`, `InstallmentStatus`로 판단한다.
+
+### 일반 입금(topUp) 락 흐름
+
+일반 입금은 대상 Account row를 비관적 락으로 조회한다.
+
+```java
+accountRepository.findByIdAndUserIdForUpdate(accountId, userId)
+```
+
+처리 순서는 다음과 같다.
+
+```text
+1. Account row 락 획득
+2. 계좌 ACTIVE 여부 확인
+3. accountType이 DEPOSIT인지 확인
+4. DEPOSIT이면 입금 진행
+5. SAVING_DEPOSIT 또는 SAVING_INSTALLMENT이면 차단
+```
+
+### 일반 송금(transfer) 락 흐름
+
+일반 송금은 sender Account와 receiver Account 두 개의 잔액이 함께 변경된다.
+따라서 두 Account row를 모두 비관적 락으로 조회한다.
+
+```java
+Account first = accountRepository.findByIdForUpdate(firstId);
+Account second = accountRepository.findByIdForUpdate(secondId);
+```
+
+두 계좌는 항상 ID가 작은 계좌부터 락을 잡는다.
+이유는 동시에 반대 방향 송금이 들어올 때 데드락 가능성을 줄이기 위해서다.
+
+### Deposit/Installment row를 일반 송금에서 락 잡지 않는 이유
+
+현재 일반 송금 가능 여부의 판단 기준은 `Account.accountType`이다.
+
+```text
+송금 판단에 필요한 값: Account.accountType
+락 잡는 대상: Account row
+```
+
+Transfer는 이미 Account row를 락 잡고 있고, Deposit/Installment 상태로 송금 가능 여부를 판단하지 않는다.
+따라서 일반 송금에서 Deposit/Installment row를 추가로 조회하거나 락 잡지 않는다.
+
+## Transaction 변경 상세
+
+### 추가된 TransactionType
+
+| 타입 | 의미 |
+| --- | --- |
+| `SAVING_DEPOSIT_SIGNUP` | 예금 가입 시 금액 이동 |
+| `SAVING_INSTALLMENT_SIGNUP` | 적금 가입 시 1회차 납입금 이동 |
+| `SAVING_CANCEL_REFUND` | 예/적금 중도해지 반환금 이동 |
+| `SAVING_MATURITY` | 예/적금 만기 지급금 이동 |
+| `INSTALLMENT_PAYMENT` | 적금 월 납입 자동이체 |
+
+### type 컬럼 length 변경 이유
+
+`TransactionHistory.type`은 enum을 문자열로 저장한다.
+새로 추가된 값 중 `SAVING_INSTALLMENT_SIGNUP`이 길기 때문에 `length = 30`으로 늘렸다.
+
+```java
+@Enumerated(EnumType.STRING)
+@Column(nullable = false, length = 30)
+private TransactionType type;
+```
+
+### 추가된 생성 메서드
+
+`TransactionHistory`에 Saving 흐름 전용 생성 메서드를 추가했다.
+
+| 메서드 | 사용 위치 |
+| --- | --- |
+| `createSavingDepositSignup()` | 예금 가입 |
+| `createSavingInstallmentSignup()` | 적금 가입 |
+| `createSavingCancelRefund()` | 중도해지 |
+| `createSavingMaturityPayout()` | 만기 처리 |
+| `createInstallmentPayment()` | 적금 자동이체 |
+
+Saving 도메인 서비스는 직접 `TransactionHistory` 필드를 조립하지 않고, 위 정적 생성 메서드를 사용한다.
+
+### Transfer와의 차이
+
+일반 송금은 `Transfer` 엔티티가 함께 생성되고, 거래내역이 `transfer_id`를 참조한다.
+
+반면 예/적금 가입, 자동이체, 중도해지, 만기 처리는 Transfer 도메인의 일반 송금이 아니다.
+
+따라서 Saving 관련 거래내역은 다음처럼 저장한다.
+
+```text
+transfer_id = null
+account_id = 금액이 변한 계좌 ID
+type = Saving 관련 TransactionType
+direction = IN 또는 OUT
+```
+
+## 후속 작업
 - PR 설명에 “예/적금은 추가 입금 불가 상품으로 정의” 정책 명시
 - 기존 개발 DB에 예전 V12/V13이 적용된 경우 로컬 Flyway checksum 정리 필요
 - Saving API 명세서가 필요하면 별도 문서로 분리

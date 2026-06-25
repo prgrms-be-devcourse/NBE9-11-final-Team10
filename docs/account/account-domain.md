@@ -44,6 +44,20 @@ Account 도메인은 사용자의 계좌 정보를 관리한다.
 
 `SAVING_DEPOSIT`, `SAVING_INSTALLMENT`는 사용자가 Account API로 직접 만들 수 없다.
 
+## 일반 입금/송금 정책
+
+일반 입금/송금은 `DEPOSIT` 타입 계좌만 사용할 수 있다.
+
+| 계좌 타입 | 일반 송금 출금 | 일반 송금 수취 | 일반 입금(topUp) |
+| --- | --- | --- | --- |
+| `DEPOSIT` | 가능 | 가능 | 가능 |
+| `SAVING_DEPOSIT` | 불가 | 불가 | 불가 |
+| `SAVING_INSTALLMENT` | 불가 | 불가 | 불가 |
+
+예/적금 전용 계좌는 실제 잔액과 거래내역을 관리하기 위해 Account로 만들지만, 자유 입출금 계좌는 아니다.
+
+예/적금 전용 계좌의 금액 이동은 Saving 도메인의 가입, 자동이체, 중도해지, 만기 흐름에서만 처리한다.
+
 ## 계좌 상태
 
 | 상태 | 설명 |
@@ -123,6 +137,10 @@ Base URL: `/api/v1/accounts`
 | `withdraw(amount)` | 잔액 부족 검증 후 잔액 감소 |
 
 잔액 변경은 각 도메인 서비스의 트랜잭션 안에서 호출한다.
+
+실제 돈의 현재 잔액은 `Account.balance`에 저장한다.
+
+`Deposit.principal`, `Installment.paidAmount`는 예/적금 계약 기준 금액이고, 실제 계좌 잔액은 Account가 담당한다.
 
 ## 락 정책
 
