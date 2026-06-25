@@ -1,4 +1,5 @@
 import { apiFetch } from '../api'
+import type { PageResponse } from '../types'
 
 export type ExchangeCurrencyCode =
   | 'KRW'
@@ -107,8 +108,13 @@ export function createExchangeQuote(data: ExchangeQuoteRequest): Promise<Exchang
   })
 }
 
-export function getExchangeOrders(): Promise<ExchangeOrder[]> {
-  return apiFetch<ExchangeOrder[]>('/api/v1/exchanges/currencies/orders')
+export function getExchangeOrders(page = 0, size = 20): Promise<PageResponse<ExchangeOrder>> {
+  const params = new URLSearchParams()
+  params.set('page', String(page))
+  params.set('size', String(size))
+  return apiFetch<PageResponse<ExchangeOrder>>(
+    `/api/v1/exchanges/currencies/orders?${params.toString()}`,
+  )
 }
 
 export function getExchangeOrder(exchangeOrderId: string | number): Promise<ExchangeOrder> {

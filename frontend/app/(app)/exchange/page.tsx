@@ -1,7 +1,17 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRightLeft, Clock3, Eye, Plus, ReceiptText, Trash2, WalletCards } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Eye,
+  Plus,
+  ReceiptText,
+  Trash2,
+  WalletCards,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -38,7 +48,15 @@ import {
 import { ApiRequestError } from '@/lib/api'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 import { createIdempotencyKey } from '@/lib/idempotency'
-import type { Account } from '@/lib/types'
+import type { Account, PageResponse } from '@/lib/types'
+
+const emptyExchangeOrderPage: PageResponse<ExchangeOrder> = {
+  content: [],
+  totalPages: 0,
+  totalElements: 0,
+  number: 0,
+  size: 0,
+}
 
 export default function ExchangePage() {
   return (
@@ -638,24 +656,27 @@ function FxWalletTab() {
 }
 
 function ExchangeOrdersTab() {
-  const [orders, setOrders] = useState<ExchangeOrder[]>([])
+  const [orderPage, setOrderPage] = useState<PageResponse<ExchangeOrder>>(emptyExchangeOrderPage)
   const [selectedOrder, setSelectedOrder] = useState<ExchangeOrder | null>(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(0)
   const [error, setError] = useState('')
 
   useEffect(() => {
     loadOrders()
-  }, [])
+  }, [currentPage])
 
   async function loadOrders() {
     setLoading(true)
     setError('')
     try {
-      const orderData = await getExchangeOrders()
-      setOrders(orderData)
-      setSelectedOrder(orderData[0] ?? null)
+      const nextPage = await getExchangeOrders(currentPage)
+      setOrderPage(nextPage)
+      setSelectedOrder(nextPage.content[0] ?? null)
     } catch (err) {
+      setOrderPage(emptyExchangeOrderPage)
+      setSelectedOrder(null)
       setError(err instanceof ApiRequestError ? err.message : '환전내역을 불러오지 못했습니다.')
     } finally {
       setLoading(false)
@@ -690,6 +711,10 @@ function ExchangeOrdersTab() {
     )
   }
 
+  const orders = orderPage.content
+  const hasPreviousPage = currentPage > 0
+  const hasNextPage = currentPage + 1 < orderPage.totalPages
+
   return (
     <div className="flex flex-col gap-3">
       {error && (
@@ -708,7 +733,10 @@ function ExchangeOrdersTab() {
         <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
           <Card className="border-border">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">환전내역</CardTitle>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">환전내역</CardTitle>
+                <span className="text-xs text-muted-foreground">총 {orderPage.totalElements}건</span>
+              </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-0">
               {orders.map((order) => {
@@ -754,6 +782,31 @@ function ExchangeOrdersTab() {
                   </div>
                 )
               })}
+              <div className="flex items-center justify-between pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!hasPreviousPage || loading}
+                  onClick={() => setCurrentPage((page) => Math.max(page - 1, 0))}
+                >
+                  <ChevronLeft data-icon="inline-start" />
+                  이전
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {orderPage.totalPages === 0 ? 0 : currentPage + 1} / {orderPage.totalPages}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!hasNextPage || loading}
+                  onClick={() => setCurrentPage((page) => page + 1)}
+                >
+                  다음
+                  <ChevronRight data-icon="inline-end" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
