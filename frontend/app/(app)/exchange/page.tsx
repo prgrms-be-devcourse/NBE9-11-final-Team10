@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRightLeft, Clock3, Plus, ReceiptText, Trash2, WalletCards } from 'lucide-react'
+import { ArrowRightLeft, Clock3, Eye, Plus, ReceiptText, Trash2, WalletCards } from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,8 @@ import {
   createFxWallet,
   createExchangeQuote,
   getExchangeCurrencies,
+  getExchangeOrder,
+  getExchangeOrders,
   getExchangeRates,
   getFxWallets,
   type ExchangeCurrency,
@@ -34,20 +36,9 @@ import {
   type FxWallet,
 } from '@/lib/api/exchanges'
 import { ApiRequestError } from '@/lib/api'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatDateTime } from '@/lib/format'
 import { createIdempotencyKey } from '@/lib/idempotency'
 import type { Account } from '@/lib/types'
-
-const orderPreview = [
-  {
-    id: 1,
-    direction: 'KRW → USD',
-    amount: '100,000원',
-    result: '72.50 USD',
-    status: '완료',
-    createdAt: '2026-06-17 10:00',
-  },
-]
 
 export default function ExchangePage() {
   return (
@@ -84,7 +75,7 @@ export default function ExchangePage() {
         </TabsContent>
 
         <TabsContent value="orders" className="mt-4">
-          <ExchangeOrdersSkeleton />
+          <ExchangeOrdersTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -594,37 +585,166 @@ function FxWalletTab() {
   )
 }
 
-function ExchangeOrdersSkeleton() {
+function ExchangeOrdersTab() {
+  const [orders, setOrders] = useState<ExchangeOrder[]>([])
+  const [selectedOrder, setSelectedOrder] = useState<ExchangeOrder | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    loadOrders()
+  }, [])
+
+  async function loadOrders() {
+    setLoading(true)
+    setError('')
+    try {
+      const orderData = await getExchangeOrders()
+      setOrders(orderData)
+      setSelectedOrder(orderData[0] ?? null)
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : '환전내역을 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSelectOrder(exchangeOrderId: number) {
+    setDetailLoading(true)
+    setError('')
+    try {
+      const order = await getExchangeOrder(exchangeOrderId)
+      setSelectedOrder(order)
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : '환전 주문 상세를 불러오지 못했습니다.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
+        <Card className="border-border">
+          <CardContent className="pt-4 flex flex-col gap-3">
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+            <Skeleton className="h-16 w-full rounded-lg" />
+          </CardContent>
+        </Card>
+        <Skeleton className="h-72 w-full rounded-lg" />
+      </div>
+    )
+  }
+
   return (
-    <Card className="border-border">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium text-muted-foreground">최근 환전내역</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-0">
-        {orderPreview.map((order) => (
-          <div key={order.id} className="flex items-center justify-between gap-3 py-3 border-b last:border-b-0 border-border">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="size-9 rounded-md bg-muted flex items-center justify-center shrink-0">
-                <Clock3 className="size-4 text-muted-foreground" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{order.direction}</p>
-                <p className="text-xs text-muted-foreground">{order.createdAt}</p>
-              </div>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="text-sm font-semibold text-foreground">{order.result}</p>
-              <p className="text-xs text-muted-foreground">
-                {order.amount} · {order.status}
-              </p>
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-3">
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {orders.length === 0 ? (
+        <Card className="border-border">
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            환전내역이 없습니다.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
+          <Card className="border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">환전내역</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-0">
+              {orders.map((order) => {
+                const selected = selectedOrder?.exchangeOrderId === order.exchangeOrderId
+                return (
+                  <div
+                    key={order.exchangeOrderId}
+                    className="flex items-center justify-between gap-3 py-3 border-b last:border-b-0 border-border"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="size-9 rounded-md bg-muted flex items-center justify-center shrink-0">
+                        <Clock3 className="size-4 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {exchangeDirectionLabel[order.direction]}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateTime(order.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-foreground">
+                          {formatFxBalance(order.toAmount)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(order.fromAmount)} · {exchangeOrderStatusLabel[order.status]}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant={selected ? 'default' : 'outline'}
+                        size="icon-sm"
+                        disabled={detailLoading && selected}
+                        onClick={() => handleSelectOrder(order.exchangeOrderId)}
+                        aria-label="환전 주문 상세 보기"
+                      >
+                        <Eye />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">상세 정보</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {selectedOrder ? (
+                <>
+                  <SummaryRow label="상태" value={exchangeOrderStatusLabel[selectedOrder.status]} />
+                  <SummaryRow label="방향" value={exchangeDirectionLabel[selectedOrder.direction]} />
+                  <SummaryRow label="출금 금액" value={formatCurrency(selectedOrder.fromAmount)} />
+                  <SummaryRow
+                    label="입금 금액"
+                    value={formatFxBalance(selectedOrder.toAmount)}
+                    strong
+                  />
+                  <SummaryRow
+                    label="적용 환율"
+                    value={`${formatNumber(selectedOrder.appliedRate)}원`}
+                  />
+                  <SummaryRow label="수수료" value={formatCurrency(selectedOrder.fee)} />
+                  <SummaryRow
+                    label="수수료율"
+                    value={`${formatNumber(selectedOrder.feeRate * 100)}%`}
+                  />
+                  <SummaryRow label="주문 시각" value={formatDateTime(selectedOrder.createdAt)} />
+                  <SummaryRow
+                    label="완료 시각"
+                    value={selectedOrder.completedAt ? formatDateTime(selectedOrder.completedAt) : '-'}
+                  />
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">확인할 환전내역을 선택해 주세요.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
   )
 }
-
 function SummaryRow({
   label,
   value,
@@ -655,6 +775,11 @@ const exchangeOrderStatusLabel = {
   COMPLETED: '완료',
   FAILED: '실패',
   CANCELED: '취소',
+}
+
+const exchangeDirectionLabel = {
+  KRW_TO_FOREIGN: '원화 → 외화',
+  FOREIGN_TO_KRW: '외화 → 원화',
 }
 
 function formatFxBalance(value: number) {
