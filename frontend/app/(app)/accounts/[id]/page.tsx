@@ -34,7 +34,6 @@ import {
   changeAccountPassword,
   closeAccount,
   getAccount,
-  setAccountPassword,
   updateAccountNickname,
 } from '@/lib/api/accounts'
 import { formatCurrency, formatDate } from '@/lib/format'
@@ -97,25 +96,6 @@ export default function AccountDetailPage() {
     }
   }
 
-
-  async function handlePasswordSet() {
-    if (!user || !account) return
-    if (!/^\d{6}$/.test(newPassword)) {
-      toast.error('계좌 비밀번호는 숫자 6자리여야 합니다.')
-      return
-    }
-    setPasswordLoading(true)
-    try {
-      await setAccountPassword(account.id, newPassword)
-      setPasswordOpen(false)
-      setNewPassword('')
-      toast.success('계좌 비밀번호가 설정되었습니다.')
-    } catch (err) {
-      toast.error(err instanceof ApiRequestError ? err.message : '오류가 발생했습니다.')
-    } finally {
-      setPasswordLoading(false)
-    }
-  }
 
   async function handlePasswordChange() {
     if (!user || !account) return
@@ -257,12 +237,12 @@ export default function AccountDetailPage() {
                 <DialogTrigger>
                   <Button variant="outline" className="w-full justify-start">
                     <KeyRound data-icon="inline-start" />
-                    계좌 비밀번호 설정/변경
+                    계좌 비밀번호 변경
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>계좌 비밀번호 설정/변경</DialogTitle>
+                    <DialogTitle>계좌 비밀번호 변경</DialogTitle>
                   </DialogHeader>
                   <div className="flex flex-col gap-3 py-2">
                     <div className="flex flex-col gap-1.5">
@@ -276,9 +256,6 @@ export default function AccountDetailPage() {
                         placeholder="변경할 때만 입력"
                         maxLength={6}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        처음 설정하는 경우 현재 비밀번호는 비워두세요.
-                      </p>
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor="newPassword">새 비밀번호</Label>
@@ -295,13 +272,6 @@ export default function AccountDetailPage() {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setPasswordOpen(false)}>취소</Button>
-                    <Button
-                      variant="outline"
-                      onClick={handlePasswordSet}
-                      disabled={passwordLoading}
-                    >
-                      처음 설정
-                    </Button>
                     <Button onClick={handlePasswordChange} disabled={passwordLoading}>
                       변경
                     </Button>
