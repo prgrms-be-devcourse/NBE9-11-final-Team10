@@ -91,7 +91,7 @@ public class ExchangeController {
     @Operation(description = "내 환전 주문 목록 조회")
     public ResponseEntity<Page<ExchangeOrderRes>> getExchangeOrders(
             @AuthenticationPrincipal Long userId,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         Page<ExchangeOrderRes> response = exchangeService.getExchangeOrders(userId, pageable);
         return ResponseEntity.ok(response);

@@ -108,7 +108,7 @@ export function createExchangeQuote(data: ExchangeQuoteRequest): Promise<Exchang
   })
 }
 
-export function getExchangeOrders(page = 0, size = 20): Promise<PageResponse<ExchangeOrder>> {
+export function getExchangeOrders(page = 0, size = 10): Promise<PageResponse<ExchangeOrder>> {
   const params = new URLSearchParams()
   params.set('page', String(page))
   params.set('size', String(size))
