@@ -253,6 +253,9 @@ public class SavingBatchProcessor {
 
     private void closeSavingAccount(Account savingAccount, Long amount) {
         savingAccount.withdraw(amount);
+        if (!savingAccount.getBalance().equals(0L)) {
+            throw new BusinessException(AccountErrorCode.ACCOUNT_BALANCE_NOT_ZERO);
+        }
         savingAccount.close();
     }
 

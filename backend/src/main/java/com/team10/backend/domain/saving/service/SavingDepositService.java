@@ -407,6 +407,9 @@ public class SavingDepositService {
 
     private void closeSavingAccount(Account savingAccount, Long amount) {
         savingAccount.withdraw(amount);
+        if (!savingAccount.getBalance().equals(0L)) {
+            throw new BusinessException(AccountErrorCode.ACCOUNT_BALANCE_NOT_ZERO);
+        }
         savingAccount.close();
     }
 
@@ -528,10 +531,9 @@ public class SavingDepositService {
                 nickname,
                 accountType
         );
-        Account savedSavingAccount = accountRepository.save(savingAccount);
-        savedSavingAccount.deposit(initialBalance);
+        savingAccount.deposit(initialBalance);
 
-        return savedSavingAccount;
+        return accountRepository.save(savingAccount);
     }
 
     private String generateUniqueAccountNumber() {
