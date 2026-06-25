@@ -24,13 +24,21 @@ public class ExchangeCalculator {
             Integer toCurrencyDecimalPlaces
     ) {
         BigDecimal rate = calculateUnitRate(basePrice, currencyUnit);
-        BigDecimal fee = calculateFee(fromAmount, DEFAULT_FEE_RATE, fromCurrencyDecimalPlaces);
-        BigDecimal amountAfterFee = fromAmount.subtract(fee);
+        BigDecimal fee = calculateFee(
+                fromCurrencyCode,
+                toCurrencyCode,
+                fromAmount,
+                rate,
+                DEFAULT_FEE_RATE,
+                fromCurrencyDecimalPlaces,
+                toCurrencyDecimalPlaces
+        );
 
         BigDecimal expectedToAmount = calculateExpectedToAmount(
                 fromCurrencyCode,
                 toCurrencyCode,
-                amountAfterFee,
+                fromAmount,
+                fee,
                 rate,
                 toCurrencyDecimalPlaces
         );
@@ -53,22 +61,41 @@ public class ExchangeCalculator {
         );
     }
 
-    // 사용자가 환전하려는 금액 기준으로 수수료 금액을 계산하는 메서드
-    private BigDecimal calculateFee(BigDecimal fromAmount, BigDecimal defaultFeeRate, Integer fromCurrencyDecimalPlaces) {
-        return fromAmount.multiply(defaultFeeRate)
-                .setScale(fromCurrencyDecimalPlaces, RoundingMode.DOWN); // 내림(절삭)
+    private BigDecimal calculateFee(
+            CurrencyCode fromCurrencyCode,
+            CurrencyCode toCurrencyCode,
+            BigDecimal fromAmount,
+            BigDecimal rate,
+            BigDecimal defaultFeeRate,
+            Integer fromCurrencyDecimalPlaces,
+            Integer toCurrencyDecimalPlaces
+    ) {
+        if (fromCurrencyCode == CurrencyCode.KRW) {
+            return fromAmount.multiply(defaultFeeRate)
+                    .setScale(fromCurrencyDecimalPlaces, RoundingMode.DOWN);
+        }
+
+        if (toCurrencyCode == CurrencyCode.KRW) {
+            BigDecimal krwAmount = fromAmount.multiply(rate);
+            return krwAmount.multiply(defaultFeeRate)
+                    .setScale(toCurrencyDecimalPlaces, RoundingMode.DOWN);
+        }
+
+        throw new BusinessException(ExchangeErrorCode.INVALID_EXCHANGE_DIRECTION);
     }
 
     // 예상 수령 금액을 계산하는 메서드
     private BigDecimal calculateExpectedToAmount(
             CurrencyCode fromCurrencyCode,
             CurrencyCode toCurrencyCode,
-            BigDecimal amountAfterFee,
+            BigDecimal fromAmount,
+            BigDecimal fee,
             BigDecimal rate,
             Integer toCurrencyDecimalPlaces
     ) {
         // 원화 -> 외화 환전
         if (fromCurrencyCode == CurrencyCode.KRW) {
+            BigDecimal amountAfterFee = fromAmount.subtract(fee);
             // amountAfterFee = 99750 KRW, rate = 1380,
             // expectedToAmount = 99750 / 1380 = 72.28 USD (내림 -> 최대한 은행사에 유리하게)
             return amountAfterFee.divide(rate, toCurrencyDecimalPlaces, RoundingMode.DOWN);
@@ -76,9 +103,9 @@ public class ExchangeCalculator {
 
         // 외화 -> 원화 환전
         if (toCurrencyCode == CurrencyCode.KRW) {
-            // amountAfterFee = 99.75 USD, rate = 1380, expectedToAmount = 99.75 * 1380 = 137655 KRW
-            return amountAfterFee.multiply(rate)
-                    .setScale(toCurrencyDecimalPlaces, RoundingMode.DOWN); // 소수점 처리
+            BigDecimal krwAmount = fromAmount.multiply(rate)
+                    .setScale(toCurrencyDecimalPlaces, RoundingMode.DOWN);
+            return krwAmount.subtract(fee);
         }
 
         throw new BusinessException(ExchangeErrorCode.INVALID_EXCHANGE_DIRECTION);
