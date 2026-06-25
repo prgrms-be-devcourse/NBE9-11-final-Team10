@@ -4,7 +4,6 @@ import com.team10.backend.global.jwt.JwtProvider;
 import com.team10.backend.global.jwt.TokenBlocklistService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -31,12 +30,6 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint authenticationEntryPoint;
     private final JwtAccessDeniedHandler accessDeniedHandler;
     private final Environment environment;
-
-    /**
-     * 허용할 Origin 목록. 환경변수 CORS_ALLOWED_ORIGINS로 주입, 기본값은 로컬 개발 서버.
-     */
-    @Value("${cors.allowed-origins:http://localhost:3000}")
-    private List<String> allowedOrigins;
 
     @Bean
     public BCryptPasswordEncoder passwordEncoder() {
@@ -140,7 +133,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(allowedOrigins);
+        config.setAllowedOrigins(List.of("https://0bank.shop", "https://www.0bank.shop", "http://localhost:3000"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
