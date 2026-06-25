@@ -360,17 +360,24 @@ function ExchangeFormTab() {
                   resetExchangeAttempt()
                 }}
               >
-                <SelectTrigger id="krw-account">
-                  <span className="max-w-40 truncate">
-                    {selectedAccount ? formatAccountOption(selectedAccount) : '계좌 선택'}
-                  </span>
+                <SelectTrigger id="krw-account" className="w-64">
+                  {selectedAccount ? (
+                    <span className="grid w-full min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-2">
+                      <span className="min-w-0 truncate">{selectedAccount.nickname}</span>
+                      <span className="min-w-0 truncate text-right tabular-nums text-muted-foreground">
+                        {formatCurrency(selectedAccount.balance)}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="truncate">계좌 선택</span>
+                  )}
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="w-80">
                   {accounts.map((account) => (
-                    <SelectItem key={account.id} value={String(account.id)}>
-                      <span className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="max-w-32 truncate">{account.nickname}</span>
-                        <span className="max-w-28 truncate tabular-nums text-muted-foreground">
+                    <SelectItem key={account.id} value={String(account.id)} className="w-80">
+                      <span className="grid w-68 min-w-0 grid-cols-[minmax(0,1fr)_7rem] items-center gap-3">
+                        <span className="min-w-0 truncate">{account.nickname}</span>
+                        <span className="min-w-0 truncate text-right tabular-nums text-muted-foreground">
                           {formatCurrency(account.balance)}
                         </span>
                       </span>
@@ -380,7 +387,7 @@ function ExchangeFormTab() {
               </Select>
             </div>
 
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 sm:pl-8">
               <Label htmlFor="fx-wallet">외화 지갑</Label>
               <Select
                 value={fxWalletId}
