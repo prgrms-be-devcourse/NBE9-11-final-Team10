@@ -42,8 +42,12 @@ public class CodefExAccountTransactionMapper {
                 data,
                 "resTrHistoryList",
                 "resAccountTrHistoryList",
+                "resAccountTransactionList",
+                "resAccountTrList",
                 "resTransactionList",
                 "resBankTransactionList",
+                "resHistoryList",
+                "resList",
                 "transactionList"
         );
         if (transactions == null) {
@@ -65,49 +69,53 @@ public class CodefExAccountTransactionMapper {
             JsonNode transaction,
             int index
     ) {
-        LocalDateTime transactedAt = dateTime(transaction);
-        if (transactedAt == null) {
-            log.warn("[CODEF] 거래일시가 없는 거래내역 항목을 제외했습니다. index={}", index);
-            return;
+        try {
+            LocalDateTime transactedAt = dateTime(transaction);
+            if (transactedAt == null) {
+                log.warn("[CODEF] 거래일시가 없는 거래내역 항목을 제외했습니다. index={}", index);
+                return;
+            }
+
+            BigDecimal inAmount = firstDecimal(transaction, "resAccountIn", "resDepositAmt", "resIn", "depositAmount");
+            BigDecimal outAmount = firstDecimal(transaction, "resAccountOut", "resWithdrawAmt", "resWithdrawalAmt", "resOut", "withdrawAmount");
+            BigDecimal explicitAmount = firstSignedDecimal(transaction, "resAccountTrAmt", "resTransactionAmount", "resAmount", "amount");
+
+            ExAccountTransactionDirection direction = direction(transaction, inAmount, outAmount, explicitAmount);
+            BigDecimal amount = amount(direction, inAmount, outAmount, explicitAmount);
+            if (direction == null || amount == null) {
+                log.warn("[CODEF] 입출금 방향 또는 금액이 없는 거래내역 항목을 제외했습니다. index={}", index);
+                return;
+            }
+
+            String counterpartyName = firstText(
+                    transaction,
+                    "resAccountDesc1",
+                    "resAccountDesc2",
+                    "resAccountTrDesc",
+                    "resMemberStoreName",
+                    "resContent",
+                    "resRemark"
+            );
+            String memo = firstText(transaction, "resAccountDesc3", "resMemo", "memo");
+            String rawCategory = firstText(transaction, "resAccountTrType", "resTransactionType", "resCategory", "category");
+            String transactionKey = firstText(transaction, "resAccountTrNo", "resTransactionId", "transactionKey", "resSeq");
+            if (transactionKey == null) {
+                transactionKey = fallbackKey(organization, accountNumber, transactedAt, direction, amount, counterpartyName, index);
+            }
+
+            snapshots.add(new CodefExAccountTransactionSnapshot(
+                    transactionKey,
+                    transactedAt,
+                    direction,
+                    amount,
+                    firstDecimal(transaction, "resAfterTranBalance", "resAccountBalance", "resBalance", "balanceAfter"),
+                    counterpartyName,
+                    memo,
+                    rawCategory
+            ));
+        } catch (CodefExAccountClientException exception) {
+            log.warn("[CODEF] 거래내역 항목을 해석할 수 없어 제외했습니다. index={}, reason={}", index, exception.getMessage());
         }
-
-        BigDecimal inAmount = firstDecimal(transaction, "resAccountIn", "resDepositAmt", "resIn", "depositAmount");
-        BigDecimal outAmount = firstDecimal(transaction, "resAccountOut", "resWithdrawAmt", "resWithdrawalAmt", "resOut", "withdrawAmount");
-        BigDecimal explicitAmount = firstDecimal(transaction, "resAccountTrAmt", "resTransactionAmount", "resAmount", "amount");
-
-        ExAccountTransactionDirection direction = direction(transaction, inAmount, outAmount);
-        BigDecimal amount = amount(direction, inAmount, outAmount, explicitAmount);
-        if (direction == null || amount == null) {
-            log.warn("[CODEF] 입출금 방향 또는 금액이 없는 거래내역 항목을 제외했습니다. index={}", index);
-            return;
-        }
-
-        String counterpartyName = firstText(
-                transaction,
-                "resAccountDesc1",
-                "resAccountDesc2",
-                "resAccountTrDesc",
-                "resMemberStoreName",
-                "resContent",
-                "resRemark"
-        );
-        String memo = firstText(transaction, "resAccountDesc3", "resMemo", "memo");
-        String rawCategory = firstText(transaction, "resAccountTrType", "resTransactionType", "resCategory", "category");
-        String transactionKey = firstText(transaction, "resAccountTrNo", "resTransactionId", "transactionKey", "resSeq");
-        if (transactionKey == null) {
-            transactionKey = fallbackKey(organization, accountNumber, transactedAt, direction, amount, counterpartyName, index);
-        }
-
-        snapshots.add(new CodefExAccountTransactionSnapshot(
-                transactionKey,
-                transactedAt,
-                direction,
-                amount,
-                firstDecimal(transaction, "resAfterTranBalance", "resAccountBalance", "resBalance", "balanceAfter"),
-                counterpartyName,
-                memo,
-                rawCategory
-        ));
     }
 
     private JsonNode firstArray(JsonNode node, String... fieldNames) {
@@ -128,7 +136,7 @@ public class CodefExAccountTransactionMapper {
         String time = firstText(node, "resAccountTrTime", "resTrTime", "resTransactionTime", "resUsedTime", "time");
         try {
             LocalDate localDate = parseDate(date);
-            LocalTime localTime = time == null ? LocalTime.MIDNIGHT : parseTime(time);
+            LocalTime localTime = time == null ? parseTimeFromDate(date) : parseTime(time);
             return LocalDateTime.of(localDate, localTime);
         } catch (DateTimeException exception) {
             throw new CodefExAccountClientException("CODEF 거래내역 일시 형식이 올바르지 않습니다.", exception);
@@ -136,6 +144,10 @@ public class CodefExAccountTransactionMapper {
     }
 
     private LocalDate parseDate(String value) {
+        String normalized = value.replace(".", "").replace("/", "").replace("-", "");
+        if (normalized.length() >= 8) {
+            return LocalDate.parse(normalized.substring(0, 8), BASIC_DATE);
+        }
         if (value.indexOf('-') >= 0) {
             return LocalDate.parse(value, DateTimeFormatter.ISO_LOCAL_DATE);
         }
@@ -143,21 +155,39 @@ public class CodefExAccountTransactionMapper {
     }
 
     private LocalTime parseTime(String value) {
-        String normalized = value.replace(":", "");
+        String normalized = value.replace(":", "").replace(".", "").replace("/", "").replace("-", "");
+        if (normalized.length() >= 14) {
+            normalized = normalized.substring(8, 14);
+        }
         if (normalized.length() == 4) {
             normalized += "00";
+        }
+        if (normalized.length() > 6) {
+            normalized = normalized.substring(0, 6);
         }
         return LocalTime.parse(normalized, BASIC_TIME);
     }
 
-    private ExAccountTransactionDirection direction(JsonNode node, BigDecimal inAmount, BigDecimal outAmount) {
+    private LocalTime parseTimeFromDate(String value) {
+        String normalized = value.replace(":", "").replace(".", "").replace("/", "").replace("-", "");
+        return normalized.length() >= 14 ? parseTime(normalized) : LocalTime.MIDNIGHT;
+    }
+
+    private ExAccountTransactionDirection direction(
+            JsonNode node,
+            BigDecimal inAmount,
+            BigDecimal outAmount,
+            BigDecimal explicitAmount
+    ) {
         String value = firstText(node, "direction", "resDirection", "resAccountTrType", "resTransactionType");
         if (value != null) {
             String normalized = value.trim().toUpperCase(Locale.ROOT);
-            if (normalized.equals("IN") || normalized.contains("입금") || normalized.contains("DEPOSIT")) {
+            if (normalized.equals("IN") || normalized.equals("1")
+                    || normalized.contains("입금") || normalized.contains("DEPOSIT")) {
                 return ExAccountTransactionDirection.IN;
             }
-            if (normalized.equals("OUT") || normalized.contains("출금") || normalized.contains("WITHDRAW")) {
+            if (normalized.equals("OUT") || normalized.equals("2")
+                    || normalized.contains("출금") || normalized.contains("WITHDRAW")) {
                 return ExAccountTransactionDirection.OUT;
             }
         }
@@ -165,6 +195,9 @@ public class CodefExAccountTransactionMapper {
             return ExAccountTransactionDirection.IN;
         }
         if (outAmount != null && outAmount.compareTo(BigDecimal.ZERO) > 0) {
+            return ExAccountTransactionDirection.OUT;
+        }
+        if (explicitAmount != null && explicitAmount.signum() < 0) {
             return ExAccountTransactionDirection.OUT;
         }
         return null;
@@ -186,13 +219,22 @@ public class CodefExAccountTransactionMapper {
     }
 
     private BigDecimal firstDecimal(JsonNode node, String... fieldNames) {
+        BigDecimal value = firstSignedDecimal(node, fieldNames);
+        return value == null ? null : value.abs();
+    }
+
+    private BigDecimal firstSignedDecimal(JsonNode node, String... fieldNames) {
         for (String fieldName : fieldNames) {
             String value = text(node, fieldName);
             if (value == null) {
                 continue;
             }
             try {
-                return new BigDecimal(value.replace(",", "")).abs();
+                String normalized = value.replace(",", "").replace("원", "").trim();
+                if (normalized.equals("-") || normalized.equals("+")) {
+                    continue;
+                }
+                return new BigDecimal(normalized);
             } catch (NumberFormatException exception) {
                 throw new CodefExAccountClientException("CODEF 거래내역 금액 형식이 올바르지 않습니다.", exception);
             }

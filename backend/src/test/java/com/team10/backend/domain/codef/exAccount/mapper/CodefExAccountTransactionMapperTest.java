@@ -37,4 +37,51 @@ class CodefExAccountTransactionMapperTest {
                 .doesNotContain(accountNumber)
                 .matches("[0-9a-f]{64}");
     }
+
+    @Test
+    void skipsMalformedTransactionItemsAndKeepsValidItems() throws Exception {
+        JsonNode data = objectMapper.readTree("""
+                {
+                  "resTrHistoryList": [
+                    {
+                      "resAccountTrDate": "bad-date",
+                      "resAccountIn": "1000"
+                    },
+                    {
+                      "resAccountTrDate": "2026.06.18",
+                      "resAccountTrTime": "14:30:00",
+                      "resAccountIn": "1,000",
+                      "resAccountDesc1": "급여"
+                    }
+                  ]
+                }
+                """);
+
+        List<CodefExAccountTransactionSnapshot> snapshots =
+                mapper.toSnapshots("0004", "1234567890", data);
+
+        assertThat(snapshots).hasSize(1);
+        assertThat(snapshots.get(0).counterpartyName()).isEqualTo("급여");
+        assertThat(snapshots.get(0).amount()).isEqualByComparingTo("1000");
+    }
+
+    @Test
+    void infersWithdrawDirectionFromNegativeExplicitAmount() throws Exception {
+        JsonNode data = objectMapper.readTree("""
+                {
+                  "resTrHistoryList": [{
+                    "resAccountTrDate": "20260618143000",
+                    "resAccountTrAmt": "-45000",
+                    "resAccountDesc1": "카드결제"
+                  }]
+                }
+                """);
+
+        List<CodefExAccountTransactionSnapshot> snapshots =
+                mapper.toSnapshots("0004", "1234567890", data);
+
+        assertThat(snapshots).hasSize(1);
+        assertThat(snapshots.get(0).direction().name()).isEqualTo("OUT");
+        assertThat(snapshots.get(0).amount()).isEqualByComparingTo("45000");
+    }
 }

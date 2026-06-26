@@ -62,7 +62,7 @@ public class CodefExAccountClient {
                         .body(request)
                         .retrieve()
                         .body(String.class);
-                return responseDecoder.decodeData(responseBody);
+                return responseDecoder.decodeTransactionData(responseBody);
             } catch (RestClientResponseException exception) {
                 if (!shouldRetry(exception, attempt)) {
                     throw new CodefExAccountClientException("CODEF 보유계좌 HTTP 요청에 실패했습니다.", exception);

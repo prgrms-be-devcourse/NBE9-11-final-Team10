@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -43,6 +44,7 @@ import static org.springframework.util.StringUtils.hasText;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @Transactional(readOnly = true)
 public class ExAccountTransactionService {
 
@@ -222,6 +224,8 @@ public class ExAccountTransactionService {
                     exception
             );
         } catch (CodefExAccountClientException exception) {
+            log.warn("[CODEF] 보유계좌 응답 처리 실패. userId={}, exAccountId={}, organization={}, reason={}",
+                    account.getUser().getId(), account.getId(), account.getOrganization(), exception.getMessage());
             throw new BusinessException(
                     ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_PROVIDER_INVALID_RESPONSE,
                     exception
@@ -260,6 +264,8 @@ public class ExAccountTransactionService {
                     exception
             );
         } catch (CodefExAccountClientException exception) {
+            log.warn("[CODEF] 거래내역 응답 처리 실패. userId={}, exAccountId={}, organization={}, reason={}",
+                    account.getUser().getId(), account.getId(), account.getOrganization(), exception.getMessage());
             throw new BusinessException(
                     ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_PROVIDER_INVALID_RESPONSE,
                     exception
