@@ -1,36 +1,5 @@
 import { apiFetch } from '../api'
-import type { DepositRequest, TransferRequest, TransferResult } from '../types'
-
-export async function deposit(
-  data: DepositRequest,
-  idempotencyKey: string,
-): Promise<TransferResult> {
-  const response = await apiFetch<{
-    transactionId: number
-    accountId: number
-    type: string
-    amount: number
-    balanceBefore: number
-    balanceAfter: number
-    memo?: string
-    transactedAt: string
-  }>('/api/v1/transfers/topUp', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify(data),
-  })
-
-  return {
-    success: true,
-    transactionId: response.transactionId,
-    accountId: response.accountId,
-    amount: response.amount,
-    balanceBefore: response.balanceBefore,
-    balanceAfter: response.balanceAfter,
-    memo: response.memo,
-    createdAt: response.transactedAt,
-  }
-}
+import type { TransferRequest, TransferResult } from '../types'
 
 export async function transfer(
   data: TransferRequest,
