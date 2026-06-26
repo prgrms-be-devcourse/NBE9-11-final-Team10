@@ -72,6 +72,7 @@ export async function getTransaction(
     amount: transaction.amount,
     balanceAfter: transaction.balanceAfter,
     counterpartyName: transaction.counterpartyName,
+    displayName: transaction.displayName,
     memo: transaction.memo,
     createdAt: transaction.transactedAt,
   }

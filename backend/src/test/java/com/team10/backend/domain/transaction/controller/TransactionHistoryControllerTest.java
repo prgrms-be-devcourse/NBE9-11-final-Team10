@@ -202,6 +202,7 @@ class TransactionHistoryControllerTest {
                 5_000L,
                 95_000L,
                 "홍길동",
+                "홍길동",
                 "점심값",
                 LocalDateTime.of(2026, 6, 9, 12, 30)
         );
@@ -216,6 +217,7 @@ class TransactionHistoryControllerTest {
                 .andExpect(jsonPath("$.amount").value(5000))
                 .andExpect(jsonPath("$.balanceAfter").value(95000))
                 .andExpect(jsonPath("$.counterpartyName").value("홍길동"))
+                .andExpect(jsonPath("$.displayName").value("홍길동"))
                 .andExpect(jsonPath("$.memo").value("점심값"))
                 .andExpect(jsonPath("$.transactedAt").value("2026-06-09T12:30:00"));
 

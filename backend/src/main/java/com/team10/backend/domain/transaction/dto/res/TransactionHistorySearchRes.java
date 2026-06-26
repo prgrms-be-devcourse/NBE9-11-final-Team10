@@ -40,7 +40,7 @@ public record TransactionHistorySearchRes(
         }
     }
 
-    private static String resolveDisplayName(
+    public static String resolveDisplayName(
             TransactionType type,
             TransactionDirection direction,
             String counterpartyName

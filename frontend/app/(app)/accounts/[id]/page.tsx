@@ -47,6 +47,7 @@ import {
   updateAccountNickname,
 } from '@/lib/api/accounts'
 import { getTransactions } from '@/lib/api/transactions'
+import { getTransactionCategoryLabel, getTransactionDisplayName } from '@/lib/transaction-display'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format'
 import type { Account, PageResponse, Transaction } from '@/lib/types'
 import { ApiRequestError } from '@/lib/api'
@@ -80,6 +81,7 @@ export default function AccountDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [closeLoading, setCloseLoading] = useState(false)
+  const [closeAccountPassword, setCloseAccountPassword] = useState('')
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -176,9 +178,13 @@ export default function AccountDetailPage() {
 
   async function handleClose() {
     if (!user || !account) return
+    if (!/^\d{6}$/.test(closeAccountPassword)) {
+      toast.error('계좌 비밀번호 숫자 6자리를 입력해 주세요.')
+      return
+    }
     setCloseLoading(true)
     try {
-      await closeAccount(account.id)
+      await closeAccount(account.id, closeAccountPassword)
       toast.success('계좌가 해지되었습니다.')
       router.push('/accounts')
     } catch (err) {
@@ -309,10 +315,10 @@ export default function AccountDetailPage() {
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <p className="truncate text-sm font-medium text-foreground">
-                                {txn.counterpartyName ?? '알 수 없음'}
+                                {getTransactionDisplayName(txn)}
                               </p>
                               <Badge variant={txn.direction === 'IN' ? 'default' : 'secondary'} className="h-4 shrink-0 text-xs">
-                                {txn.direction === 'IN' ? '입금' : '출금'}
+                                {getTransactionCategoryLabel(txn)}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground">{formatDateTime(txn.createdAt)}</p>
@@ -484,10 +490,25 @@ export default function AccountDetailPage() {
                       이 작업은 되돌릴 수 없습니다. 계좌를 해지하면 더 이상 사용할 수 없습니다.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="closeAccountPassword">계좌 비밀번호</Label>
+                    <Input
+                      id="closeAccountPassword"
+                      type="password"
+                      inputMode="numeric"
+                      value={closeAccountPassword}
+                      onChange={(e) => setCloseAccountPassword(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                      placeholder="숫자 6자리"
+                      maxLength={6}
+                    />
+                  </div>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>취소</AlertDialogCancel>
+                    <AlertDialogCancel onClick={() => setCloseAccountPassword('')}>취소</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={handleClose}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        handleClose()
+                      }}
                       disabled={closeLoading}
                       className="bg-destructive hover:bg-destructive/90"
                     >

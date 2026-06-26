@@ -32,9 +32,13 @@ export async function updateAccountNickname(
   )
 }
 
-export async function closeAccount(accountId: string | number): Promise<Account> {
+export async function closeAccount(
+  accountId: string | number,
+  accountPassword: string,
+): Promise<Account> {
   return apiFetch<Account>(`/api/v1/accounts/${accountId}/close`, {
     method: 'POST',
+    body: JSON.stringify({ accountPassword }),
   })
 }
 
