@@ -3,6 +3,7 @@ package com.team10.backend.domain.saving.service;
 import com.team10.backend.domain.account.entity.Account;
 import com.team10.backend.domain.account.exception.AccountErrorCode;
 import com.team10.backend.domain.account.repository.AccountRepository;
+import com.team10.backend.domain.account.service.AccountLockService;
 import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.saving.dto.req.*;
@@ -31,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -68,6 +68,9 @@ class SavingDepositServiceTest {
 
     @Mock
     private AccountRepository accountRepository;
+
+    @Mock
+    private AccountLockService accountLockService;
 
     @Mock
     private UserRepository userRepository;
@@ -498,10 +501,8 @@ class SavingDepositServiceTest {
 
         when(depositRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
-        when(accountRepository.findByIdForUpdate(activeAccount.getId()))
-                .thenReturn(Optional.of(activeAccount));
-        when(accountRepository.findByIdForUpdate(deposit.getSavingAccount().getId()))
-                .thenReturn(Optional.of(deposit.getSavingAccount()));
+        when(accountLockService.lockTwoAccounts(activeAccount, deposit.getSavingAccount()))
+                .thenReturn(new AccountLockService.LockedAccounts(activeAccount, deposit.getSavingAccount()));
 
         EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
 
@@ -535,9 +536,7 @@ class SavingDepositServiceTest {
         assertThat(history.getBalanceAfter()).isEqualTo(3008750L);
         assertThat(history.getMemo()).isEqualTo("예금 중도 해지 반환");
 
-        InOrder inOrder = inOrder(accountRepository);
-        inOrder.verify(accountRepository).findByIdForUpdate(activeAccount.getId());
-        inOrder.verify(accountRepository).findByIdForUpdate(deposit.getSavingAccount().getId());
+        verify(accountLockService).lockTwoAccounts(activeAccount, deposit.getSavingAccount());
         verify(depositRepository).findByIdAndUserIdWithAccountForUpdate(1L, 1L);
     }
 
@@ -550,10 +549,8 @@ class SavingDepositServiceTest {
 
         when(installmentRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
                 .thenReturn(Optional.of(installment));
-        when(accountRepository.findByIdForUpdate(activeAccount.getId()))
-                .thenReturn(Optional.of(activeAccount));
-        when(accountRepository.findByIdForUpdate(installment.getSavingAccount().getId()))
-                .thenReturn(Optional.of(installment.getSavingAccount()));
+        when(accountLockService.lockTwoAccounts(activeAccount, installment.getSavingAccount()))
+                .thenReturn(new AccountLockService.LockedAccounts(activeAccount, installment.getSavingAccount()));
 
         EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
 
