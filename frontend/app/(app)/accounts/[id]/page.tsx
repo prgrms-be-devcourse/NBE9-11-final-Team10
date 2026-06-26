@@ -308,14 +308,16 @@ export default function AccountDetailPage() {
             {/* Close account */}
             {account.status === 'ACTIVE' && (
               <AlertDialog>
-                <AlertDialogTrigger>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <Trash2 data-icon="inline-start" />
-                    계좌 해지
-                  </Button>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+                    />
+                  }
+                >
+                  <Trash2 data-icon="inline-start" />
+                  계좌 해지
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
