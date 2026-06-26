@@ -69,6 +69,7 @@ function TransferForm({
   const idempotencyKeyRef = useRef<string | null>(null)
 
   const activeAccounts = accounts.filter((a) => a.status === 'ACTIVE')
+  const selectedAccount = activeAccounts.find((account) => String(account.id) === senderAccountId)
 
   function resetIdempotencyKey() {
     idempotencyKeyRef.current = null
@@ -153,12 +154,26 @@ function TransferForm({
               }}
             >
               <SelectTrigger id="sender" aria-invalid={!!errors.senderAccountId}>
-                <SelectValue placeholder="계좌 선택" />
+                {selectedAccount ? (
+                  <span className="grid w-full min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-2">
+                    <span className="min-w-0 truncate">{selectedAccount.nickname}</span>
+                    <span className="min-w-0 truncate text-right tabular-nums text-muted-foreground">
+                      {formatCurrency(selectedAccount.balance)}
+                    </span>
+                  </span>
+                ) : (
+                  <SelectValue placeholder="계좌 선택" />
+                )}
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="w-80">
                 {activeAccounts.map((acc) => (
                   <SelectItem key={acc.id} value={String(acc.id)}>
-                    {acc.nickname} — {formatCurrency(acc.balance)}
+                    <span className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_7rem] items-center gap-3">
+                      <span className="min-w-0 truncate">{acc.nickname}</span>
+                      <span className="min-w-0 truncate text-right tabular-nums text-muted-foreground">
+                        {formatCurrency(acc.balance)}
+                      </span>
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
