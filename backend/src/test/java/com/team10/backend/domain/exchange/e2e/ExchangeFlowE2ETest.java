@@ -203,6 +203,7 @@ class ExchangeFlowE2ETest {
         assertEquals(100_000L, krwHistory.getAmount());
         assertEquals(200_000L, krwHistory.getBalanceBefore());
         assertEquals(100_000L, krwHistory.getBalanceAfter());
+        assertEquals("환전 주문", krwHistory.getCounterpartyName());
         assertEquals("환전", krwHistory.getMemo());
         assertNotNull(krwHistory.getTransactedAt());
 
@@ -319,6 +320,7 @@ class ExchangeFlowE2ETest {
         assertEquals(13_766L, krwHistory.getAmount());
         assertEquals(100_000L, krwHistory.getBalanceBefore());
         assertEquals(113_766L, krwHistory.getBalanceAfter());
+        assertEquals("환전 주문", krwHistory.getCounterpartyName());
         assertEquals("환전", krwHistory.getMemo());
         assertNotNull(krwHistory.getTransactedAt());
 
