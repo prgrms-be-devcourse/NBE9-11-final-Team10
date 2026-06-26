@@ -70,13 +70,17 @@ public class ExchangeCalculator {
             Integer fromCurrencyDecimalPlaces,
             Integer toCurrencyDecimalPlaces
     ) {
+        // 수수료는 항상 원화 기준으로 계산한다.
+        // KRW -> 외화: 출금 금액(fromAmount)이 이미 원화다.
         if (fromCurrencyCode == CurrencyCode.KRW) {
             return fromAmount.multiply(defaultFeeRate)
                     .setScale(fromCurrencyDecimalPlaces, RoundingMode.DOWN);
         }
 
+        // 외화 -> KRW: 출금 외화를 원화로 환산한 정산 금액 기준으로 수수료를 계산한다.
         if (toCurrencyCode == CurrencyCode.KRW) {
-            BigDecimal krwAmount = fromAmount.multiply(rate);
+            BigDecimal krwAmount = fromAmount.multiply(rate)
+                    .setScale(toCurrencyDecimalPlaces, RoundingMode.DOWN);
             return krwAmount.multiply(defaultFeeRate)
                     .setScale(toCurrencyDecimalPlaces, RoundingMode.DOWN);
         }

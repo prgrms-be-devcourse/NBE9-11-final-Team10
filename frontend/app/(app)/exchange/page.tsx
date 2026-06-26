@@ -445,7 +445,7 @@ function ExchangeFormTab({
               </Select>
             </div>
 
-            <div className="flex flex-col gap-1.5 sm:pl-8">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="fx-wallet">외화 지갑</Label>
               <div
                 id="fx-wallet"
