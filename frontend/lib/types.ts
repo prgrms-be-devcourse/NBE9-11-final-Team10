@@ -82,6 +82,7 @@ export interface TransferRequest {
   senderAccountId: number | string
   receiverAccountNumber: string
   amount: number
+  accountPassword: string
   memo?: string
 }
 
