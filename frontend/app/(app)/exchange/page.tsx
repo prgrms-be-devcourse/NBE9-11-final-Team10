@@ -192,6 +192,7 @@ function ExchangeFormTab({
   const [ordering, setOrdering] = useState(false)
   const [error, setError] = useState(initialError)
   const idempotencyKeyRef = useRef<string | null>(null)
+  const idempotencyRequestSignatureRef = useRef<string | null>(null)
 
   useEffect(() => {
     setError(initialError)
@@ -201,6 +202,7 @@ function ExchangeFormTab({
     setQuote(null)
     setOrder(null)
     idempotencyKeyRef.current = null
+    idempotencyRequestSignatureRef.current = null
   }
 
   async function handleCreateQuote() {
@@ -231,24 +233,29 @@ function ExchangeFormTab({
   async function handleCreateOrder() {
     if (!quote || !krwAccountId || !fxWalletId) return
 
-    if (!idempotencyKeyRef.current) {
+    const request = {
+      exchangeQuoteId: quote.exchangeQuoteId,
+      krwAccountId: Number(krwAccountId),
+      fxWalletId: Number(fxWalletId),
+    }
+    const requestSignature = JSON.stringify(request)
+
+    if (!idempotencyKeyRef.current || idempotencyRequestSignatureRef.current !== requestSignature) {
       idempotencyKeyRef.current = createIdempotencyKey('exchange-order')
+      idempotencyRequestSignatureRef.current = requestSignature
     }
 
     setOrdering(true)
     setError('')
     try {
       const nextOrder = await createExchangeOrder(
-        {
-          exchangeQuoteId: quote.exchangeQuoteId,
-          krwAccountId: Number(krwAccountId),
-          fxWalletId: Number(fxWalletId),
-        },
+        request,
         idempotencyKeyRef.current,
       )
       await onBalancesChanged()
       setOrder(nextOrder)
       idempotencyKeyRef.current = null
+      idempotencyRequestSignatureRef.current = null
       toast.success('환전 주문이 완료되었습니다.')
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : '환전 주문 실행에 실패했습니다.')

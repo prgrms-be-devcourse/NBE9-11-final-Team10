@@ -67,12 +67,14 @@ function TransferForm({
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState('')
   const idempotencyKeyRef = useRef<string | null>(null)
+  const idempotencyRequestSignatureRef = useRef<string | null>(null)
 
   const activeAccounts = accounts.filter((a) => a.status === 'ACTIVE')
   const selectedAccount = activeAccounts.find((account) => String(account.id) === senderAccountId)
 
   function resetIdempotencyKey() {
     idempotencyKeyRef.current = null
+    idempotencyRequestSignatureRef.current = null
   }
 
   function validate() {
@@ -97,24 +99,28 @@ function TransferForm({
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
 
+    const request = {
+      senderAccountId,
+      receiverAccountNumber,
+      amount: Number(amount),
+      accountPassword,
+      memo: memo || undefined,
+    }
+    const requestSignature = JSON.stringify(request)
+
     setLoading(true)
-    if (!idempotencyKeyRef.current) {
+    if (!idempotencyKeyRef.current || idempotencyRequestSignatureRef.current !== requestSignature) {
       idempotencyKeyRef.current = createIdempotencyKey('transfer')
+      idempotencyRequestSignatureRef.current = requestSignature
     }
 
     try {
       const idempotencyKey = idempotencyKeyRef.current
       const res = await transfer(
-        {
-          senderAccountId,
-          receiverAccountNumber,
-          amount: Number(amount),
-          accountPassword,
-          memo: memo || undefined,
-        },
+        request,
         idempotencyKey,
       )
-      idempotencyKeyRef.current = null
+      resetIdempotencyKey()
       onSuccess({
         ...res,
         amount: Number(amount),
