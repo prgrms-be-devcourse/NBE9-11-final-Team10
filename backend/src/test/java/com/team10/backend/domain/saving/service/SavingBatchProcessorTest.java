@@ -94,7 +94,7 @@ class SavingBatchProcessorTest {
         Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
         ReflectionTestUtils.setField(deposit, "maturityDate", TODAY);
 
-        when(depositRepository.findByIdWithAccountForUpdate(1L))
+        when(depositRepository.findByIdWithAccount(1L))
                 .thenReturn(Optional.of(deposit));
         when(accountLockService.lockTwoAccounts(activeAccount, deposit.getSavingAccount()))
                 .thenReturn(new AccountLockService.LockedAccounts(activeAccount, deposit.getSavingAccount()));
@@ -140,7 +140,7 @@ class SavingBatchProcessorTest {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
         ReflectionTestUtils.setField(installment, "maturityDate", TODAY);
 
-        when(installmentRepository.findByIdWithAccountForUpdate(1L))
+        when(installmentRepository.findByIdWithAccount(1L))
                 .thenReturn(Optional.of(installment));
         when(accountLockService.lockTwoAccounts(activeAccount, installment.getSavingAccount()))
                 .thenReturn(new AccountLockService.LockedAccounts(activeAccount, installment.getSavingAccount()));
@@ -185,7 +185,7 @@ class SavingBatchProcessorTest {
     void matureSavingWithNotActiveStatus() {
         Deposit deposit = createDeposit(1L, DepositStatus.MATURED);
 
-        when(depositRepository.findByIdWithAccountForUpdate(1L))
+        when(depositRepository.findByIdWithAccount(1L))
                 .thenReturn(Optional.of(deposit));
 
         assertThatThrownBy(() -> savingBatchProcessor.matureDeposit(1L))
@@ -199,7 +199,7 @@ class SavingBatchProcessorTest {
     void matureSavingBeforeMaturityDate() {
         Deposit deposit = createDeposit(1L, DepositStatus.ACTIVE);
 
-        when(depositRepository.findByIdWithAccountForUpdate(1L))
+        when(depositRepository.findByIdWithAccount(1L))
                 .thenReturn(Optional.of(deposit));
 
         assertThatThrownBy(() -> savingBatchProcessor.matureDeposit(1L))
@@ -214,7 +214,7 @@ class SavingBatchProcessorTest {
         Installment installment = createInstallment(1L, InstallmentStatus.ACTIVE);
         ReflectionTestUtils.setField(installment, "nextPaymentDate", TODAY);
 
-        when(installmentRepository.findByIdWithAccountForUpdate(1L))
+        when(installmentRepository.findByIdWithAccount(1L))
                 .thenReturn(Optional.of(installment));
         when(accountLockService.lockTwoAccounts(activeAccount, installment.getSavingAccount()))
                 .thenReturn(new AccountLockService.LockedAccounts(activeAccount, installment.getSavingAccount()));
@@ -257,7 +257,7 @@ class SavingBatchProcessorTest {
         ReflectionTestUtils.setField(installment, "nextPaymentDate", TODAY);
         ReflectionTestUtils.setField(activeAccount, "balance", 50000L);
 
-        when(installmentRepository.findByIdWithAccountForUpdate(1L))
+        when(installmentRepository.findByIdWithAccount(1L))
                 .thenReturn(Optional.of(installment));
         when(accountLockService.lockTwoAccounts(activeAccount, installment.getSavingAccount()))
                 .thenReturn(new AccountLockService.LockedAccounts(activeAccount, installment.getSavingAccount()));
@@ -281,7 +281,7 @@ class SavingBatchProcessorTest {
         ReflectionTestUtils.setField(installment, "nextPaymentDate", TODAY);
         ReflectionTestUtils.setField(activeAccount, "status", AccountStatus.CLOSED);
 
-        when(installmentRepository.findByIdWithAccountForUpdate(1L))
+        when(installmentRepository.findByIdWithAccount(1L))
                 .thenReturn(Optional.of(installment));
         when(accountLockService.lockTwoAccounts(activeAccount, installment.getSavingAccount()))
                 .thenReturn(new AccountLockService.LockedAccounts(activeAccount, installment.getSavingAccount()));

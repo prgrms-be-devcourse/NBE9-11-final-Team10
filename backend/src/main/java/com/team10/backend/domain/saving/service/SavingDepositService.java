@@ -327,7 +327,7 @@ public class SavingDepositService {
 
 
     private EarlyCancelRes cancelDeposit(Long userId, Long savingId) {
-        Deposit deposit = depositRepository.findByIdAndUserIdWithAccountForUpdate(savingId, userId)
+        Deposit deposit = depositRepository.findByIdAndUserIdWithAccount(savingId, userId)
                 .orElseThrow(() -> new BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
 
         validateDepositCancelable(deposit);
@@ -368,7 +368,7 @@ public class SavingDepositService {
     }
 
     private EarlyCancelRes cancelInstallment(Long userId, Long savingId) {
-        Installment installment = installmentRepository.findByIdAndUserIdWithAccountForUpdate(savingId, userId)
+        Installment installment = installmentRepository.findByIdAndUserIdWithAccount(savingId, userId)
                 .orElseThrow(() -> new BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
 
         validateInstallmentCancelable(installment);

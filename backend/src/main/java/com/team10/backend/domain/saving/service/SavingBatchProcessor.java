@@ -45,7 +45,7 @@ public class SavingBatchProcessor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processInstallmentPayment(Long installmentId) {
         Installment installment =
-                installmentRepository.findByIdWithAccountForUpdate(installmentId)
+                installmentRepository.findByIdWithAccount(installmentId)
                         .orElseThrow(() -> new
                                 BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
 
@@ -81,7 +81,7 @@ public class SavingBatchProcessor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public MaturityRes matureDeposit(Long depositId, Long userId) {
         Deposit deposit =
-                depositRepository.findByIdAndUserIdWithAccountForUpdate(depositId, userId)
+                depositRepository.findByIdAndUserIdWithAccount(depositId, userId)
                         .orElseThrow(() -> new
                                 BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
 
@@ -90,7 +90,7 @@ public class SavingBatchProcessor {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public MaturityRes matureDeposit(Long depositId) {
-        Deposit deposit = depositRepository.findByIdWithAccountForUpdate(depositId)
+        Deposit deposit = depositRepository.findByIdWithAccount(depositId)
                 .orElseThrow(() -> new
                         BusinessException(SavingErrorCode.DEPOSIT_NOT_FOUND));
 
@@ -138,7 +138,7 @@ public class SavingBatchProcessor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public MaturityRes matureInstallment(Long installmentId, Long userId) {
         Installment installment =
-                installmentRepository.findByIdAndUserIdWithAccountForUpdate(installmentId,
+                installmentRepository.findByIdAndUserIdWithAccount(installmentId,
                                 userId)
                         .orElseThrow(() -> new
                                 BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
@@ -149,7 +149,7 @@ public class SavingBatchProcessor {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public MaturityRes matureInstallment(Long installmentId) {
         Installment installment =
-                installmentRepository.findByIdWithAccountForUpdate(installmentId)
+                installmentRepository.findByIdWithAccount(installmentId)
                         .orElseThrow(() -> new
                                 BusinessException(SavingErrorCode.INSTALLMENT_NOT_FOUND));
 
