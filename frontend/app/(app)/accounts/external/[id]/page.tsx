@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowDownLeft,
@@ -53,8 +53,10 @@ export default function ExternalAccountDetailPage() {
   const [transactions, setTransactions] = useState<ExternalAccountTransaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [transactionsError, setTransactionsError] = useState('')
   const [infoRefreshing, setInfoRefreshing] = useState(false)
   const [transactionsRefreshing, setTransactionsRefreshing] = useState(false)
+  const autoRefreshAttempted = useRef(false)
 
   async function loadDetail(options?: { silent?: boolean }) {
     if (!user) return
@@ -81,6 +83,12 @@ export default function ExternalAccountDetailPage() {
     void loadDetail()
   }, [id, user])
 
+  useEffect(() => {
+    if (!user || !account || transactions.length > 0 || autoRefreshAttempted.current) return
+    autoRefreshAttempted.current = true
+    void refreshTransactions({ automatic: true })
+  }, [account, transactions.length, user])
+
   async function handleRefreshInfo() {
     if (!account) return
     setInfoRefreshing(true)
@@ -97,16 +105,27 @@ export default function ExternalAccountDetailPage() {
   }
 
   async function handleRefreshTransactions() {
+    await refreshTransactions()
+  }
+
+  async function refreshTransactions(options?: { automatic?: boolean }) {
     setTransactionsRefreshing(true)
+    setTransactionsError('')
     try {
       const result = await refreshExternalAccountTransactions(id)
       setAccount(result.detail.account)
       setTransactions(result.detail.transactions)
-      toast.success(
-        `거래내역 업데이트 완료: 신규 ${result.createdCount}건, 갱신 ${result.updatedCount}건`,
-      )
+      if (!options?.automatic) {
+        toast.success(
+          `거래내역 업데이트 완료: 신규 ${result.createdCount}건, 갱신 ${result.updatedCount}건`,
+        )
+      }
     } catch (err) {
-      toast.error(err instanceof ApiRequestError ? err.message : '거래내역 업데이트에 실패했습니다.')
+      const message = err instanceof ApiRequestError ? err.message : '거래내역 업데이트에 실패했습니다.'
+      setTransactionsError(message)
+      if (!options?.automatic) {
+        toast.error(message)
+      }
     } finally {
       setTransactionsRefreshing(false)
     }
@@ -178,12 +197,26 @@ export default function ExternalAccountDetailPage() {
           <section className="flex flex-col gap-3">
             <div>
               <h2 className="text-base font-semibold text-foreground">거래내역</h2>
-              <p className="text-sm text-muted-foreground">총 {transactions.length}건</p>
+              <p className="text-sm text-muted-foreground">
+                {transactionsRefreshing && transactions.length === 0 ? '거래내역을 불러오는 중...' : `총 ${transactions.length}건`}
+              </p>
             </div>
+
+            {transactionsError && (
+              <Alert variant="destructive" className="border-destructive/30">
+                <AlertDescription>{transactionsError}</AlertDescription>
+              </Alert>
+            )}
 
             <Card className="border-border">
               <CardContent className="pt-4 flex flex-col gap-0">
-                {transactions.length === 0 ? (
+                {transactionsRefreshing && transactions.length === 0 ? (
+                  <div className="flex flex-col gap-3">
+                    {[1, 2, 3].map((i) => (
+                      <Skeleton key={i} className="h-14 w-full" />
+                    ))}
+                  </div>
+                ) : transactions.length === 0 ? (
                   <div className="py-10 text-center">
                     <p className="text-sm text-muted-foreground">거래 내역이 없습니다.</p>
                   </div>

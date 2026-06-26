@@ -23,6 +23,7 @@ import com.team10.backend.global.exception.GlobalErrorCode;
 import lombok.RequiredArgsConstructor;
 import com.team10.backend.global.lock.DistributedLockTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -74,6 +75,7 @@ public class ExAccountTransactionService {
      * @param transactions 외부기관으로부터 신규 수신한 거래내역 동기화 요청 DTO 리스트
      * @return 추가/변경 통계 및 업데이트된 계좌 상세 결과를 담은 갱신 응답 DTO
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ExAccountTransactionRefreshRes refreshTransactions(
             Long userId,
             Long exAccountId,
@@ -120,6 +122,7 @@ public class ExAccountTransactionService {
      * 저장된 CODEF 연결정보로 외부기관 거래내역을 직접 조회한 뒤 기존 upsert 경로로 반영합니다.
      * 원계좌번호는 DB에 저장하지 않고, 보유계좌 재조회 결과를 HMAC 해시로 대조해 메모리 안에서만 사용합니다.
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ExAccountTransactionRefreshRes refreshTransactionsFromProvider(Long userId, Long exAccountId) {
         ExAccount account = accountRepository.findByIdAndUserId(exAccountId, userId)
                 .orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
