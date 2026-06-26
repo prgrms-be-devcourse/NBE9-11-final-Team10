@@ -59,7 +59,10 @@ public class SavingBatchProcessor {
             return;
         }
 
-        LockedInstallmentAccounts lockedAccounts = lockInstallmentAccounts(installment);
+        LockedSavingAccounts lockedAccounts =
+                lockSavingAccounts(installment.getWithdrawAccount(),
+                        installment.getSavingAccount());
+
         Account withdrawAccount = lockedAccounts.withdrawAccount();
 
         if (!withdrawAccount.isActive()) {
@@ -100,8 +103,20 @@ public class SavingBatchProcessor {
         Long interestAmount = deposit.getExpectedInterest();
         Long payoutAmount = deposit.getPrincipal() + interestAmount;
 
-        Account savingAccount = deposit.getSavingAccount();
+        // 입출금 계좌와 예금 전용 계좌를 ID 작은 순서대로 잠근다.
+        LockedSavingAccounts lockedAccounts =
+                lockSavingAccounts(deposit.getWithdrawAccount(), deposit.getSavingAccount());
+
+        // 락이 걸린 입출금 계좌를 꺼낸다.
+        // 만기 지급액이 들어갈 계좌다.
+        Account withdrawAccount = lockedAccounts.withdrawAccount();
+
+        // 락이 걸린 예금 전용 계좌를 꺼낸다.
+        // 만기 처리 시 원금이 빠져나갈 계좌다.
+        Account savingAccount = lockedAccounts.savingAccount();
+
         Long savingBalanceBefore = savingAccount.getBalance();
+
         closeSavingAccount(savingAccount, deposit.getPrincipal());
         Long savingBalanceAfter = savingAccount.getBalance();
         LocalDateTime transactedAt = LocalDateTime.now(clock);
@@ -114,7 +129,7 @@ public class SavingBatchProcessor {
                 DEPOSIT_MATURITY_WITHDRAW_MEMO,
                 transactedAt
         );
-        saveMaturityPayoutHistory(deposit.getWithdrawAccount(), payoutAmount, DEPOSIT_MATURITY_PAYOUT_MEMO, transactedAt);
+        saveMaturityPayoutHistory(withdrawAccount, payoutAmount, DEPOSIT_MATURITY_PAYOUT_MEMO, transactedAt);
         deposit.mature();
 
         return MaturityRes.fromDeposit(deposit, interestAmount, payoutAmount);
@@ -147,8 +162,21 @@ public class SavingBatchProcessor {
         Long interestAmount = calculateInstallmentExpectedInterest(installment);
         Long payoutAmount = installment.getPaidAmount() + interestAmount;
 
-        Account savingAccount = installment.getSavingAccount();
+        // 입출금 계좌와 적금 전용 계좌를 ID 작은 순서대로 잠근다.
+        LockedSavingAccounts lockedAccounts =
+                lockSavingAccounts(installment.getWithdrawAccount(),
+                        installment.getSavingAccount());
+
+        // 락이 걸린 입출금 계좌를 꺼낸다.
+        // 만기 지급액이 들어갈 계좌다.
+        Account withdrawAccount = lockedAccounts.withdrawAccount();
+
+        // 락이 걸린 적금 전용 계좌를 꺼낸다.
+        // 만기 처리 시 납입금이 빠져나갈 계좌다.
+        Account savingAccount = lockedAccounts.savingAccount();
+
         Long savingBalanceBefore = savingAccount.getBalance();
+
         closeSavingAccount(savingAccount, installment.getPaidAmount());
         Long savingBalanceAfter = savingAccount.getBalance();
         LocalDateTime transactedAt = LocalDateTime.now(clock);
@@ -162,7 +190,7 @@ public class SavingBatchProcessor {
                 transactedAt
         );
         saveMaturityPayoutHistory(
-                installment.getWithdrawAccount(),
+                withdrawAccount,
                 payoutAmount,
                 INSTALLMENT_MATURITY_PAYOUT_MEMO,
                 transactedAt
@@ -195,21 +223,6 @@ public class SavingBatchProcessor {
 
     private void failInstallmentPayment(Installment installment, String reason, LocalDate failedDate) {
         installment.failPayment(reason, failedDate);
-    }
-
-    private LockedInstallmentAccounts lockInstallmentAccounts(Installment installment) {
-        Long withdrawAccountId = installment.getWithdrawAccount().getId();
-        Long savingAccountId = installment.getSavingAccount().getId();
-
-        if (withdrawAccountId < savingAccountId) {
-            Account withdrawAccount = findAccountForUpdate(withdrawAccountId);
-            Account savingAccount = findAccountForUpdate(savingAccountId);
-            return new LockedInstallmentAccounts(withdrawAccount, savingAccount);
-        }
-
-        Account savingAccount = findAccountForUpdate(savingAccountId);
-        Account withdrawAccount = findAccountForUpdate(withdrawAccountId);
-        return new LockedInstallmentAccounts(withdrawAccount, savingAccount);
     }
 
     private Account findAccountForUpdate(Long accountId) {
@@ -255,12 +268,6 @@ public class SavingBatchProcessor {
         transactionHistoryRepository.save(transactionHistory);
         transactionHistoryRepository.save(savingAccountHistory);
         installment.payMonthlyAmount();
-    }
-
-    private record LockedInstallmentAccounts(
-            Account withdrawAccount,
-            Account savingAccount
-    ) {
     }
 
     private void validateDepositMaturityAllowed(Deposit deposit) {
@@ -352,5 +359,26 @@ public class SavingBatchProcessor {
                         * (periodMonth + 1)
                         / 2
         );
+    }
+
+    private LockedSavingAccounts lockSavingAccounts(
+            Account withdrawAccount,
+            Account savingAccount
+    ) {
+        Long withdrawAccountId = withdrawAccount.getId();
+        Long savingAccountId = savingAccount.getId();
+
+        if (withdrawAccountId < savingAccountId) {
+            Account lockedWithdrawAccount = findAccountForUpdate(withdrawAccountId);
+            Account lockedSavingAccount = findAccountForUpdate(savingAccountId);
+            return new LockedSavingAccounts(lockedWithdrawAccount, lockedSavingAccount);
+        }
+
+        Account lockedSavingAccount = findAccountForUpdate(savingAccountId);
+        Account lockedWithdrawAccount = findAccountForUpdate(withdrawAccountId);
+        return new LockedSavingAccounts(lockedWithdrawAccount, lockedSavingAccount);
+    }
+
+    private record LockedSavingAccounts(Account withdrawAccount, Account savingAccount) {
     }
 }

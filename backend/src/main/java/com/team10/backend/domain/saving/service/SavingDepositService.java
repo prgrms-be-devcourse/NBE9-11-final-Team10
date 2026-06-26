@@ -333,8 +333,20 @@ public class SavingDepositService {
         Long interestAmount = calculateDepositEarlyCancelInterest(deposit);
         Long refundAmount = deposit.getPrincipal() + interestAmount;
 
-        Account savingAccount = deposit.getSavingAccount();
+        // 입출금 계좌와 예금 전용 계좌를 ID 작은 순서대로 잠근다.
+        LockedSavingAccounts lockedAccounts =
+                lockSavingAccounts(deposit.getWithdrawAccount(), deposit.getSavingAccount());
+
+        // 락이 걸린 입출금 계좌를 꺼낸다.
+        // 중도해지 환급금이 들어갈 계좌다.
+        Account withdrawAccount = lockedAccounts.withdrawAccount();
+
+        // 락이 걸린 예금 전용 계좌를 꺼낸다.
+        // 중도해지 시 원금이 빠져나갈 계좌다.
+        Account savingAccount = lockedAccounts.savingAccount();
+
         Long savingBalanceBefore = savingAccount.getBalance();
+
         closeSavingAccount(savingAccount, deposit.getPrincipal());
         Long savingBalanceAfter = savingAccount.getBalance();
         LocalDateTime transactedAt = LocalDateTime.now(clock);
@@ -347,7 +359,7 @@ public class SavingDepositService {
                 DEPOSIT_CANCEL_WITHDRAW_MEMO,
                 transactedAt
         );
-        saveCancelRefundHistory(deposit.getWithdrawAccount(), refundAmount, DEPOSIT_CANCEL_REFUND_MEMO, transactedAt);
+        saveCancelRefundHistory(withdrawAccount, refundAmount, DEPOSIT_CANCEL_REFUND_MEMO, transactedAt);
         deposit.cancel();
 
         return EarlyCancelRes.fromDeposit(deposit, interestAmount, refundAmount);
@@ -362,8 +374,21 @@ public class SavingDepositService {
         Long interestAmount = calculateInstallmentEarlyCancelInterest(installment);
         Long refundAmount = installment.getPaidAmount() + interestAmount;
 
-        Account savingAccount = installment.getSavingAccount();
+        // 입출금 계좌와 적금 전용 계좌를 ID 작은 순서대로 잠근다.
+        LockedSavingAccounts lockedAccounts =
+                lockSavingAccounts(installment.getWithdrawAccount(),
+                        installment.getSavingAccount());
+
+        // 락이 걸린 입출금 계좌를 꺼낸다.
+        // 중도해지 환급금이 들어갈 계좌다.
+        Account withdrawAccount = lockedAccounts.withdrawAccount();
+
+        // 락이 걸린 적금 전용 계좌를 꺼낸다.
+        // 중도해지 시 납입금이 빠져나갈 계좌다.
+        Account savingAccount = lockedAccounts.savingAccount();
+
         Long savingBalanceBefore = savingAccount.getBalance();
+
         closeSavingAccount(savingAccount, installment.getPaidAmount());
         Long savingBalanceAfter = savingAccount.getBalance();
         LocalDateTime transactedAt = LocalDateTime.now(clock);
@@ -377,7 +402,7 @@ public class SavingDepositService {
                 transactedAt
         );
         saveCancelRefundHistory(
-                installment.getWithdrawAccount(),
+                withdrawAccount,
                 refundAmount,
                 INSTALLMENT_CANCEL_REFUND_MEMO,
                 transactedAt
@@ -613,6 +638,29 @@ public class SavingDepositService {
                         * (periodMonth + 1)        // 1부터 기간까지 합 계산용
                         / 2                        // 등차수열 합 공식
         );
+    }
+
+    private LockedSavingAccounts lockSavingAccounts(Account withdrawAccount, Account savingAccount) {
+        Long withdrawAccountId = withdrawAccount.getId();
+        Long savingAccountId = savingAccount.getId();
+
+        if (withdrawAccountId < savingAccountId) {
+            Account lockedWithdrawAccount = findAccountForUpdate(withdrawAccountId);
+            Account lockedSavingAccount = findAccountForUpdate(savingAccountId);
+            return new LockedSavingAccounts(lockedWithdrawAccount, lockedSavingAccount);
+        }
+
+        Account lockedSavingAccount = findAccountForUpdate(savingAccountId);
+        Account lockedWithdrawAccount = findAccountForUpdate(withdrawAccountId);
+        return new LockedSavingAccounts(lockedWithdrawAccount, lockedSavingAccount);
+    }
+
+    private Account findAccountForUpdate(Long accountId) {
+        return accountRepository.findByIdForUpdate(accountId)
+                .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+    }
+
+    private record LockedSavingAccounts(Account withdrawAccount, Account savingAccount) {
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)

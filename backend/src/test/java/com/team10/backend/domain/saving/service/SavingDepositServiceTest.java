@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -497,6 +498,10 @@ class SavingDepositServiceTest {
 
         when(depositRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
                 .thenReturn(Optional.of(deposit));
+        when(accountRepository.findByIdForUpdate(activeAccount.getId()))
+                .thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdForUpdate(deposit.getSavingAccount().getId()))
+                .thenReturn(Optional.of(deposit.getSavingAccount()));
 
         EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
 
@@ -529,6 +534,10 @@ class SavingDepositServiceTest {
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
         assertThat(history.getBalanceAfter()).isEqualTo(3008750L);
         assertThat(history.getMemo()).isEqualTo("예금 중도 해지 반환");
+
+        InOrder inOrder = inOrder(accountRepository);
+        inOrder.verify(accountRepository).findByIdForUpdate(activeAccount.getId());
+        inOrder.verify(accountRepository).findByIdForUpdate(deposit.getSavingAccount().getId());
         verify(depositRepository).findByIdAndUserIdWithAccountForUpdate(1L, 1L);
     }
 
@@ -541,6 +550,10 @@ class SavingDepositServiceTest {
 
         when(installmentRepository.findByIdAndUserIdWithAccountForUpdate(1L, 1L))
                 .thenReturn(Optional.of(installment));
+        when(accountRepository.findByIdForUpdate(activeAccount.getId()))
+                .thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdForUpdate(installment.getSavingAccount().getId()))
+                .thenReturn(Optional.of(installment.getSavingAccount()));
 
         EarlyCancelRes response = savingDepositService.cancelSaving(1L, 1L, request);
 

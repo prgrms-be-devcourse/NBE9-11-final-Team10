@@ -97,6 +97,10 @@ class SavingBatchProcessorTest {
 
         when(depositRepository.findByIdWithAccountForUpdate(1L))
                 .thenReturn(Optional.of(deposit));
+        when(accountRepository.findByIdForUpdate(activeAccount.getId()))
+                .thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdForUpdate(deposit.getSavingAccount().getId()))
+                .thenReturn(Optional.of(deposit.getSavingAccount()));
 
         MaturityRes response = savingBatchProcessor.matureDeposit(1L);
 
@@ -129,6 +133,10 @@ class SavingBatchProcessorTest {
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
         assertThat(history.getBalanceAfter()).isEqualTo(3035000L);
         assertThat(history.getMemo()).isEqualTo("예금 만기 지급");
+
+        InOrder inOrder = inOrder(accountRepository);
+        inOrder.verify(accountRepository).findByIdForUpdate(activeAccount.getId());
+        inOrder.verify(accountRepository).findByIdForUpdate(deposit.getSavingAccount().getId());
     }
 
     @Test
@@ -139,6 +147,10 @@ class SavingBatchProcessorTest {
 
         when(installmentRepository.findByIdWithAccountForUpdate(1L))
                 .thenReturn(Optional.of(installment));
+        when(accountRepository.findByIdForUpdate(activeAccount.getId()))
+                .thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdForUpdate(installment.getSavingAccount().getId()))
+                .thenReturn(Optional.of(installment.getSavingAccount()));
 
         MaturityRes response = savingBatchProcessor.matureInstallment(1L);
 
@@ -171,6 +183,10 @@ class SavingBatchProcessorTest {
         assertThat(history.getBalanceBefore()).isEqualTo(2000000L);
         assertThat(history.getBalanceAfter()).isEqualTo(2119500L);
         assertThat(history.getMemo()).isEqualTo("적금 만기 지급");
+
+        InOrder inOrder = inOrder(accountRepository);
+        inOrder.verify(accountRepository).findByIdForUpdate(activeAccount.getId());
+        inOrder.verify(accountRepository).findByIdForUpdate(installment.getSavingAccount().getId());
     }
 
     @Test
