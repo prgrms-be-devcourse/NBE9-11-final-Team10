@@ -59,6 +59,7 @@ export default function AccountDetailPage() {
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
   const [passwordLoading, setPasswordLoading] = useState(false)
 
   useEffect(() => {
@@ -99,8 +100,16 @@ export default function AccountDetailPage() {
 
   async function handlePasswordChange() {
     if (!user || !account) return
-    if (!/^\d{6}$/.test(currentPassword) || !/^\d{6}$/.test(newPassword)) {
+    if (
+      !/^\d{6}$/.test(currentPassword)
+      || !/^\d{6}$/.test(newPassword)
+      || !/^\d{6}$/.test(newPasswordConfirm)
+    ) {
       toast.error('계좌 비밀번호는 숫자 6자리여야 합니다.')
+      return
+    }
+    if (newPassword !== newPasswordConfirm) {
+      toast.error('새 비밀번호가 일치하지 않습니다.')
       return
     }
     setPasswordLoading(true)
@@ -109,6 +118,7 @@ export default function AccountDetailPage() {
       setPasswordOpen(false)
       setCurrentPassword('')
       setNewPassword('')
+      setNewPasswordConfirm('')
       toast.success('계좌 비밀번호가 변경되었습니다.')
     } catch (err) {
       toast.error(err instanceof ApiRequestError ? err.message : '오류가 발생했습니다.')
@@ -129,6 +139,13 @@ export default function AccountDetailPage() {
     } finally {
       setCloseLoading(false)
     }
+  }
+
+  function closePasswordDialog() {
+    setPasswordOpen(false)
+    setCurrentPassword('')
+    setNewPassword('')
+    setNewPasswordConfirm('')
   }
 
   return (
@@ -231,7 +248,7 @@ export default function AccountDetailPage() {
 
             {/* Account password */}
             {account.status === 'ACTIVE' && (
-              <Dialog open={passwordOpen} onOpenChange={setPasswordOpen}>
+              <Dialog open={passwordOpen} onOpenChange={(open) => (open ? setPasswordOpen(true) : closePasswordDialog())}>
                 <DialogTrigger render={<Button variant="outline" className="w-full justify-start" />}>
                   <KeyRound data-icon="inline-start" />
                   계좌 비밀번호 변경
@@ -265,9 +282,21 @@ export default function AccountDetailPage() {
                         maxLength={6}
                       />
                     </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="newPasswordConfirm">새 비밀번호 확인</Label>
+                      <Input
+                        id="newPasswordConfirm"
+                        type="password"
+                        inputMode="numeric"
+                        value={newPasswordConfirm}
+                        onChange={(e) => setNewPasswordConfirm(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                        placeholder="새 비밀번호 한 번 더 입력"
+                        maxLength={6}
+                      />
+                    </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setPasswordOpen(false)}>취소</Button>
+                    <Button variant="outline" onClick={closePasswordDialog}>취소</Button>
                     <Button onClick={handlePasswordChange} disabled={passwordLoading}>
                       변경
                     </Button>
