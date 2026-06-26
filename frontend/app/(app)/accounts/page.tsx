@@ -200,8 +200,8 @@ function AccountCard({ account, disabled = false }: { account: Account; disabled
 }
 
 function ExternalAccountCard({ account }: { account: ExternalAccount }) {
-  return (
-    <Card className="border-border">
+  const card = (
+    <Card className="border-border hover:border-primary/40 transition-colors cursor-pointer">
       <CardContent className="py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -232,9 +232,12 @@ function ExternalAccountCard({ account }: { account: ExternalAccount }) {
             <p className="text-base font-bold text-foreground tabular-nums">
               {formatCurrency(account.balance)}
             </p>
+            <ChevronRight className="size-4 text-muted-foreground" />
           </div>
         </div>
       </CardContent>
     </Card>
   )
+
+  return <Link href={`/accounts/external/${account.id}`}>{card}</Link>
 }

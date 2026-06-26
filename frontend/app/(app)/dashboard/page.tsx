@@ -62,6 +62,7 @@ export default function DashboardPage() {
     externalAccounts.reduce((sum, a) => sum + a.balance, 0)
   const activeAccounts = accounts.filter((a) => a.status === 'ACTIVE')
   const activeExternalAccounts = externalAccounts.filter((a) => a.status === 'ACTIVE')
+  const firstAccountHref = accounts.length > 0 ? `/accounts/${accounts[0].id}` : '/accounts'
   const accountSummaryItems = [
     ...accounts.map((account) => ({
       id: `internal-${account.id}`,
@@ -88,7 +89,6 @@ export default function DashboardPage() {
   const quickActions = [
     { href: '/accounts/new', label: '계좌 만들기', icon: Plus },
     { href: '/transfer', label: '송금', icon: Send },
-    { href: '/transactions', label: '거래내역', icon: CreditCard },
     { href: '/savings', label: '예적금', icon: PiggyBank },
     { href: '/investment-accounts', label: '투자계좌', icon: BarChart3 },
   ]
@@ -260,7 +260,7 @@ export default function DashboardPage() {
       <Card className="border-border">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-medium text-muted-foreground">최근 거래</CardTitle>
-          <Button variant="ghost" size="sm" className="h-auto py-1 text-xs text-primary" nativeButton={false} render={<Link href="/transactions" />}>
+          <Button variant="ghost" size="sm" className="h-auto py-1 text-xs text-primary" nativeButton={false} render={<Link href={firstAccountHref} />}>
             전체보기
           </Button>
         </CardHeader>
