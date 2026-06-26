@@ -1,6 +1,7 @@
 package com.team10.backend.domain.saving.service;
 
 import com.team10.backend.domain.account.entity.Account;
+import com.team10.backend.domain.account.repository.AccountRepository;
 import com.team10.backend.domain.account.type.AccountStatus;
 import com.team10.backend.domain.account.type.AccountType;
 import com.team10.backend.domain.saving.dto.res.MaturityRes;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -41,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -63,6 +66,9 @@ class SavingBatchProcessorTest {
 
     @Mock
     private InstallmentRepository installmentRepository;
+
+    @Mock
+    private AccountRepository accountRepository;
 
     @Spy
     private Clock clock = FIXED_CLOCK;
@@ -203,6 +209,10 @@ class SavingBatchProcessorTest {
 
         when(installmentRepository.findByIdWithAccountForUpdate(1L))
                 .thenReturn(Optional.of(installment));
+        when(accountRepository.findByIdForUpdate(activeAccount.getId()))
+                .thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdForUpdate(installment.getSavingAccount().getId()))
+                .thenReturn(Optional.of(installment.getSavingAccount()));
 
         savingBatchProcessor.processInstallmentPayment(1L);
 
@@ -230,6 +240,10 @@ class SavingBatchProcessorTest {
         assertThat(savingHistory.getBalanceBefore()).isEqualTo(100000L);
         assertThat(savingHistory.getBalanceAfter()).isEqualTo(200000L);
         assertThat(savingHistory.getMemo()).isEqualTo("적금 계좌 월 납입 입금");
+
+        InOrder inOrder = inOrder(accountRepository);
+        inOrder.verify(accountRepository).findByIdForUpdate(activeAccount.getId());
+        inOrder.verify(accountRepository).findByIdForUpdate(installment.getSavingAccount().getId());
     }
 
 
@@ -242,6 +256,10 @@ class SavingBatchProcessorTest {
 
         when(installmentRepository.findByIdWithAccountForUpdate(1L))
                 .thenReturn(Optional.of(installment));
+        when(accountRepository.findByIdForUpdate(activeAccount.getId()))
+                .thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdForUpdate(installment.getSavingAccount().getId()))
+                .thenReturn(Optional.of(installment.getSavingAccount()));
 
         savingBatchProcessor.processInstallmentPayment(1L);
 
@@ -264,6 +282,10 @@ class SavingBatchProcessorTest {
 
         when(installmentRepository.findByIdWithAccountForUpdate(1L))
                 .thenReturn(Optional.of(installment));
+        when(accountRepository.findByIdForUpdate(activeAccount.getId()))
+                .thenReturn(Optional.of(activeAccount));
+        when(accountRepository.findByIdForUpdate(installment.getSavingAccount().getId()))
+                .thenReturn(Optional.of(installment.getSavingAccount()));
 
         savingBatchProcessor.processInstallmentPayment(1L);
 
