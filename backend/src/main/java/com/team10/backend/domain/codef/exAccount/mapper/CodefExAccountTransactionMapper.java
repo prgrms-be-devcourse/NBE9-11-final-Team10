@@ -8,6 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -225,8 +228,23 @@ public class CodefExAccountTransactionMapper {
             String counterpartyName,
             int index
     ) {
-        return organization + "-" + accountNumber + "-" + transactedAt + "-"
+        String rawKey = organization + "-" + accountNumber + "-" + transactedAt + "-"
                 + direction + "-" + amount.toPlainString() + "-"
                 + (counterpartyName == null ? "" : counterpartyName) + "-" + index;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(rawKey.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new CodefExAccountClientException("SHA-256 알고리즘을 사용할 수 없습니다.", exception);
+        }
     }
 }

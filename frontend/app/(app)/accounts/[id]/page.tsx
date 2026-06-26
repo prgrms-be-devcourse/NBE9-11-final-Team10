@@ -102,6 +102,12 @@ export default function AccountDetailPage() {
   }, [id, user])
 
   useEffect(() => {
+    setCurrentPage(0)
+    setTransactionPage(emptyTransactionPage)
+    setTransactionsError('')
+  }, [id])
+
+  useEffect(() => {
     if (!user || !id) return
     setTransactionsLoading(true)
     setTransactionsError('')

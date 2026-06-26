@@ -84,6 +84,10 @@ export default function ExternalAccountDetailPage() {
   }, [id, user])
 
   useEffect(() => {
+    autoRefreshAttempted.current = false
+  }, [id])
+
+  useEffect(() => {
     if (!user || !account || transactions.length > 0 || autoRefreshAttempted.current) return
     autoRefreshAttempted.current = true
     void refreshTransactions({ automatic: true })
