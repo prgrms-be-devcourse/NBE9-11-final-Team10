@@ -59,6 +59,55 @@ const emptyExchangeOrderPage: PageResponse<ExchangeOrder> = {
 }
 
 export default function ExchangePage() {
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [currencies, setCurrencies] = useState<ExchangeCurrency[]>([])
+  const [rates, setRates] = useState<ExchangeRate[]>([])
+  const [wallets, setWallets] = useState<FxWallet[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    loadExchangeData()
+  }, [])
+
+  async function loadExchangeData() {
+    setLoading(true)
+    setError('')
+    try {
+      const [accountData, currencyData, rateData, walletData] = await Promise.all([
+        getAccounts(),
+        getExchangeCurrencies(),
+        getExchangeRates(),
+        getFxWallets(),
+      ])
+
+      setAccounts(accountData.filter((account) => account.status === 'ACTIVE'))
+      setCurrencies(currencyData)
+      setRates(rateData)
+      setWallets(walletData)
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : '환전 정보를 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function refreshAccountsAndWallets() {
+    const [accountData, walletData] = await Promise.all([getAccounts(), getFxWallets()])
+    setAccounts(accountData.filter((account) => account.status === 'ACTIVE'))
+    setWallets(walletData)
+  }
+
+  function handleWalletCreated(wallet: FxWallet) {
+    setWallets((prev) => [wallet, ...prev.filter((item) => item.walletId !== wallet.walletId)])
+  }
+
+  function handleWalletClosed(wallet: FxWallet) {
+    setWallets((prev) =>
+      prev.map((item) => (item.walletId === wallet.walletId ? wallet : item)),
+    )
+  }
+
   return (
     <div className="flex flex-col gap-5 max-w-3xl">
       <div>
@@ -85,26 +134,53 @@ export default function ExchangePage() {
         </TabsList>
 
         <TabsContent value="exchange" className="mt-4">
-          <ExchangeFormTab />
+          <ExchangeFormTab
+            accounts={accounts}
+            currencies={currencies}
+            rates={rates}
+            wallets={wallets}
+            loading={loading}
+            initialError={error}
+            onBalancesChanged={refreshAccountsAndWallets}
+          />
         </TabsContent>
 
         <TabsContent value="wallets" className="mt-4">
-          <FxWalletTab />
+          <FxWalletTab
+            currencies={currencies}
+            wallets={wallets}
+            loading={loading}
+            initialError={error}
+            onWalletCreated={handleWalletCreated}
+            onWalletClosed={handleWalletClosed}
+          />
         </TabsContent>
 
         <TabsContent value="orders" className="mt-4">
-          <ExchangeOrdersTab />
+          <ExchangeOrdersTab wallets={wallets} />
         </TabsContent>
       </Tabs>
     </div>
   )
 }
 
-function ExchangeFormTab() {
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [currencies, setCurrencies] = useState<ExchangeCurrency[]>([])
-  const [rates, setRates] = useState<ExchangeRate[]>([])
-  const [wallets, setWallets] = useState<FxWallet[]>([])
+function ExchangeFormTab({
+  accounts,
+  currencies,
+  rates,
+  wallets,
+  loading,
+  initialError,
+  onBalancesChanged,
+}: {
+  accounts: Account[]
+  currencies: ExchangeCurrency[]
+  rates: ExchangeRate[]
+  wallets: FxWallet[]
+  loading: boolean
+  initialError: string
+  onBalancesChanged: () => Promise<void>
+}) {
   const [amount, setAmount] = useState('')
   const [fromCurrencyCode, setFromCurrencyCode] = useState<ExchangeCurrencyCode>('KRW')
   const [toCurrencyCode, setToCurrencyCode] = useState<ExchangeCurrencyCode | ''>('')
@@ -112,51 +188,14 @@ function ExchangeFormTab() {
   const [fxWalletId, setFxWalletId] = useState('')
   const [quote, setQuote] = useState<ExchangeQuote | null>(null)
   const [order, setOrder] = useState<ExchangeOrder | null>(null)
-  const [loading, setLoading] = useState(true)
   const [quoting, setQuoting] = useState(false)
   const [ordering, setOrdering] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialError)
   const idempotencyKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
-    loadExchangeFormData()
-  }, [])
-
-  async function loadExchangeFormData() {
-    setLoading(true)
-    setError('')
-    try {
-      const [accountData, currencyData, rateData, walletData] = await Promise.all([
-        getAccounts(),
-        getExchangeCurrencies(),
-        getExchangeRates(),
-        getFxWallets(),
-      ])
-
-      const activeAccounts = accountData.filter((account) => account.status === 'ACTIVE')
-      const activeTargetCurrencies = currencyData.filter(
-        (currency) => currency.status === 'ACTIVE' && currency.currencyCode !== 'KRW',
-      )
-      const activeWallets = walletData.filter((wallet) => wallet.status === 'ACTIVE')
-
-      setAccounts(activeAccounts)
-      setCurrencies(currencyData)
-      setRates(rateData)
-      setWallets(walletData)
-      if (activeAccounts[0]) setKrwAccountId(String(activeAccounts[0].id))
-      if (activeTargetCurrencies[0]) setToCurrencyCode(activeTargetCurrencies[0].currencyCode)
-      if (activeTargetCurrencies[0]) {
-        const matchingWallet = activeWallets.find(
-          (wallet) => wallet.currencyCode === activeTargetCurrencies[0].currencyCode,
-        )
-        if (matchingWallet) setFxWalletId(String(matchingWallet.walletId))
-      }
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : '환전 정보를 불러오지 못했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
+    setError(initialError)
+  }, [initialError])
 
   function resetExchangeAttempt() {
     setQuote(null)
@@ -207,10 +246,7 @@ function ExchangeFormTab() {
         },
         idempotencyKeyRef.current,
       )
-      const [accountData, walletData] = await Promise.all([getAccounts(), getFxWallets()])
-
-      setAccounts(accountData.filter((account) => account.status === 'ACTIVE'))
-      setWallets(walletData)
+      await onBalancesChanged()
       setOrder(nextOrder)
       idempotencyKeyRef.current = null
       toast.success('환전 주문이 완료되었습니다.')
@@ -238,13 +274,38 @@ function ExchangeFormTab() {
   const canCreateOrder = Boolean(quote && !order && !ordering)
 
   useEffect(() => {
-    if (!foreignCurrencyCode || foreignCurrencyCode === 'KRW') return
+    if (!krwAccountId && accounts[0]) setKrwAccountId(String(accounts[0].id))
+  }, [accounts, krwAccountId])
+
+  useEffect(() => {
+    if (!toCurrencyCode && targetCurrencies[0]) {
+      setToCurrencyCode(targetCurrencies[0].currencyCode)
+    }
+  }, [targetCurrencies, toCurrencyCode])
+
+  useEffect(() => {
+    if (!foreignCurrencyCode || foreignCurrencyCode === 'KRW') {
+      if (fxWalletId) {
+        setFxWalletId('')
+        resetExchangeAttempt()
+      }
+      return
+    }
+
+    const selectedStillAvailable = wallets.some(
+      (wallet) =>
+        wallet.status === 'ACTIVE'
+        && wallet.currencyCode === foreignCurrencyCode
+        && String(wallet.walletId) === fxWalletId,
+    )
+    if (selectedStillAvailable) return
+
     const matchingWallet = wallets.find(
       (wallet) => wallet.status === 'ACTIVE' && wallet.currencyCode === foreignCurrencyCode,
     )
     setFxWalletId(matchingWallet ? String(matchingWallet.walletId) : '')
     resetExchangeAttempt()
-  }, [foreignCurrencyCode])
+  }, [foreignCurrencyCode, fxWalletId, wallets])
 
   if (loading) {
     return (
@@ -374,8 +435,8 @@ function ExchangeFormTab() {
                 </SelectTrigger>
                 <SelectContent className="w-80">
                   {accounts.map((account) => (
-                    <SelectItem key={account.id} value={String(account.id)} className="w-80">
-                      <span className="grid w-68 min-w-0 grid-cols-[minmax(0,1fr)_7rem] items-center gap-3">
+                    <SelectItem key={account.id} value={String(account.id)}>
+                      <span className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_7rem] items-center gap-3">
                         <span className="min-w-0 truncate">{account.nickname}</span>
                         <span className="min-w-0 truncate text-right tabular-nums text-muted-foreground">
                           {formatCurrency(account.balance)}
@@ -481,35 +542,29 @@ function ExchangeFormTab() {
   )
 }
 
-function FxWalletTab() {
-  const [currencies, setCurrencies] = useState<ExchangeCurrency[]>([])
-  const [wallets, setWallets] = useState<FxWallet[]>([])
+function FxWalletTab({
+  currencies,
+  wallets,
+  loading,
+  initialError,
+  onWalletCreated,
+  onWalletClosed,
+}: {
+  currencies: ExchangeCurrency[]
+  wallets: FxWallet[]
+  loading: boolean
+  initialError: string
+  onWalletCreated: (wallet: FxWallet) => void
+  onWalletClosed: (wallet: FxWallet) => void
+}) {
   const [selectedCurrencyCode, setSelectedCurrencyCode] = useState<ExchangeCurrencyCode | ''>('')
-  const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [closingWalletId, setClosingWalletId] = useState<number | null>(null)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialError)
 
   useEffect(() => {
-    loadWalletData()
-  }, [])
-
-  async function loadWalletData() {
-    setLoading(true)
-    setError('')
-    try {
-      const [currencyData, walletData] = await Promise.all([
-        getExchangeCurrencies(),
-        getFxWallets(),
-      ])
-      setCurrencies(currencyData)
-      setWallets(walletData)
-    } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : '외화 지갑 정보를 불러오지 못했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
+    setError(initialError)
+  }, [initialError])
 
   async function handleCreateWallet() {
     if (!selectedCurrencyCode) return
@@ -518,7 +573,7 @@ function FxWalletTab() {
     setError('')
     try {
       const wallet = await createFxWallet({ currencyCode: selectedCurrencyCode })
-      setWallets((prev) => [wallet, ...prev.filter((item) => item.walletId !== wallet.walletId)])
+      onWalletCreated(wallet)
       setSelectedCurrencyCode('')
       toast.success(`${wallet.currencyCode} 지갑을 만들었습니다.`)
     } catch (err) {
@@ -536,9 +591,7 @@ function FxWalletTab() {
     setError('')
     try {
       const closedWallet = await closeFxWallet(wallet.walletId)
-      setWallets((prev) =>
-        prev.map((item) => (item.walletId === closedWallet.walletId ? closedWallet : item)),
-      )
+      onWalletClosed(closedWallet)
       toast.success(`${closedWallet.currencyCode} 지갑을 해지했습니다.`)
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : '외화 지갑 해지에 실패했습니다.')
@@ -662,7 +715,7 @@ function FxWalletTab() {
   )
 }
 
-function ExchangeOrdersTab() {
+function ExchangeOrdersTab({ wallets }: { wallets: FxWallet[] }) {
   const [orderPage, setOrderPage] = useState<PageResponse<ExchangeOrder>>(emptyExchangeOrderPage)
   const [selectedOrder, setSelectedOrder] = useState<ExchangeOrder | null>(null)
   const [loading, setLoading] = useState(true)
@@ -748,6 +801,7 @@ function ExchangeOrdersTab() {
             <CardContent className="flex flex-col gap-0">
               {orders.map((order) => {
                 const selected = selectedOrder?.exchangeOrderId === order.exchangeOrderId
+                const { fromCurrencyCode, toCurrencyCode } = getOrderCurrencyCodes(order, wallets)
                 return (
                   <div
                     key={order.exchangeOrderId}
@@ -769,17 +823,17 @@ function ExchangeOrdersTab() {
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right">
                         <p className="text-sm font-semibold text-foreground">
-                          {formatFxBalance(order.toAmount)}
+                          {formatCurrencyAmount(order.toAmount, toCurrencyCode)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatCurrency(order.fromAmount)} · {exchangeOrderStatusLabel[order.status]}
+                          {formatCurrencyAmount(order.fromAmount, fromCurrencyCode)} · {exchangeOrderStatusLabel[order.status]}
                         </p>
                       </div>
                       <Button
                         type="button"
                         variant={selected ? 'default' : 'outline'}
                         size="icon-sm"
-                        disabled={detailLoading && selected}
+                        disabled={detailLoading}
                         onClick={() => handleSelectOrder(order.exchangeOrderId)}
                         aria-label="환전 주문 상세 보기"
                       >
@@ -823,30 +877,7 @@ function ExchangeOrdersTab() {
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {selectedOrder ? (
-                <>
-                  <SummaryRow label="상태" value={exchangeOrderStatusLabel[selectedOrder.status]} />
-                  <SummaryRow label="방향" value={exchangeDirectionLabel[selectedOrder.direction]} />
-                  <SummaryRow label="출금 금액" value={formatCurrency(selectedOrder.fromAmount)} />
-                  <SummaryRow
-                    label="입금 금액"
-                    value={formatFxBalance(selectedOrder.toAmount)}
-                    strong
-                  />
-                  <SummaryRow
-                    label="적용 환율"
-                    value={`${formatNumber(selectedOrder.appliedRate)}원`}
-                  />
-                  <SummaryRow label="수수료" value={formatCurrency(selectedOrder.fee)} />
-                  <SummaryRow
-                    label="수수료율"
-                    value={`${formatNumber(selectedOrder.feeRate * 100)}%`}
-                  />
-                  <SummaryRow label="주문 시각" value={formatDateTime(selectedOrder.createdAt)} />
-                  <SummaryRow
-                    label="완료 시각"
-                    value={selectedOrder.completedAt ? formatDateTime(selectedOrder.completedAt) : '-'}
-                  />
-                </>
+                <ExchangeOrderDetail order={selectedOrder} wallets={wallets} />
               ) : (
                 <p className="text-sm text-muted-foreground">확인할 환전내역을 선택해 주세요.</p>
               )}
@@ -857,6 +888,41 @@ function ExchangeOrdersTab() {
     </div>
   )
 }
+
+function ExchangeOrderDetail({ order, wallets }: { order: ExchangeOrder; wallets: FxWallet[] }) {
+  const { fromCurrencyCode, toCurrencyCode } = getOrderCurrencyCodes(order, wallets)
+
+  return (
+    <>
+      <SummaryRow label="상태" value={exchangeOrderStatusLabel[order.status]} />
+      <SummaryRow label="방향" value={exchangeDirectionLabel[order.direction]} />
+      <SummaryRow
+        label="출금 금액"
+        value={formatCurrencyAmount(order.fromAmount, fromCurrencyCode)}
+      />
+      <SummaryRow
+        label="입금 금액"
+        value={formatCurrencyAmount(order.toAmount, toCurrencyCode)}
+        strong
+      />
+      <SummaryRow
+        label="적용 환율"
+        value={`${formatNumber(order.appliedRate)}원`}
+      />
+      <SummaryRow label="수수료" value={formatCurrency(order.fee)} />
+      <SummaryRow
+        label="수수료율"
+        value={`${formatNumber(order.feeRate * 100)}%`}
+      />
+      <SummaryRow label="주문 시각" value={formatDateTime(order.createdAt)} />
+      <SummaryRow
+        label="완료 시각"
+        value={order.completedAt ? formatDateTime(order.completedAt) : '-'}
+      />
+    </>
+  )
+}
+
 function SummaryRow({
   label,
   value,
@@ -904,6 +970,29 @@ function formatFxBalance(value: number) {
 function formatExchangeAmount(value: number, currencyCode: ExchangeCurrencyCode) {
   if (currencyCode === 'KRW') return formatCurrency(value)
   return `${formatFxBalance(value)} ${currencyCode}`
+}
+
+function formatCurrencyAmount(value: number, currencyCode?: ExchangeCurrencyCode) {
+  if (currencyCode === 'KRW') return formatCurrency(value)
+  return `${formatFxBalance(value)} ${currencyCode ?? '외화'}`
+}
+
+function getOrderCurrencyCodes(order: ExchangeOrder, wallets: FxWallet[]) {
+  const foreignCurrencyCode = wallets.find(
+    (wallet) => wallet.walletId === order.fxWalletId,
+  )?.currencyCode
+
+  if (order.direction === 'KRW_TO_FOREIGN') {
+    return {
+      fromCurrencyCode: 'KRW' as const,
+      toCurrencyCode: foreignCurrencyCode,
+    }
+  }
+
+  return {
+    fromCurrencyCode: foreignCurrencyCode,
+    toCurrencyCode: 'KRW' as const,
+  }
 }
 
 function formatAccountOption(account: Account) {
