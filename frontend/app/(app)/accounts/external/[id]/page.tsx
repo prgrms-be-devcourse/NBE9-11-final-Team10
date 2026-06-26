@@ -167,11 +167,37 @@ export default function ExternalAccountDetailPage() {
                   {statusLabel[account.status] ?? account.status}
                 </Badge>
               </div>
-              <div className="flex items-center gap-2">
-                <CreditCard className="size-4 text-primary-foreground/70" />
-                <div className="min-w-0">
-                  <p className="text-xs text-primary-foreground/60">{account.organization}</p>
-                  <p className="mt-0.5 text-sm font-mono tracking-wider">{account.accountNoMasked}</p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex min-w-0 items-center gap-2">
+                  <CreditCard className="size-4 shrink-0 text-primary-foreground/70" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-primary-foreground/60">{account.organization}</p>
+                    <p className="mt-0.5 truncate text-sm font-mono tracking-wider">{account.accountNoMasked}</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRefreshInfo}
+                    disabled={infoRefreshing}
+                    className="h-8 bg-primary-foreground/10 px-2.5 text-primary-foreground hover:bg-primary-foreground/20"
+                    title="외부 계좌 정보 업데이트"
+                  >
+                    <RefreshCw data-icon="inline-start" className={infoRefreshing ? 'animate-spin' : ''} />
+                    정보
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRefreshTransactions}
+                    disabled={transactionsRefreshing}
+                    className="h-8 bg-primary-foreground/10 px-2.5 text-primary-foreground hover:bg-primary-foreground/20"
+                    title="거래내역 업데이트"
+                  >
+                    <RefreshCw data-icon="inline-start" className={transactionsRefreshing ? 'animate-spin' : ''} />
+                    거래내역
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -277,21 +303,6 @@ export default function ExternalAccountDetailPage() {
             </Card>
           </section>
 
-          <div className="flex flex-col gap-2">
-            <Button variant="outline" className="w-full justify-start" onClick={handleRefreshInfo} disabled={infoRefreshing}>
-              <RefreshCw data-icon="inline-start" className={infoRefreshing ? 'animate-spin' : ''} />
-              {infoRefreshing ? '정보 업데이트 중...' : '외부 계좌 정보 업데이트'}
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={handleRefreshTransactions}
-              disabled={transactionsRefreshing}
-            >
-              <RefreshCw data-icon="inline-start" className={transactionsRefreshing ? 'animate-spin' : ''} />
-              {transactionsRefreshing ? '거래내역 업데이트 중...' : '거래내역 업데이트'}
-            </Button>
-          </div>
         </>
       )}
     </div>
