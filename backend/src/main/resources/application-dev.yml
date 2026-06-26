@@ -31,5 +31,4 @@ logging:
     com.team10.backend.domain.user.ocr: DEBUG
 
 cors:
-  allowed-origins:
-    - http://localhost:3000
+  allowed-origins: http://localhost:3000

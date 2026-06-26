@@ -32,7 +32,7 @@ public class SecurityConfig {
     private final JwtAccessDeniedHandler accessDeniedHandler;
     private final Environment environment;
 
-    @Value("${cors.allowed-origins}")
+    @Value("${cors.allowed-origins:http://localhost:3000}")
     private List<String> allowedOrigins;
 
     @Bean
