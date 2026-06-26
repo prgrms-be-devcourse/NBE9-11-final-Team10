@@ -261,9 +261,6 @@ function ExchangeFormTab({
     (currency) => currency.status === 'ACTIVE' && currency.currencyCode !== 'KRW',
   )
   const foreignCurrencyCode = fromCurrencyCode === 'KRW' ? toCurrencyCode : fromCurrencyCode
-  const selectableWallets = wallets.filter(
-    (wallet) => wallet.status === 'ACTIVE' && wallet.currencyCode === foreignCurrencyCode,
-  )
   const selectedRate = rates.find((rate) => rate.currencyCode === foreignCurrencyCode)
   const selectedAccount = accounts.find((account) => String(account.id) === krwAccountId)
   const selectedWallet = wallets.find((wallet) => String(wallet.walletId) === fxWalletId)
@@ -421,7 +418,7 @@ function ExchangeFormTab({
                   resetExchangeAttempt()
                 }}
               >
-                <SelectTrigger id="krw-account" className="w-64">
+                <SelectTrigger id="krw-account">
                   {selectedAccount ? (
                     <span className="grid w-full min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-2">
                       <span className="min-w-0 truncate">{selectedAccount.nickname}</span>
@@ -450,36 +447,24 @@ function ExchangeFormTab({
 
             <div className="flex flex-col gap-1.5 sm:pl-8">
               <Label htmlFor="fx-wallet">외화 지갑</Label>
-              <Select
-                value={fxWalletId}
-                onValueChange={(value) => {
-                  if (value == null) return
-                  setFxWalletId(value)
-                  resetExchangeAttempt()
-                }}
-                disabled={!foreignCurrencyCode || selectableWallets.length === 0}
+              <div
+                id="fx-wallet"
+                className="flex h-9 w-full items-center justify-between gap-3 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
               >
-                <SelectTrigger id="fx-wallet">
-                  <span className="max-w-40 truncate">
-                    {selectedWallet ? formatWalletOption(selectedWallet) : '지갑 선택'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {selectableWallets.map((wallet) => (
-                    <SelectItem key={wallet.walletId} value={String(wallet.walletId)}>
-                      <span className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="font-medium">{wallet.currencyCode}</span>
-                        <span className="max-w-28 truncate tabular-nums text-muted-foreground">
-                          {formatFxBalance(wallet.balance)}
-                        </span>
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {foreignCurrencyCode && selectableWallets.length === 0 && (
+                {selectedWallet ? (
+                  <>
+                    <span className="min-w-0 truncate font-medium">{selectedWallet.currencyCode}</span>
+                    <span className="min-w-0 truncate text-right tabular-nums text-muted-foreground">
+                      {formatFxBalance(selectedWallet.balance)} {selectedWallet.currencyCode}
+                    </span>
+                  </>
+                ) : (
+                  <span className="truncate text-muted-foreground">활성 외화 지갑 없음</span>
+                )}
+              </div>
+              {foreignCurrencyCode && !selectedWallet && (
                 <p className="text-xs text-muted-foreground">
-                  먼저 {foreignCurrencyCode} 외화 지갑을 만들어 주세요.
+                  {foreignCurrencyCode} 외화 지갑이 없습니다. 외화지갑 탭에서 먼저 지갑을 만들어 주세요.
                 </p>
               )}
             </div>
@@ -997,10 +982,6 @@ function getOrderCurrencyCodes(order: ExchangeOrder, wallets: FxWallet[]) {
 
 function formatAccountOption(account: Account) {
   return `${account.nickname} ${formatCurrency(account.balance)}`
-}
-
-function formatWalletOption(wallet: FxWallet) {
-  return `${wallet.currencyCode} ${formatFxBalance(wallet.balance)}`
 }
 
 function formatNumber(value: number) {
