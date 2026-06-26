@@ -41,7 +41,7 @@ public class AccountService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(AccountErrorCode.USER_NOT_FOUND));
 
-        if (!Boolean.TRUE.equals(user.getIdentityVerified())) {
+        if (!user.isIdentityVerificationValid()) {
             throw new BusinessException(AccountErrorCode.IDENTITY_VERIFICATION_REQUIRED);
         }
 
