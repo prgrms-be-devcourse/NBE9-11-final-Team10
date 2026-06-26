@@ -51,10 +51,15 @@ import { formatCurrency, formatDate, formatDateTime } from '@/lib/format'
 import type { Account, PageResponse, Transaction } from '@/lib/types'
 import { ApiRequestError } from '@/lib/api'
 
-const statusLabel: Record<string, string> = {
-  ACTIVE: '정상',
-  SUSPENDED: '정지',
-  CLOSED: '해지',
+const accountTypeLabel: Record<string, string> = {
+  DEPOSIT: '입출금',
+  SAVING_DEPOSIT: '예금',
+  SAVING_INSTALLMENT: '적금',
+}
+
+function getAccountTypeLabel(accountType?: string) {
+  if (!accountType) return '계좌'
+  return accountTypeLabel[accountType] ?? accountType
 }
 
 const emptyTransactionPage: PageResponse<Transaction> = {
@@ -218,8 +223,8 @@ export default function AccountDetailPage() {
                     {formatCurrency(account.balance)}
                   </p>
                 </div>
-                <Badge variant="secondary" className="text-xs">
-                  {statusLabel[account.status] ?? account.status}
+                <Badge variant="default" className="text-xs">
+                  {getAccountTypeLabel(account.accountType)}
                 </Badge>
               </div>
               <div>
@@ -242,7 +247,7 @@ export default function AccountDetailPage() {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">계좌 유형</span>
                 <span className="text-sm font-medium text-foreground">
-                  {account.accountType === 'DEPOSIT' ? '입출금' : account.accountType}
+                  {getAccountTypeLabel(account.accountType)}
                 </span>
               </div>
               <div className="flex justify-between items-center">

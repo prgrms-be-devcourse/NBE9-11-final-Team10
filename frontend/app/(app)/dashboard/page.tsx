@@ -22,6 +22,7 @@ import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/contexts/AuthContext'
 import { getAccounts, getExternalAccounts } from '@/lib/api/accounts'
 import { getTransactions } from '@/lib/api/transactions'
+import { getTransactionDisplayName } from '@/lib/transaction-display'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 import type { Account, Transaction } from '@/lib/types'
 import type { ExternalAccount } from '@/lib/api/accounts'
@@ -294,7 +295,7 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-foreground">
-                        {txn.counterpartyName ?? '알 수 없음'}
+                        {getTransactionDisplayName(txn)}
                       </p>
                       <p className="text-xs text-muted-foreground">{formatDateTime(txn.createdAt)}</p>
                     </div>

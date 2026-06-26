@@ -20,7 +20,7 @@ export interface AuthResponse {
 // Account
 // ──────────────────────────────────────────────
 export type AccountStatus = 'ACTIVE' | 'SUSPENDED' | 'CLOSED'
-export type AccountType = 'DEPOSIT'
+export type AccountType = 'DEPOSIT' | 'SAVING_DEPOSIT' | 'SAVING_INSTALLMENT'
 
 export interface Account {
   id: number
@@ -45,6 +45,7 @@ export interface Transaction {
   direction: TransactionDirection
   type?: string
   counterpartyName?: string
+  displayName?: string
   memo?: string
   balanceAfter?: number
   createdAt: string

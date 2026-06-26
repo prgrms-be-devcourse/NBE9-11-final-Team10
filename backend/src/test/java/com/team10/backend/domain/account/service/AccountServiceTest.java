@@ -172,6 +172,7 @@ class AccountServiceTest {
         assertThat(responses.get(0).id()).isEqualTo(1L);
         assertThat(responses.get(0).accountNumber()).isEqualTo("100200300001");
         assertThat(responses.get(0).nickname()).isEqualTo("생활비 계좌");
+        assertThat(responses.get(0).accountType()).isEqualTo(AccountType.DEPOSIT);
         assertThat(responses.get(0).balance()).isZero();
         assertThat(responses.get(0).status()).isEqualTo(AccountStatus.ACTIVE);
     }
@@ -192,6 +193,7 @@ class AccountServiceTest {
         assertThat(responses.get(0).id()).isEqualTo(1L);
         assertThat(responses.get(0).accountNumber()).isEqualTo("100200300001");
         assertThat(responses.get(0).nickname()).isEqualTo("생활비 계좌");
+        assertThat(responses.get(0).accountType()).isEqualTo(AccountType.DEPOSIT);
         assertThat(responses.get(0).status()).isEqualTo(AccountStatus.CLOSED);
     }
 

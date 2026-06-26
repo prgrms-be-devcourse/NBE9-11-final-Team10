@@ -232,6 +232,7 @@ class AccountControllerTest {
                 1L,
                 "100200300001",
                 "생활비 계좌",
+                AccountType.DEPOSIT,
                 150000L,
                 AccountStatus.ACTIVE
         );
@@ -243,6 +244,7 @@ class AccountControllerTest {
                 .andExpect(jsonPath("$[0].id").value(1L))
                 .andExpect(jsonPath("$[0].accountNumber").value("100200300001"))
                 .andExpect(jsonPath("$[0].nickname").value("생활비 계좌"))
+                .andExpect(jsonPath("$[0].accountType").value("DEPOSIT"))
                 .andExpect(jsonPath("$[0].balance").value(150000L))
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"));
 
@@ -256,6 +258,7 @@ class AccountControllerTest {
                 1L,
                 "100200300001",
                 "생활비 계좌",
+                AccountType.DEPOSIT,
                 0L,
                 AccountStatus.CLOSED
         );
@@ -267,6 +270,7 @@ class AccountControllerTest {
                 .andExpect(jsonPath("$[0].id").value(1L))
                 .andExpect(jsonPath("$[0].accountNumber").value("100200300001"))
                 .andExpect(jsonPath("$[0].nickname").value("생활비 계좌"))
+                .andExpect(jsonPath("$[0].accountType").value("DEPOSIT"))
                 .andExpect(jsonPath("$[0].status").value("CLOSED"));
 
         verify(accountService).getClosedAccounts(1L);

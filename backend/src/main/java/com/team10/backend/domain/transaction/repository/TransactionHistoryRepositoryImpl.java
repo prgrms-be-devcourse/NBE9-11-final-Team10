@@ -48,10 +48,13 @@ public class TransactionHistoryRepositoryImpl implements TransactionHistoryRepos
                 .select(Projections.constructor(
                         TransactionHistorySearchRes.class,
                         transactionHistory.id,
+                        transactionHistory.type,
+                        transactionHistory.counterpartyName,
                         transactionHistory.counterpartyName,
                         transactionHistory.amount,
                         transactionHistory.balanceAfter,
                         transactionHistory.transactedAt,
+                        transactionHistory.memo,
                         transactionHistory.direction
                 ))
                 .from(transactionHistory)
