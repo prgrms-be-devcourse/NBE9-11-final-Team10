@@ -26,6 +26,7 @@ import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/contexts/AuthContext'
 import { getAccounts } from '@/lib/api/accounts'
 import { getTransactions } from '@/lib/api/transactions'
+import { getTransactionCategoryLabel, getTransactionDisplayName } from '@/lib/transaction-display'
 import { formatCurrency, formatDateTime } from '@/lib/format'
 import type { Account, PageResponse, Transaction, TransactionFilter } from '@/lib/types'
 
@@ -248,10 +249,10 @@ export default function TransactionsPage() {
                     <div>
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-medium text-foreground">
-                          {txn.counterpartyName ?? '알 수 없음'}
+                          {getTransactionDisplayName(txn)}
                         </p>
                         <Badge variant={txn.direction === 'IN' ? 'default' : 'secondary'} className="text-xs h-4">
-                          {txn.direction === 'IN' ? '입금' : '출금'}
+                          {getTransactionCategoryLabel(txn)}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">{formatDateTime(txn.createdAt)}</p>

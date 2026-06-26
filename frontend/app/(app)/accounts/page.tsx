@@ -15,11 +15,15 @@ import { formatCurrency, maskAccountNumber } from '@/lib/format'
 import type { Account } from '@/lib/types'
 import type { ExternalAccount } from '@/lib/api/accounts'
 
-const statusLabel: Record<string, string> = {
-  ACTIVE: '정상',
-  SUSPENDED: '정지',
-  CLOSED: '해지',
-  UNKNOWN: '확인 필요',
+const accountTypeLabel: Record<string, string> = {
+  DEPOSIT: '입출금',
+  SAVING_DEPOSIT: '예금',
+  SAVING_INSTALLMENT: '적금',
+}
+
+function getAccountTypeLabel(accountType?: string) {
+  if (!accountType) return '계좌'
+  return accountTypeLabel[accountType] ?? accountType
 }
 
 export default function AccountsPage() {
@@ -172,11 +176,8 @@ function AccountCard({ account, disabled = false }: { account: Account; disabled
             <div>
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold text-foreground">{account.nickname}</p>
-                <Badge
-                  variant={account.status === 'ACTIVE' ? 'default' : 'secondary'}
-                  className="text-xs h-5"
-                >
-                  {statusLabel[account.status] ?? account.status}
+                <Badge variant="default" className="text-xs h-5">
+                  {getAccountTypeLabel(account.accountType)}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -215,12 +216,6 @@ function ExternalAccountCard({ account }: { account: ExternalAccount }) {
                 </p>
                 <Badge variant="outline" className="text-xs h-5">
                   외부
-                </Badge>
-                <Badge
-                  variant={account.status === 'ACTIVE' ? 'default' : 'secondary'}
-                  className="text-xs h-5"
-                >
-                  {statusLabel[account.status] ?? account.status}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
