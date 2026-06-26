@@ -84,4 +84,53 @@ class CodefExAccountTransactionMapperTest {
         assertThat(snapshots.get(0).direction().name()).isEqualTo("OUT");
         assertThat(snapshots.get(0).amount()).isEqualByComparingTo("45000");
     }
+
+    @Test
+    void fallbackTransactionKeyDoesNotDependOnResponseIndex() throws Exception {
+        JsonNode firstResponse = objectMapper.readTree("""
+                {
+                  "resTrHistoryList": [
+                    {
+                      "resAccountTrDate": "20260618",
+                      "resAccountTrTime": "143000",
+                      "resAccountOut": "45000",
+                      "resAfterTranBalance": "955000",
+                      "resAccountDesc1": "스타벅스"
+                    },
+                    {
+                      "resAccountTrDate": "20260619",
+                      "resAccountTrTime": "090000",
+                      "resAccountIn": "100000",
+                      "resAfterTranBalance": "1055000",
+                      "resAccountDesc1": "급여"
+                    }
+                  ]
+                }
+                """);
+        JsonNode secondResponse = objectMapper.readTree("""
+                {
+                  "resTrHistoryList": [
+                    {
+                      "resAccountTrDate": "20260619",
+                      "resAccountTrTime": "090000",
+                      "resAccountIn": "100000",
+                      "resAfterTranBalance": "1055000",
+                      "resAccountDesc1": "급여"
+                    },
+                    {
+                      "resAccountTrDate": "20260618",
+                      "resAccountTrTime": "143000",
+                      "resAccountOut": "45000",
+                      "resAfterTranBalance": "955000",
+                      "resAccountDesc1": "스타벅스"
+                    }
+                  ]
+                }
+                """);
+
+        String firstKey = mapper.toSnapshots("0004", "1234567890", firstResponse).get(0).transactionKey();
+        String secondKey = mapper.toSnapshots("0004", "1234567890", secondResponse).get(1).transactionKey();
+
+        assertThat(secondKey).isEqualTo(firstKey);
+    }
 }

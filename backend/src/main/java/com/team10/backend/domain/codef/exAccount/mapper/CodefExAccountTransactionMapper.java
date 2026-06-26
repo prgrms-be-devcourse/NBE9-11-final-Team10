@@ -99,8 +99,19 @@ public class CodefExAccountTransactionMapper {
             String memo = firstText(transaction, "resAccountDesc3", "resMemo", "memo");
             String rawCategory = firstText(transaction, "resAccountTrType", "resTransactionType", "resCategory", "category");
             String transactionKey = firstText(transaction, "resAccountTrNo", "resTransactionId", "transactionKey", "resSeq");
+            BigDecimal balanceAfter = firstDecimal(transaction, "resAfterTranBalance", "resAccountBalance", "resBalance", "balanceAfter");
             if (transactionKey == null) {
-                transactionKey = fallbackKey(organization, accountNumber, transactedAt, direction, amount, counterpartyName, index);
+                transactionKey = fallbackKey(
+                        organization,
+                        accountNumber,
+                        transactedAt,
+                        direction,
+                        amount,
+                        balanceAfter,
+                        counterpartyName,
+                        memo,
+                        rawCategory
+                );
             }
 
             snapshots.add(new CodefExAccountTransactionSnapshot(
@@ -108,7 +119,7 @@ public class CodefExAccountTransactionMapper {
                     transactedAt,
                     direction,
                     amount,
-                    firstDecimal(transaction, "resAfterTranBalance", "resAccountBalance", "resBalance", "balanceAfter"),
+                    balanceAfter,
                     counterpartyName,
                     memo,
                     rawCategory
@@ -267,12 +278,17 @@ public class CodefExAccountTransactionMapper {
             LocalDateTime transactedAt,
             ExAccountTransactionDirection direction,
             BigDecimal amount,
+            BigDecimal balanceAfter,
             String counterpartyName,
-            int index
+            String memo,
+            String rawCategory
     ) {
         String rawKey = organization + "-" + accountNumber + "-" + transactedAt + "-"
                 + direction + "-" + amount.toPlainString() + "-"
-                + (counterpartyName == null ? "" : counterpartyName) + "-" + index;
+                + (balanceAfter == null ? "" : balanceAfter.toPlainString()) + "-"
+                + normalizedKeyPart(counterpartyName) + "-"
+                + normalizedKeyPart(memo) + "-"
+                + normalizedKeyPart(rawCategory);
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(rawKey.getBytes(StandardCharsets.UTF_8));
@@ -288,5 +304,9 @@ public class CodefExAccountTransactionMapper {
         } catch (NoSuchAlgorithmException exception) {
             throw new CodefExAccountClientException("SHA-256 알고리즘을 사용할 수 없습니다.", exception);
         }
+    }
+
+    private String normalizedKeyPart(String value) {
+        return value == null ? "" : value.trim();
     }
 }
