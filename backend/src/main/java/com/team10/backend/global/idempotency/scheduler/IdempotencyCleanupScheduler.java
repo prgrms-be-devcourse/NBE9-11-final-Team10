@@ -4,6 +4,7 @@ import com.team10.backend.global.idempotency.service.IdempotencyService;
 import com.team10.backend.global.lock.DistributedLockTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -14,7 +15,15 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class IdempotencyCleanupScheduler {
 
-    private static final String LOCK_KEY = "lock:scheduler:idempotency-cleanup";
+    @Value("${idempotency.stale-processing-timeout-minutes:10}")
+    private long staleProcessingTimeoutMinutes;
+    @Value("${idempotency.retention-days:15}")
+    private long retentionDays;
+
+    private static final String EXPIRE_STALE_PROCESSING_LOCK_KEY =
+            "lock:scheduler:idempotency-expire-stale-processing";
+    private static final String DELETE_OLD_RECORDS_LOCK_KEY =
+            "lock:scheduler:idempotency-delete-old-records";
     private static final Duration LOCK_LEASE_TIME = Duration.ofMinutes(5);
 
     private final IdempotencyService idempotencyService;
@@ -23,23 +32,44 @@ public class IdempotencyCleanupScheduler {
     @Scheduled(fixedDelayString = "${idempotency.cleanup-fixed-delay-ms:60000}")
     public void expireStaleProcessing() {
         try {
-            // 오래된 멱등성 레코드 정리는 모든 인스턴스가 동시에 수행할 필요가 없으므로,
-            // 하나의 인스턴스만 정리하고 나머지는 정상적으로 건너뛴다.
+            // PROCESSING 상태가 오래 지속된 레코드는 짧은 주기로 만료 처리한다.
+            // 멀티 인스턴스 환경에서는 하나의 인스턴스만 처리하고 나머지는 정상적으로 건너뛴다.
             boolean executed = lockTemplate.tryExecuteWithLock(
-                    LOCK_KEY,
+                    EXPIRE_STALE_PROCESSING_LOCK_KEY,
                     LOCK_LEASE_TIME,
                     () -> {
-                        int expiredCount = idempotencyService.expireStaleProcessing(Duration.ofMinutes(10));
-                        int deletedCount = idempotencyService.deleteRecordsOlderThan(Duration.ofDays(15));
-                        log.info("멱등성 레코드 정리 완료. expiredCount={}, deletedCount={}", expiredCount, deletedCount);
+                        int expiredCount = idempotencyService.expireStaleProcessing(Duration.ofMinutes(staleProcessingTimeoutMinutes));
+                        log.info("오래된 PROCESSING 멱등성 레코드 만료 처리 완료. expiredCount={}", expiredCount);
                     }
             );
 
             if (!executed) {
-                log.info("다른 인스턴스에서 멱등성 레코드 정리가 실행 중이므로 이번 실행을 건너뜁니다.");
+                log.info("다른 인스턴스에서 오래된 PROCESSING 멱등성 레코드 만료 처리가 실행 중이므로 이번 실행을 건너뜁니다.");
             }
         } catch (RuntimeException e) {
-            log.warn("멱등성 레코드 정리 실패", e);
+            log.warn("오래된 PROCESSING 멱등성 레코드 만료 처리 실패", e);
+        }
+    }
+
+    @Scheduled(cron = "${idempotency.delete-old-records-cron:0 0 3 * * *}", zone = "Asia/Seoul")
+    public void deleteOldRecords() {
+        try {
+            // 보관 기간이 지난 종료 상태 레코드는 하루에 한 번 삭제한다.
+            // 대량 삭제 작업이 중복 실행되지 않도록 별도 락을 사용한다.
+            boolean executed = lockTemplate.tryExecuteWithLock(
+                    DELETE_OLD_RECORDS_LOCK_KEY,
+                    LOCK_LEASE_TIME,
+                    () -> {
+                        int deletedCount = idempotencyService.deleteRecordsOlderThan(Duration.ofDays(retentionDays));
+                        log.info("보관 기간이 지난 멱등성 레코드 삭제 완료. deletedCount={}", deletedCount);
+                    }
+            );
+
+            if (!executed) {
+                log.info("다른 인스턴스에서 보관 기간이 지난 멱등성 레코드 삭제가 실행 중이므로 이번 실행을 건너뜁니다.");
+            }
+        } catch (RuntimeException e) {
+            log.warn("보관 기간이 지난 멱등성 레코드 삭제 실패", e);
         }
     }
 }
