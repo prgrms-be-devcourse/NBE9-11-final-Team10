@@ -56,6 +56,38 @@ class AccountLockServiceTest {
     }
 
     @Test
+    @DisplayName("락 대상 계좌가 null이면 예외가 발생한다")
+    void lockTwoAccountsWithNullAccount() {
+        Account account = createAccount(1L);
+
+        assertThatThrownBy(() -> accountLockService.lockTwoAccounts(null, account))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Accounts to lock must not be null");
+    }
+
+    @Test
+    @DisplayName("락 대상 계좌 ID가 null이면 예외가 발생한다")
+    void lockTwoAccountsWithNullAccountId() {
+        Account accountWithoutId = createAccount(null);
+        Account account = createAccount(1L);
+
+        assertThatThrownBy(() -> accountLockService.lockTwoAccounts(accountWithoutId, account))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Account ID must not be null");
+    }
+
+    @Test
+    @DisplayName("같은 계좌를 두 번 락 조회하려 하면 예외가 발생한다")
+    void lockTwoAccountsWithSameAccount() {
+        Account firstAccount = createAccount(1L);
+        Account secondAccount = createAccount(1L);
+
+        assertThatThrownBy(() -> accountLockService.lockTwoAccounts(firstAccount, secondAccount))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot lock the same account twice: 1");
+    }
+
+    @Test
     @DisplayName("락 조회 대상 계좌가 없으면 ACCOUNT_NOT_FOUND 예외가 발생한다")
     void findByIdForUpdateNotFound() {
         when(accountRepository.findByIdForUpdate(1L)).thenReturn(Optional.empty());

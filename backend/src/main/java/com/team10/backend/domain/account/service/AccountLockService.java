@@ -19,10 +19,12 @@ public class AccountLockService {
     }
 
     public LockedAccounts lockTwoAccounts(Account firstAccount, Account secondAccount) {
+        validateLockTargets(firstAccount, secondAccount);
+
         Long firstAccountId = firstAccount.getId();
         Long secondAccountId = secondAccount.getId();
 
-        if (firstAccountId < secondAccountId) {
+        if (firstAccountId.compareTo(secondAccountId) < 0) {
             Account lockedFirstAccount = findByIdForUpdate(firstAccountId);
             Account lockedSecondAccount = findByIdForUpdate(secondAccountId);
             return new LockedAccounts(lockedFirstAccount, lockedSecondAccount);
@@ -31,6 +33,23 @@ public class AccountLockService {
         Account lockedSecondAccount = findByIdForUpdate(secondAccountId);
         Account lockedFirstAccount = findByIdForUpdate(firstAccountId);
         return new LockedAccounts(lockedFirstAccount, lockedSecondAccount);
+    }
+
+    private void validateLockTargets(Account firstAccount, Account secondAccount) {
+        if (firstAccount == null || secondAccount == null) {
+            throw new IllegalArgumentException("Accounts to lock must not be null");
+        }
+
+        Long firstAccountId = firstAccount.getId();
+        Long secondAccountId = secondAccount.getId();
+
+        if (firstAccountId == null || secondAccountId == null) {
+            throw new IllegalArgumentException("Account ID must not be null");
+        }
+
+        if (firstAccountId.equals(secondAccountId)) {
+            throw new IllegalArgumentException("Cannot lock the same account twice: " + firstAccountId);
+        }
     }
 
     public record LockedAccounts(Account firstAccount, Account secondAccount) {
