@@ -21,7 +21,10 @@ curl http://localhost:8080/actuator/prometheus
 Prometheus:
 
 ```bash
-prometheus --config.file=perf/prometheus/prometheus.local.yml
+prometheus \
+  --config.file=perf/prometheus/prometheus.local.yml \
+  --storage.tsdb.path=perf/prometheus/data \
+  --web.listen-address=127.0.0.1:9090
 ```
 
 Grafana:
@@ -30,7 +33,7 @@ Grafana:
 grafana-server
 ```
 
-Grafana는 `http://localhost:3000`에서 접속할 수 있습니다. 접속 후 Prometheus를 데이터 소스로 추가합니다.
+Grafana는 `http://localhost:3001`에서 접속할 수 있습니다. 접속 후 Prometheus를 데이터 소스로 추가합니다.
 
 ```text
 http://localhost:9090
