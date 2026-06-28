@@ -29,7 +29,7 @@ cat > /dockerProjects/app-data/docker-compose.yml <<'COMPOSE'
 ${compose_yml}
 COMPOSE
 
-cat > /dockerProjects/app-data/.env <<'ENV'
+cat > /dockerProjects/app-data/.env.local <<'ENV'
 MYSQL_ROOT_PASSWORD=${mysql_root_password}
 REDIS_PASSWORD=${redis_password}
 ENV
@@ -56,4 +56,4 @@ server {
 }
 NGINX
 
-docker compose --env-file /dockerProjects/app-data/.env -f /dockerProjects/app-data/docker-compose.yml up -d
+docker compose --env-file /dockerProjects/app-data/.env.local -f /dockerProjects/app-data/docker-compose.yml up -d
