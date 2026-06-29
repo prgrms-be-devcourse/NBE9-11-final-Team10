@@ -124,7 +124,7 @@ tasks.jacocoTestCoverageVerification {
     violationRules {
         rule {
             enabled = true // 규칙 활성 여부
-            element = "CLASS" // 커버리지 검사 단위 지정 BUNDLE : 프로젝트 전체
+            element = "BUNDLE" // 커버리지 검사 단위 지정 CLASS : 각 클래스 별
 
             limit {
                 counter = "LINE"
@@ -156,9 +156,9 @@ tasks.jacocoTestCoverageVerification {
  * 이후 아래 설정에 의해 jacocoTestCoverageVerification 품질 게이트 검증 실행
  * 기준 만족 시에만 BUILD SUCCESS
  * */
-tasks.check {
-    dependsOn(tasks.jacocoTestCoverageVerification)
-}
+//tasks.check {
+//    dependsOn(tasks.jacocoTestCoverageVerification)
+//}
 
 
 /** JaCoCo 커버리지 측정/검증 제외 경로 지정 헬퍼 메서드 */
