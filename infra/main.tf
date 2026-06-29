@@ -331,7 +331,8 @@ resource "aws_instance" "edge" {
   # EC2 최초 생성 시 Docker 및 NPM을 자동 설치합니다.
   user_data = templatefile("${path.module}/user-data/edge.sh.tftpl",
     {
-      compose_yml = file("${path.module}/compose/edge.docker-compose.yml")
+      compose_yml         = file("${path.module}/compose/edge.docker-compose.yml")
+      app_data_private_ip = aws_instance.app_data.private_ip
     }
   )
 
