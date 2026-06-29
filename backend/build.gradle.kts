@@ -122,6 +122,18 @@ tasks.jacocoTestCoverageVerification {
 
     /** 품질 검사 통과 기준 정의 */
     violationRules {
+//        특정 경로에 대해서만 CLASS를 적용해 엄격한 검사를 수행할 수 있다
+//        rule {
+//            enabled = true
+//            element = "CLASS"
+//
+//            includes = listOf("com.team.service.*")
+//
+//            limit {
+//
+//            }
+//        }
+
         rule {
             enabled = true // 규칙 활성 여부
             element = "BUNDLE" // 커버리지 검사 단위 지정 CLASS : 각 클래스 별
