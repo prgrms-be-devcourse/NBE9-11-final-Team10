@@ -1,7 +1,7 @@
 package com.team10.backend.global.idempotency.service;
 
-import com.team10.backend.domain.transaction.type.TransactionType;
-import com.team10.backend.domain.transfer.dto.res.TopUpRes;
+import com.team10.backend.domain.transaction.domain.type.TransactionType;
+import com.team10.backend.domain.transfer.application.dto.res.TopUpRes;
 import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;

@@ -1,6 +1,6 @@
 package com.team10.backend.global.idempotency.entity;
 
-import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.domain.user.domain.entity.User;
 import com.team10.backend.global.entity.BaseEntity;
 import com.team10.backend.global.idempotency.type.IdempotencyOperationType;
 import com.team10.backend.global.idempotency.type.IdempotencyStatus;

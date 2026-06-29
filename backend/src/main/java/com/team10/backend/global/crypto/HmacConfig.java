@@ -1,4 +1,6 @@
 package com.team10.backend.global.crypto;
+import com.team10.backend.domain.investment.infrastructure.config.InvestmentConfig;
+import com.team10.backend.domain.investment.infrastructure.config.KisProperties;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;

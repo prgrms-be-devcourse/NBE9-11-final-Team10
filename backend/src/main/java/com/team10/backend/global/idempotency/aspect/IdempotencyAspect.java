@@ -1,4 +1,6 @@
 package com.team10.backend.global.idempotency.aspect;
+import com.team10.backend.domain.account.application.dto.res.AccountSummaryRes;
+import com.team10.backend.domain.transfer.application.dto.res.TransferRes;
 
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;

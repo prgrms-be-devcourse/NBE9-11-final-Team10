@@ -1,9 +1,9 @@
 package com.team10.backend.global.idempotency.aspect;
 
-import com.team10.backend.domain.transaction.type.TransactionType;
-import com.team10.backend.domain.transfer.dto.res.TopUpRes;
-import com.team10.backend.domain.transfer.exception.TransferErrorCode;
-import com.team10.backend.domain.user.entity.User;
+import com.team10.backend.domain.transaction.domain.type.TransactionType;
+import com.team10.backend.domain.transfer.application.dto.res.TopUpRes;
+import com.team10.backend.domain.transfer.domain.exception.TransferErrorCode;
+import com.team10.backend.domain.user.domain.entity.User;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.idempotency.annotation.Idempotent;
 import com.team10.backend.global.idempotency.entity.Idempotency;

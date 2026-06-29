@@ -2,8 +2,8 @@ package com.team10.backend.global.idempotency.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.team10.backend.domain.user.entity.User;
-import com.team10.backend.domain.user.repository.UserRepository;
+import com.team10.backend.domain.user.domain.entity.User;
+import com.team10.backend.domain.user.domain.repository.UserRepository;
 import com.team10.backend.global.exception.BusinessException;
 import com.team10.backend.global.exception.GlobalErrorCode;
 import com.team10.backend.global.idempotency.entity.Idempotency;
