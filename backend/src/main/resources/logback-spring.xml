@@ -27,7 +27,7 @@
               class="ch.qos.logback.core.rolling.RollingFileAppender">
 
         <!-- 현재 기록 중인 로그 파일 -->
-        <file>logs/app.log</file>
+        <file>/app/logs/app.log</file>
 
         <!--
             SizeAndTimeBasedRollingPolicy
@@ -48,7 +48,7 @@
                 app-2026-06-27.0.log.gz
             -->
             <fileNamePattern>
-                logs/app-%d{yyyy-MM-dd}.%i.log.gz
+                /app/logs/app-%d{yyyy-MM-dd}.%i.log.gz
             </fileNamePattern>
 
             <!-- 파일 하나가 100MB를 넘으면 분할 -->
