@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -159,5 +160,23 @@ public class ExAccountController {
     ) {
         List<ExAccountRes> response = exAccountSyncService.linkAccounts(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @Operation(
+            summary = "연동된 외부 계좌 삭제",
+            description = "연동된 외부 계좌와 해당 계좌의 거래내역을 모두 삭제합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "외부 계좌 삭제 성공"),
+            @ApiResponse(responseCode = "404", description = "외부 계좌를 찾을 수 없음")
+    })
+    @DeleteMapping("/accounts/{exAccountId}")
+    public ResponseEntity<Void> deleteAccount(
+            @AuthenticationPrincipal Long userId,
+            @Parameter(description = "외부 계좌 ID", example = "10")
+            @PathVariable Long exAccountId
+    ) {
+        exAccountService.deleteAccount(userId, exAccountId);
+        return ResponseEntity.noContent().build();
     }
 }

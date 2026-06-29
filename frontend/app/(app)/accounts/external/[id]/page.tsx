@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   CreditCard,
   RefreshCw,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -16,8 +17,20 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { useAuth } from '@/contexts/AuthContext'
 import {
+  deleteExternalAccount,
   getExternalAccount,
   refreshExternalAccountInfo,
   refreshExternalAccountTransactions,
@@ -56,6 +69,7 @@ export default function ExternalAccountDetailPage() {
   const [transactionsError, setTransactionsError] = useState('')
   const [infoRefreshing, setInfoRefreshing] = useState(false)
   const [transactionsRefreshing, setTransactionsRefreshing] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const autoRefreshAttempted = useRef(false)
 
   async function loadDetail(options?: { silent?: boolean }) {
@@ -132,6 +146,20 @@ export default function ExternalAccountDetailPage() {
       }
     } finally {
       setTransactionsRefreshing(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!user || !account) return
+    setDeleteLoading(true)
+    try {
+      await deleteExternalAccount(account.id)
+      toast.success('외부 계좌 연동이 해제되었습니다.')
+      router.push('/accounts')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '오류가 발생했습니다.')
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -307,6 +335,44 @@ export default function ExternalAccountDetailPage() {
             </Card>
           </section>
 
+          {/* Actions */}
+          <div className="flex flex-col gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+                  />
+                }
+              >
+                <Trash2 data-icon="inline-start" />
+                외부 계좌 연동 해제
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>외부 계좌 연동을 해제하시겠습니까?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    연동을 해제하면 이 계좌 정보와 조회된 거래내역이 앱 내에서 모두 삭제됩니다.
+                    (실제 은행 계좌가 해지되는 것은 아닙니다.)
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>취소</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(event) => {
+                      event.preventDefault()
+                      handleDelete()
+                    }}
+                    disabled={deleteLoading}
+                    className="bg-destructive hover:bg-destructive/90"
+                  >
+                    {deleteLoading ? '처리 중...' : '연동 해제'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </>
       )}
     </div>
