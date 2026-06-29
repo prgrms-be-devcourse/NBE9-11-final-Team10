@@ -26,8 +26,8 @@ spring:
 
 logging:
   level:
-    org.hibernate.orm.jdbc.bind: TRACE
-    org.hibernate.orm.jdbc.extract: TRACE
+    # bind/extract TRACE는 모든 SQL의 바인드/추출 값(이메일·전화번호·생년월일 등 PII성 컬럼 포함)을
+    # 평문으로 로그에 남기므로 비활성화. SQL 문 자체는 위 show-sql/format_sql로 계속 확인 가능.
     com.team10.backend.domain.user.ocr: DEBUG
 
 cors:
