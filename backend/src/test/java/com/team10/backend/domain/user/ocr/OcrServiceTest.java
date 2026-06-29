@@ -166,7 +166,8 @@ class OcrServiceTest {
         @Test
         @DisplayName("OCR 추출 실패 → saveFailure(이미지 처리 중 오류) — 예외 메시지는 DB에 남지 않는다, 락은 해제된다")
         void ocrExtractionFails_savesFailure() {
-            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verificationWithMatchingUser());
+            IdentityVerification verification = verificationWithMatchingUser();
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verification);
             when(codefOcrClient.extractIdCard(any()))
                     .thenThrow(new BusinessException(UserErrorCode.OCR_FAILED));
 
@@ -283,7 +284,8 @@ class OcrServiceTest {
         @Test
         @DisplayName("OCR 처리 오류 로그 — 예외 메시지는 DB(failureReason)에는 남지 않고 로그(error)에만 남는다")
         void ocrExtractionFails_exceptionMessageOnlyInLogNotInDb() {
-            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verificationWithMatchingUser());
+            IdentityVerification verification = verificationWithMatchingUser();
+            when(ocrPersistenceService.loadVerification(10L)).thenReturn(verification);
             when(codefOcrClient.extractIdCard(any()))
                     .thenThrow(new BusinessException(UserErrorCode.OCR_FAILED));
 

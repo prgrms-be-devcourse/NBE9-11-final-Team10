@@ -190,6 +190,14 @@ class UserConcurrencyE2ETest {
                             "DELETE FROM user_consents WHERE user_id IN (SELECT id FROM users WHERE email = :email)")
                     .setParameter("email", email)
                     .executeUpdate();
+            // user_profile_interests는 user_profiles를 FK(profile_id)로 참조하는 @ElementCollection 테이블 —
+            // user_profiles보다 먼저 지우지 않으면 FK 제약 위반(ConstraintViolationException)이 발생한다.
+            entityManager.createNativeQuery(
+                            "DELETE FROM user_profile_interests WHERE profile_id IN "
+                                    + "(SELECT id FROM user_profiles WHERE user_id IN "
+                                    + "(SELECT id FROM users WHERE email = :email))")
+                    .setParameter("email", email)
+                    .executeUpdate();
             entityManager.createNativeQuery(
                             "DELETE FROM user_profiles WHERE user_id IN (SELECT id FROM users WHERE email = :email)")
                     .setParameter("email", email)
