@@ -37,3 +37,4 @@ services:
       TZ: Asia/Seoul
     volumes:
       - /dockerProjects/grafana/data:/var/lib/grafana
+      - /dockerProjects/grafana/provisioning:/etc/grafana/provisioning:ro
