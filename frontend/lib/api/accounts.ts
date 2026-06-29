@@ -232,3 +232,12 @@ export async function refreshExternalAccountTransactions(
     { method: 'POST' },
   )
 }
+
+/**
+ * 연동된 외부 계좌를 삭제(연동 해제)합니다.
+ */
+export async function deleteExternalAccount(accountId: string | number): Promise<void> {
+  return apiFetch<void>(`/api/v1/external-accounts/accounts/${accountId}`, {
+    method: 'DELETE',
+  })
+}
