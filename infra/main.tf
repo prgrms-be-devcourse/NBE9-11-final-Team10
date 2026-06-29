@@ -179,6 +179,22 @@ resource "aws_security_group" "app_data" {
     security_groups = [aws_security_group.edge.id]
   }
 
+  ingress {
+    description     = "Backend 1 Prometheus metrics"
+    from_port       = 18081
+    to_port         = 18081
+    protocol        = "tcp"
+    security_groups = [aws_security_group.edge.id]
+  }
+
+  ingress {
+    description     = "Backend 2 Prometheus metrics"
+    from_port       = 18082
+    to_port         = 18082
+    protocol        = "tcp"
+    security_groups = [aws_security_group.edge.id]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
