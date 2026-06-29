@@ -20,8 +20,9 @@ docker exec -i mysql mysql -u root -p snaptix < 04_k6_young_policies.sql
 
 ## 생성 데이터
 
-- 테스트 사용자 2명
+- 테스트 사용자 20명
 - 사용자당 입출금 계좌 2개
+- 총 입출금 계좌 40개
 - 계좌별 거래내역 20,000건
 - 환전 테스트용 통화/환율 최소 데이터
 - 환전 테스트용 외화 지갑
@@ -56,12 +57,15 @@ AWS/DB 담당자는 아래를 확인합니다.
 
 MacBook/IntelliJ 터미널에서 EC2 서버를 대상으로 k6를 실행할 때 `perf/k6/.env.local`에 아래 값을 넣습니다.
 
+`TEST_EMAIL`/`SENDER_ACCOUNT_ID`/`RECEIVER_ACCOUNT_NUMBER`는 단일 사용자 이체 테스트용이고, `TEST_EMAILS`/`SENDER_ACCOUNT_IDS`/`RECEIVER_ACCOUNT_NUMBERS`는 20명/20개 출금 계좌로 분산 이체 부하를 줄 때 사용합니다.
+
 ```bash
 export BASE_URL=https://api.0bank.shop
 
 export TEST_EMAIL=k6-user1@0bank.test
+export TEST_EMAILS=k6-user1@0bank.test,k6-user2@0bank.test,k6-user3@0bank.test,k6-user4@0bank.test,k6-user5@0bank.test,k6-user6@0bank.test,k6-user7@0bank.test,k6-user8@0bank.test,k6-user9@0bank.test,k6-user10@0bank.test,k6-user11@0bank.test,k6-user12@0bank.test,k6-user13@0bank.test,k6-user14@0bank.test,k6-user15@0bank.test,k6-user16@0bank.test,k6-user17@0bank.test,k6-user18@0bank.test,k6-user19@0bank.test,k6-user20@0bank.test
 export TEST_PASSWORD='Password1!'
-export ACCOUNT_IDS=900001,900002
+export ACCOUNT_IDS=900001,900002,900003,900004,900005,900006,900007,900008,900009,900010
 
 export KRW_ACCOUNT_ID=900001
 export FX_WALLET_ID=900001
@@ -76,6 +80,8 @@ export STOCK_KEYWORDS=삼성,현대,카카오
 
 export SENDER_ACCOUNT_ID=900001
 export RECEIVER_ACCOUNT_NUMBER=900000000003
+export SENDER_ACCOUNT_IDS=900001,900003,900005,900007,900009,900011,900013,900015,900017,900019,900021,900023,900025,900027,900029,900031,900033,900035,900037,900039
+export RECEIVER_ACCOUNT_NUMBERS=900000000003,900000000005,900000000007,900000000009,900000000011,900000000013,900000000015,900000000017,900000000019,900000000021,900000000023,900000000025,900000000027,900000000029,900000000031,900000000033,900000000035,900000000037,900000000039,900000000001
 export ACCOUNT_PASSWORD=123456
 export TRANSFER_AMOUNT=1
 

@@ -1,5 +1,5 @@
 -- k6 은행/계좌 조회 테스트용 기본 데이터입니다.
--- 테스트 사용자 2명, 입출금 계좌 4개, 계좌별 거래내역 20,000건을 생성합니다.
+-- 테스트 사용자 20명, 입출금 계좌 40개, 계좌별 거래내역 20,000건을 생성합니다.
 -- 로그인 비밀번호 평문: Password1!
 -- 계좌 비밀번호 평문: 123456
 
@@ -8,9 +8,25 @@ SET @k6_account_password_hash = '$2y$10$JLOUv1hc6oGsQYLvePh8FOBuoWZRgbRnUgdwdY3p
 
 INSERT INTO users
 (id, birth_date, identity_verified, identity_verified_at, created_at, updated_at, phone_number, name, email, password, status)
-VALUES
-(900001, '1999-01-01', 1, NOW(6), NOW(6), NOW(6), '01090000001', 'k6 테스트 사용자 1', 'k6-user1@0bank.test', @k6_user_password_hash, 'ACTIVE'),
-(900002, '1998-02-02', 1, NOW(6), NOW(6), NOW(6), '01090000002', 'k6 테스트 사용자 2', 'k6-user2@0bank.test', @k6_user_password_hash, 'ACTIVE')
+SELECT
+  900000 + user_seq.n AS id,
+  DATE_ADD('1990-01-01', INTERVAL user_seq.n DAY) AS birth_date,
+  1 AS identity_verified,
+  NOW(6) AS identity_verified_at,
+  NOW(6) AS created_at,
+  NOW(6) AS updated_at,
+  CONCAT('0109000', LPAD(user_seq.n, 4, '0')) AS phone_number,
+  CONCAT('k6 테스트 사용자 ', user_seq.n) AS name,
+  CONCAT('k6-user', user_seq.n, '@0bank.test') AS email,
+  @k6_user_password_hash AS password,
+  'ACTIVE' AS status
+FROM (
+  SELECT ones.i + tens.i * 10 + 1 AS n
+  FROM
+    (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) ones
+    CROSS JOIN (SELECT 0 i UNION ALL SELECT 1) tens
+) user_seq
+WHERE user_seq.n <= 20
 ON DUPLICATE KEY UPDATE
   birth_date = VALUES(birth_date),
   identity_verified = VALUES(identity_verified),
@@ -23,18 +39,45 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO identity_verifications
 (id, created_at, updated_at, user_id, ocr_issue_date, ocr_resident_number, ocr_resident_number_hash, ocr_name, failure_reason, status)
-VALUES
-(900001, NOW(6), NOW(6), 900001, '20200101', NULL, 'k6_identity_hash_900001', 'k6 테스트 사용자 1', NULL, 'COMPLETED'),
-(900002, NOW(6), NOW(6), 900002, '20200101', NULL, 'k6_identity_hash_900002', 'k6 테스트 사용자 2', NULL, 'COMPLETED')
+SELECT
+  900000 + user_seq.n AS id,
+  NOW(6) AS created_at,
+  NOW(6) AS updated_at,
+  900000 + user_seq.n AS user_id,
+  '20200101' AS ocr_issue_date,
+  NULL AS ocr_resident_number,
+  CONCAT('k6_identity_hash_', 900000 + user_seq.n) AS ocr_resident_number_hash,
+  CONCAT('k6 테스트 사용자 ', user_seq.n) AS ocr_name,
+  NULL AS failure_reason,
+  'COMPLETED' AS status
+FROM (
+  SELECT ones.i + tens.i * 10 + 1 AS n
+  FROM
+    (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) ones
+    CROSS JOIN (SELECT 0 i UNION ALL SELECT 1) tens
+) user_seq
+WHERE user_seq.n <= 20
 ON DUPLICATE KEY UPDATE
   updated_at = NOW(6),
   status = VALUES(status);
 
 INSERT INTO user_profiles
 (id, created_at, updated_at, user_id, region, age_group, occupation_status)
-VALUES
-(900001, NOW(6), NOW(6), 900001, 'SEOUL', 'TWENTIES', 'STUDENT'),
-(900002, NOW(6), NOW(6), 900002, 'GYEONGGI', 'TWENTIES', 'EMPLOYED')
+SELECT
+  900000 + user_seq.n AS id,
+  NOW(6) AS created_at,
+  NOW(6) AS updated_at,
+  900000 + user_seq.n AS user_id,
+  CASE WHEN user_seq.n % 2 = 0 THEN 'GYEONGGI' ELSE 'SEOUL' END AS region,
+  'TWENTIES' AS age_group,
+  CASE WHEN user_seq.n % 3 = 0 THEN 'EMPLOYED' ELSE 'STUDENT' END AS occupation_status
+FROM (
+  SELECT ones.i + tens.i * 10 + 1 AS n
+  FROM
+    (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) ones
+    CROSS JOIN (SELECT 0 i UNION ALL SELECT 1) tens
+) user_seq
+WHERE user_seq.n <= 20
 ON DUPLICATE KEY UPDATE
   updated_at = NOW(6),
   region = VALUES(region),
@@ -43,13 +86,25 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO user_consents
 (agreed, agreed_at, created_at, updated_at, user_id, terms_type)
-VALUES
-(1, NOW(6), NOW(6), NOW(6), 900001, 'SERVICE_TERMS'),
-(1, NOW(6), NOW(6), NOW(6), 900001, 'PERSONAL_INFO'),
-(1, NOW(6), NOW(6), NOW(6), 900001, 'FINANCIAL_INFO'),
-(1, NOW(6), NOW(6), NOW(6), 900002, 'SERVICE_TERMS'),
-(1, NOW(6), NOW(6), NOW(6), 900002, 'PERSONAL_INFO'),
-(1, NOW(6), NOW(6), NOW(6), 900002, 'FINANCIAL_INFO')
+SELECT
+  1 AS agreed,
+  NOW(6) AS agreed_at,
+  NOW(6) AS created_at,
+  NOW(6) AS updated_at,
+  900000 + user_seq.n AS user_id,
+  terms.terms_type
+FROM (
+  SELECT ones.i + tens.i * 10 + 1 AS n
+  FROM
+    (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) ones
+    CROSS JOIN (SELECT 0 i UNION ALL SELECT 1) tens
+) user_seq
+CROSS JOIN (
+  SELECT 'SERVICE_TERMS' AS terms_type
+  UNION ALL SELECT 'PERSONAL_INFO'
+  UNION ALL SELECT 'FINANCIAL_INFO'
+) terms
+WHERE user_seq.n <= 20
 ON DUPLICATE KEY UPDATE
   agreed = VALUES(agreed),
   agreed_at = VALUES(agreed_at),
@@ -57,11 +112,28 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO accounts
 (id, balance, created_at, updated_at, user_id, account_number, nickname, account_type, account_password_hash, status)
-VALUES
-(900001, 1000000000, NOW(6), NOW(6), 900001, '900000000001', 'k6 user1 main', 'DEPOSIT', @k6_account_password_hash, 'ACTIVE'),
-(900002, 1000000000, NOW(6), NOW(6), 900001, '900000000002', 'k6 user1 sub', 'DEPOSIT', @k6_account_password_hash, 'ACTIVE'),
-(900003, 1000000000, NOW(6), NOW(6), 900002, '900000000003', 'k6 user2 main', 'DEPOSIT', @k6_account_password_hash, 'ACTIVE'),
-(900004, 1000000000, NOW(6), NOW(6), 900002, '900000000004', 'k6 user2 sub', 'DEPOSIT', @k6_account_password_hash, 'ACTIVE')
+SELECT
+  900000 + ((user_seq.n - 1) * 2) + account_slot.n AS id,
+  1000000000 AS balance,
+  NOW(6) AS created_at,
+  NOW(6) AS updated_at,
+  900000 + user_seq.n AS user_id,
+  CONCAT('900', LPAD(((user_seq.n - 1) * 2) + account_slot.n, 9, '0')) AS account_number,
+  CONCAT('k6 user', user_seq.n, CASE WHEN account_slot.n = 1 THEN ' main' ELSE ' sub' END) AS nickname,
+  'DEPOSIT' AS account_type,
+  @k6_account_password_hash AS account_password_hash,
+  'ACTIVE' AS status
+FROM (
+  SELECT ones.i + tens.i * 10 + 1 AS n
+  FROM
+    (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) ones
+    CROSS JOIN (SELECT 0 i UNION ALL SELECT 1) tens
+) user_seq
+CROSS JOIN (
+  SELECT 1 AS n
+  UNION ALL SELECT 2
+) account_slot
+WHERE user_seq.n <= 20
 ON DUPLICATE KEY UPDATE
   balance = VALUES(balance),
   updated_at = NOW(6),
@@ -100,7 +172,7 @@ JOIN (
     CROSS JOIN (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) tens
     CROSS JOIN (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) hundreds
     CROSS JOIN (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) thousands
-    CROSS JOIN (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2) ten_thousands
+    CROSS JOIN (SELECT 0 i UNION ALL SELECT 1) ten_thousands
 ) seq
-WHERE a.id BETWEEN 900001 AND 900004
+WHERE a.id BETWEEN 900001 AND 900040
   AND seq.n <= 20000;
