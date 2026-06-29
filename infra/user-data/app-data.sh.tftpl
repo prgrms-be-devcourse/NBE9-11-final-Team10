@@ -29,7 +29,7 @@ cat > /dockerProjects/app-data/docker-compose.yml <<'COMPOSE'
 ${compose_yml}
 COMPOSE
 
-cat > /dockerProjects/app-data/.env.local <<'ENV'
+cat > /dockerProjects/app-data/.env <<'ENV'
 MYSQL_ROOT_PASSWORD=${mysql_root_password}
 REDIS_PASSWORD=${redis_password}
 ENV
@@ -42,6 +42,10 @@ upstream spring_backend {
 
 server {
     listen 80;
+
+    location ^~ /actuator/prometheus {
+        return 404;
+    }
 
     location / {
         proxy_pass http://spring_backend;
@@ -72,4 +76,4 @@ server {
 }
 NGINX
 
-docker compose --env-file /dockerProjects/app-data/.env.local -f /dockerProjects/app-data/docker-compose.yml up -d
+docker compose --env-file /dockerProjects/app-data/.env -f /dockerProjects/app-data/docker-compose.yml up -d
