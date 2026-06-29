@@ -77,7 +77,7 @@ export default function DashboardPage() {
     })),
     ...externalAccounts.map((account) => ({
       id: `external-${account.id}`,
-      href: null,
+      href: `/accounts/external/${account.id}`,
       name: account.accountAlias || account.accountName,
       number: `${account.organization} ${account.accountNoMasked}`,
       balance: account.balance,

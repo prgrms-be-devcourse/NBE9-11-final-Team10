@@ -5,6 +5,7 @@ import com.team10.backend.domain.exAccount.dto.res.ExAccountRes;
 import com.team10.backend.domain.exAccount.dto.res.ExAccountTransactionRes;
 import com.team10.backend.domain.exAccount.entity.ExAccount;
 import com.team10.backend.domain.exAccount.exception.ExAccountErrorCode;
+import com.team10.backend.domain.exAccount.repository.ExAccountConnectionRepository;
 import com.team10.backend.domain.exAccount.repository.ExAccountRepository;
 import com.team10.backend.domain.exAccount.repository.ExAccountTransactionRepository;
 import com.team10.backend.global.exception.BusinessException;
@@ -23,6 +24,7 @@ import java.util.List;
 public class ExAccountService {
     private final ExAccountRepository accountRepository;
     private final ExAccountTransactionRepository transactionRepository;
+    private final ExAccountConnectionRepository connectionRepository;
 
     /**
      * 특정 사용자가 연동 완료한 모든 외부 계좌 목록을 조회합니다.
@@ -61,5 +63,32 @@ public class ExAccountService {
                 .toList();
 
         return ExAccountDetailRes.of(ExAccountRes.from(account), transactions);
+    }
+
+    /**
+     * 외부 계좌와 연관된 모든 거래 내역을 삭제하고 외부 계좌도 삭제합니다.
+     *
+     * @param userId      사용자 ID
+     * @param exAccountId 외부 계좌 ID
+     */
+    @Transactional
+    public void deleteAccount(Long userId, Long exAccountId) {
+        ExAccount account = accountRepository.findByIdAndUserId(exAccountId, userId)
+                .orElseThrow(() -> new BusinessException(ExAccountErrorCode.EX_ACCOUNT_NOT_FOUND));
+
+        String organization = account.getOrganization();
+
+        transactionRepository.deleteByExAccountId(account.getId());
+        accountRepository.delete(account);
+
+        // 해당 금융기관에 남아있는 계좌가 더 있는지 확인
+        List<ExAccount> remainingAccounts = accountRepository.findAllByUserId(userId).stream()
+                .filter(acc -> acc.getOrganization().equals(organization))
+                .toList();
+
+        if (remainingAccounts.isEmpty()) {
+            connectionRepository.findByUserIdAndOrganization(userId, organization)
+                    .ifPresent(connectionRepository::delete);
+        }
     }
 }
