@@ -18,6 +18,9 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class YoungPolicyRepositoryImpl implements YoungPolicyRepositoryCustom {
 
+    private static final String NATIONAL_REGION_NAME = "전국";
+    private static final String NATIONAL_REGION_CODE = "3001";
+
     private final JPAQueryFactory queryFactory;
 
     @Override
@@ -108,16 +111,16 @@ public class YoungPolicyRepositoryImpl implements YoungPolicyRepositoryCustom {
                          .or(youngPolicy.regionCode.like("%," + code + "%"));
             }
 
-            return exp.or(youngPolicy.regionCode.contains("전국"))
-                    .or(youngPolicy.regionCode.contains("3001"))
+            return exp.or(youngPolicy.regionCode.contains(NATIONAL_REGION_NAME))
+                    .or(youngPolicy.regionCode.contains(NATIONAL_REGION_CODE))
                     .or(youngPolicy.regionCode.isNull())
                     .or(youngPolicy.regionCode.isEmpty());
         }
 
         // 3. 만약 해당하는 Region 매핑이 없으면 한글 검색어로 직접 포함 여부 검사
         return youngPolicy.regionCode.containsIgnoreCase(regionName)
-                .or(youngPolicy.regionCode.contains("전국"))
-                .or(youngPolicy.regionCode.contains("3001"))
+                .or(youngPolicy.regionCode.contains(NATIONAL_REGION_NAME))
+                .or(youngPolicy.regionCode.contains(NATIONAL_REGION_CODE))
                 .or(youngPolicy.regionCode.isNull())
                 .or(youngPolicy.regionCode.isEmpty());
     }

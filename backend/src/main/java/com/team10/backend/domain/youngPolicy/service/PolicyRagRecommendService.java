@@ -36,6 +36,22 @@ public class PolicyRagRecommendService {
     private static final TypeReference<List<Map<String, Object>>> RECOMMENDATION_TYPE_REF =
             new TypeReference<>() {};
 
+    private static final int RERANK_CANDIDATE_LIMIT = 10;
+    private static final int DEFAULT_FALLBACK_AGE = 25;
+    private static final String DEFAULT_FALLBACK_REGION = "전국";
+
+    // 가중치 상수 정의
+    private static final double LOCAL_POLICY_WEIGHT = 50.0;
+    private static final double NATIONAL_POLICY_WEIGHT = 10.0;
+    private static final double KEYWORD_TITLE_WEIGHT = 5.0;
+    private static final double KEYWORD_SUBCATEGORY_WEIGHT = 3.0;
+    private static final double KEYWORD_DESC_WEIGHT = 1.0;
+    private static final int MIN_KEYWORD_LENGTH = 2;
+
+    // 전국구 코드 패턴
+    private static final String NATIONAL_REGION_NAME = "전국";
+    private static final String NATIONAL_REGION_CODE = "3001";
+
     private final YoungPolicyRepository youngPolicyRepository;
     private final GeminiChatService geminiChatService;
     private final ObjectMapper objectMapper;
@@ -95,10 +111,10 @@ public class PolicyRagRecommendService {
 
         // age 나 region 이 null 일 때의 방어 조치 (String.format 예외 방지)
         if (age == null) {
-            age = 25; // 기본값 연령
+            age = DEFAULT_FALLBACK_AGE;
         }
         if (region == null) {
-            region = "전국";
+            region = DEFAULT_FALLBACK_REGION;
         }
 
         // 1차 메타데이터 필터링 (나이, 지역, 카테고리 적용)
@@ -120,7 +136,7 @@ public class PolicyRagRecommendService {
         final String finalRegion = region;
         List<YoungPolicy> rerankedCandidates = filteredPolicies.stream()
                 .sorted(Comparator.comparingDouble((YoungPolicy p) -> calculateMatchScore(p, query, finalRegion)).reversed())
-                .limit(10)
+                .limit(RERANK_CANDIDATE_LIMIT)
                 .toList();
 
         // AI 추천을 위한 프롬프트 가공 (4가지 카드 추천에 특화된 구조)
@@ -224,15 +240,15 @@ public class PolicyRagRecommendService {
                 if (userRegionCode != null && (policyRegionCode.startsWith(userRegionCode) || policyRegionCode.contains("," + userRegionCode))) {
                     // 전국 정책 코드가 아닌 특정 지자체 코드인 경우 지역 특화 가중치 부여
                     if (!isNationalCode(policyRegionCode)) {
-                        score += 50.0; // 지역 특화 정책 가중치 대폭 상향 (15.0 -> 50.0)
+                        score += LOCAL_POLICY_WEIGHT;
                     } else {
-                        score += 10.0; // 전국구 정책 가중치 상향 (5.0 -> 10.0)
+                        score += NATIONAL_POLICY_WEIGHT;
                     }
-                } else if (isNationalCode(policyRegionCode) || policyRegionCode.contains("전국")) {
-                    score += 10.0;     // 전국구 정책 가중치
+                } else if (isNationalCode(policyRegionCode) || policyRegionCode.contains(NATIONAL_REGION_NAME)) {
+                    score += NATIONAL_POLICY_WEIGHT;
                 }
             } else {
-                score += 10.0;         // 지역 코드가 없는 경우도 전국구에 준하여 처리
+                score += NATIONAL_POLICY_WEIGHT;
             }
         }
 
@@ -244,16 +260,16 @@ public class PolicyRagRecommendService {
             String subCategory = policy.getSubCategory() != null ? policy.getSubCategory() : "";
 
             for (String kw : keywords) {
-                if (kw.length() < 2) continue; // 1글자 조사 제외
+                if (kw.length() < MIN_KEYWORD_LENGTH) continue; // 1글자 조사 제외
 
                 if (title.contains(kw)) {
-                    score += 5.0; // 기존 10.0 -> 5.0으로 하향 조정
+                    score += KEYWORD_TITLE_WEIGHT;
                 }
                 if (subCategory.contains(kw)) {
-                    score += 3.0; // 기존 5.0 -> 3.0으로 하향 조정
+                    score += KEYWORD_SUBCATEGORY_WEIGHT;
                 }
                 if (desc.contains(kw)) {
-                    score += 1.0; // 기존 2.0 -> 1.0으로 하향 조정
+                    score += KEYWORD_DESC_WEIGHT;
                 }
             }
         }
@@ -265,8 +281,8 @@ public class PolicyRagRecommendService {
         if (regionCode == null) {
             return true;
         }
-        return regionCode.contains("전국") ||
-               regionCode.contains("3001") ||
+        return regionCode.contains(NATIONAL_REGION_NAME) ||
+               regionCode.contains(NATIONAL_REGION_CODE) ||
                regionCode.isBlank();
     }
 }

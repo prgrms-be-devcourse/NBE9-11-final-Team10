@@ -34,6 +34,8 @@ public class ExAccountSyncService {
     private static final int MAX_VISIBLE_PREFIX_LENGTH = 6;
     private static final int MAX_VISIBLE_SUFFIX_LENGTH = 4;
     private static final int MIN_MASK_LENGTH = 3;
+    private static final long LOCK_WAIT_SECONDS = 10L;
+    private static final long LOCK_LEASE_SECONDS = 10L;
 
     private final ExAccountRepository exAccountRepository;
     private final UserRepository userRepository;
@@ -61,8 +63,8 @@ public class ExAccountSyncService {
         String lockKey = "lock:ex-account:sync:" + userId;
         return lockTemplate.executeWithLock(
                 lockKey,
-                Duration.ofSeconds(10),
-                Duration.ofSeconds(10),
+                Duration.ofSeconds(LOCK_WAIT_SECONDS),
+                Duration.ofSeconds(LOCK_LEASE_SECONDS),
                 ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC,
                 () -> {
                     Optional<String> claimId = candidateStore.claim(userId, request.candidateToken());
