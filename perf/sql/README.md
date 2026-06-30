@@ -56,7 +56,7 @@ AWS/DB 담당자는 아래를 확인합니다.
 
 MacBook/IntelliJ 터미널에서 EC2 서버를 대상으로 k6를 실행할 때 `perf/k6/.env.local`에 아래 값을 넣습니다.
 
-`TEST_EMAIL`/`SENDER_ACCOUNT_ID`/`RECEIVER_ACCOUNT_NUMBER`는 단일 사용자 테스트용이고, `TEST_EMAILS`와 전체 `ACCOUNT_IDS`는 여러 사용자 계좌 조회 흐름에 사용합니다. `SENDER_ACCOUNT_IDS`/`RECEIVER_ACCOUNT_NUMBERS`는 20명/20개 출금 계좌로 분산 이체 부하를 줄 때 사용합니다.
+`TEST_EMAIL`/`KRW_ACCOUNT_ID`/`FX_WALLET_ID`/`SENDER_ACCOUNT_ID`/`RECEIVER_ACCOUNT_NUMBER`는 단일 사용자 테스트용이고, `TEST_EMAILS`와 전체 `ACCOUNT_IDS`는 여러 사용자 계좌 조회 흐름에 사용합니다. `KRW_ACCOUNT_IDS`/`FX_WALLET_IDS`는 20명/20개 계좌로 분산 환전 부하를 줄 때 사용하고, `SENDER_ACCOUNT_IDS`/`RECEIVER_ACCOUNT_NUMBERS`는 20명/20개 출금 계좌로 분산 이체 부하를 줄 때 사용합니다.
 
 ```bash
 export BASE_URL=https://api.0bank.shop
@@ -69,6 +69,8 @@ export ACCOUNTS_PER_USER=2
 
 export KRW_ACCOUNT_ID=900001
 export FX_WALLET_ID=900001
+export KRW_ACCOUNT_IDS=900001,900003,900005,900007,900009,900011,900013,900015,900017,900019,900021,900023,900025,900027,900029,900031,900033,900035,900037,900039
+export FX_WALLET_IDS=900001,900002,900003,900004,900005,900006,900007,900008,900009,900010,900011,900012,900013,900014,900015,900016,900017,900018,900019,900020
 export EXCHANGE_FROM=KRW
 export EXCHANGE_TO=USD
 export EXCHANGE_AMOUNT=1000
@@ -111,6 +113,7 @@ TARGET_VUS=2 k6 run perf/k6/policy-recommend.js
 source perf/k6/.env.local
 
 TARGET_VUS=1 k6 run perf/k6/exchange-load.js
+TARGET_VUS=5 RUN_EXCHANGE_ORDER=true k6 run perf/k6/exchange-distributed-load.js
 TARGET_VUS=1 k6 run perf/k6/transfer-load.js
 ```
 
@@ -118,4 +121,5 @@ TARGET_VUS=1 k6 run perf/k6/transfer-load.js
 
 - `transfer-load.js`는 실제 송금 데이터와 거래내역을 생성합니다.
 - `exchange-load.js`에서 `RUN_EXCHANGE_ORDER=true`를 추가하면 실제 환전 주문이 생성됩니다.
+- `exchange-distributed-load.js`는 `TEST_EMAILS`, `KRW_ACCOUNT_IDS`, `FX_WALLET_IDS`를 같은 순서로 매핑해 여러 사용자 환전 주문을 생성합니다.
 - BCrypt 기준 평문 비밀번호는 사용자 `Password1!`, 계좌 `123456`입니다.
