@@ -104,7 +104,7 @@ export default function SignupPage() {
     else if (!/^01[0-9]{8,9}$/.test(form.phoneNumber))
       e.phoneNumber = '올바른 형식으로 입력해 주세요. (예: 01012345678)'
     if (!form.birthDate) e.birthDate = '생년월일을 입력해 주세요.'
-    else if (form.birthDate > getMaxBirthDateString())
+    else if (form.birthDate > MAX_BIRTH_DATE)
       e.birthDate = '생년월일은 1년 이전 날짜여야 합니다.'
     if (!form.identityVerificationId.trim()) {
       e.identityVerificationId = '본인인증을 완료해 주세요.'
