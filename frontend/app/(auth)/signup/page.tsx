@@ -51,6 +51,11 @@ interface FormState {
 
 type FormErrors = Partial<Record<keyof FormState, string>>
 
+// 2단계(프로필 설정) 화면에 실제로 렌더링되는 필드. 백엔드 검증 에러가 이 목록 밖의
+// 필드(예: password, birthDate)를 가리키면 화면 어디에도 표시되지 않고 조용히 묻히므로,
+// 그런 경우엔 1단계로 돌려보내고 상단 알림도 같이 띄운다.
+const STEP1_VISIBLE_FIELDS = new Set<string>(['ageGroup', 'region', 'occupationStatus'])
+
 // 생년월일로 선택 가능한 가장 최근 날짜 — 오늘 기준 1년 전까지만 허용한다.
 const MAX_BIRTH_DATE = (() => {
   const d = new Date()
@@ -210,6 +215,14 @@ export default function SignupPage() {
           const fieldErrs: Record<string, string> = {}
           for (const d of err.details) fieldErrs[d.field] = d.reason
           setServerFieldErrors(fieldErrs)
+
+          // details 중 현재 화면(2단계)에 보이지 않는 필드가 있으면 그 에러는 화면에
+          // 전혀 표시되지 않는다 — 1단계로 되돌리고 상단에도 알림을 띄워준다.
+          const hidden = err.details.find((d) => !STEP1_VISIBLE_FIELDS.has(d.field))
+          if (hidden) {
+            setStep(0)
+            setServerError(hidden.reason)
+          }
         } else {
           setServerError(err.message)
         }
@@ -305,8 +318,12 @@ export default function SignupPage() {
                     {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
-                {fieldError('password') && (
+                {fieldError('password') ? (
                   <p className="text-xs text-destructive">{fieldError('password')}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    영문, 숫자를 각각 1자 이상 포함해 8자 이상으로 입력해 주세요.
+                  </p>
                 )}
               </div>
 
@@ -354,8 +371,10 @@ export default function SignupPage() {
                   onChange={(e) => setForm((p) => ({ ...p, birthDate: e.target.value }))}
                   aria-invalid={!!fieldError('birthDate')}
                 />
-                {fieldError('birthDate') && (
+                {fieldError('birthDate') ? (
                   <p className="text-xs text-destructive">{fieldError('birthDate')}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">1년 이전 날짜만 입력할 수 있습니다.</p>
                 )}
               </div>
 
