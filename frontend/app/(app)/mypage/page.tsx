@@ -33,9 +33,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { createProfile, getProfile, updateProfile } from '@/lib/api/profile'
 import { changePassword, withdraw } from '@/lib/api/users'
 import { ApiRequestError } from '@/lib/api'
-import { ageGroupOptions, interestOptions, occupationOptions, regionOptions } from '@/lib/profileOptions'
+import { interestOptions, occupationOptions, regionOptions } from '@/lib/profileOptions'
 import type {
-  AgeGroup,
   FinancialInterest,
   OccupationStatus,
   Region,
@@ -50,7 +49,7 @@ export default function MyPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const [ageGroup, setAgeGroup] = useState<AgeGroup | ''>('')
+  const [birthYear, setBirthYear] = useState<number | ''>('')
   const [region, setRegion] = useState<Region | ''>('')
   const [occupationStatus, setOccupationStatus] = useState<OccupationStatus | ''>('')
   const [interests, setInterests] = useState<Set<FinancialInterest>>(new Set())
@@ -74,7 +73,7 @@ export default function MyPage() {
         const res = await getProfile()
         if (!mounted) return
         setProfile(res)
-        setAgeGroup(res.ageGroup)
+        setBirthYear(res.birthYear)
         setRegion(res.region)
         setOccupationStatus(res.occupationStatus)
         setInterests(new Set(res.financialInterests))
@@ -106,15 +105,15 @@ export default function MyPage() {
   }
 
   async function handleSubmit() {
-    if (!ageGroup || !region || !occupationStatus) {
-      setError('연령대, 지역, 직업 상태를 모두 선택해 주세요.')
+    if (!birthYear || !region || !occupationStatus) {
+      setError('태어난 년도, 지역, 직업 상태를 모두 선택해 주세요.')
       return
     }
     setError('')
     setSaving(true)
     try {
       const body = {
-        ageGroup,
+        birthYear: Number(birthYear),
         region,
         occupationStatus,
         financialInterests: Array.from(interests),
@@ -250,21 +249,24 @@ export default function MyPage() {
           ) : (
             <>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ageGroup">연령대</Label>
+                <Label htmlFor="birthYear">태어난 년도</Label>
                 <select
-                  id="ageGroup"
-                  value={ageGroup}
-                  onChange={(e) => setAgeGroup(e.target.value as AgeGroup)}
+                  id="birthYear"
+                  value={birthYear}
+                  onChange={(e) => setBirthYear(Number(e.target.value))}
                   className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
                 >
                   <option value="" disabled>
                     선택해 주세요
                   </option>
-                  {ageGroupOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
+                  {Array.from({ length: new Date().getFullYear() - 1950 + 1 }, (_, i) => {
+                    const year = new Date().getFullYear() - i;
+                    return (
+                      <option key={year} value={year}>
+                        {year}년
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

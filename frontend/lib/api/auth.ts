@@ -1,5 +1,5 @@
 import { apiFetch } from '../api'
-import type { AgeGroup, AuthResponse, FinancialInterest, OccupationStatus, Region, User } from '../types'
+import type { AuthResponse, FinancialInterest, OccupationStatus, Region, User } from '../types'
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
   return apiFetch<AuthResponse>('/api/v1/auth/login', {
@@ -17,7 +17,7 @@ export async function signup(data: {
   phoneNumber: string
   birthDate: string
   // 본인인증 다음 단계(프로필 설정)에서 함께 수집 — 마이페이지 프로필과 동일한 필드
-  ageGroup: AgeGroup
+  birthYear: number
   region: Region
   occupationStatus: OccupationStatus
   financialInterests: FinancialInterest[]

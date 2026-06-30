@@ -7,7 +7,7 @@ export async function getMe(): Promise<User> {
 
 export interface UserProfile {
   userId: number
-  ageGroup?: string
+  birthYear?: number
   region?: string
   occupationStatus?: string
   financialInterests?: string[]

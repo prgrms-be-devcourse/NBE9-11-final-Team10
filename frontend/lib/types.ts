@@ -158,14 +158,14 @@ export type Region =
 
 export interface UserProfile {
   userId: number
-  ageGroup: AgeGroup
+  birthYear: number
   region: Region
   occupationStatus: OccupationStatus
   financialInterests: FinancialInterest[]
 }
 
 export interface UserProfileRequest {
-  ageGroup: AgeGroup
+  birthYear: number
   region: Region
   occupationStatus: OccupationStatus
   financialInterests: FinancialInterest[]

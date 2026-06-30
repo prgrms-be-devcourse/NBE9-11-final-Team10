@@ -1,15 +1,8 @@
-import type { AgeGroup, FinancialInterest, OccupationStatus, Region } from './types'
+import type { FinancialInterest, OccupationStatus, Region } from './types'
 
 // 마이페이지 프로필과 회원가입 2단계(프로필 설정)에서 공통으로 쓰는 선택 옵션.
 // 두 화면의 라벨이 어긋나지 않도록 한 곳에서만 정의한다.
 
-export const ageGroupOptions: { value: AgeGroup; label: string }[] = [
-  { value: 'TEENS', label: '10대' },
-  { value: 'TWENTIES', label: '20대' },
-  { value: 'THIRTIES', label: '30대' },
-  { value: 'FORTIES', label: '40대' },
-  { value: 'FIFTIES_PLUS', label: '50대 이상' },
-]
 
 export const occupationOptions: { value: OccupationStatus; label: string }[] = [
   { value: 'EMPLOYED', label: '직장인' },
