@@ -48,6 +48,12 @@ import static org.springframework.util.StringUtils.hasText;
 @Transactional(readOnly = true)
 public class ExAccountTransactionService {
 
+    private static final String DATE_PATTERN_YYMMDD = "yyMMdd";
+    private static final long LOCK_WAIT_SECONDS = 10L;
+    private static final long LOCK_LEASE_SECONDS = 10L;
+    private static final int DEFAULT_TRANSACTION_HISTORY_MONTHS = 3;
+    private static final int TRANSACTION_SYNC_OVERLAP_DAYS = 7;
+
     private final ExAccountTransactionRepository transactionRepository;
     private final ExAccountRepository accountRepository;
     private final ExAccountConnectionRepository connectionRepository;
@@ -86,8 +92,8 @@ public class ExAccountTransactionService {
         String lockKey = "lock:ex-account:transactions:" + exAccountId;
         return lockTemplate.executeWithLock(
                 lockKey,
-                Duration.ofSeconds(10),
-                Duration.ofSeconds(10),
+                Duration.ofSeconds(LOCK_WAIT_SECONDS),
+                Duration.ofSeconds(LOCK_LEASE_SECONDS),
                 ExAccountErrorCode.EX_ACCOUNT_CONCURRENT_SYNC,
                 () -> transactionTemplate.execute(status -> {
                     validateTransactions(transactions);
@@ -134,7 +140,7 @@ public class ExAccountTransactionService {
             throw new BusinessException(ExAccountConnectionErrorCode.EX_ACCOUNT_CONNECTION_INACTIVE);
         }
 
-        String birthDate = account.getUser().getBirthDate().format(DateTimeFormatter.ofPattern("yyMMdd"));
+        String birthDate = account.getUser().getBirthDate().format(DateTimeFormatter.ofPattern(DATE_PATTERN_YYMMDD));
         CodefExAccountSnapshot snapshot = findCurrentAccountSnapshot(account, connection, birthDate);
         List<CodefExAccountTransactionSnapshot> snapshots = getTransactionSnapshots(account, connection, birthDate, snapshot.accountNumber());
         List<ExAccountTransactionSyncReq> transactions = snapshots.stream()
@@ -247,8 +253,8 @@ public class ExAccountTransactionService {
     ) {
         LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
         LocalDate startDate = account.getLastTransactionAt() == null
-                ? endDate.minusMonths(3)
-                : account.getLastTransactionAt().minusDays(7);
+                ? endDate.minusMonths(DEFAULT_TRANSACTION_HISTORY_MONTHS)
+                : account.getLastTransactionAt().minusDays(TRANSACTION_SYNC_OVERLAP_DAYS);
         try {
             return codefExAccountGateway.getTransactionSnapshots(
                     account.getOrganization(),

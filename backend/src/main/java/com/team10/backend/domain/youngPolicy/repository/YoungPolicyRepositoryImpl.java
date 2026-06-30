@@ -18,6 +18,9 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 public class YoungPolicyRepositoryImpl implements YoungPolicyRepositoryCustom {
 
+    private static final String NATIONAL_REGION_NAME = "전국";
+    private static final String NATIONAL_REGION_CODE = "3001";
+
     private final JPAQueryFactory queryFactory;
 
     @Override
@@ -72,23 +75,52 @@ public class YoungPolicyRepositoryImpl implements YoungPolicyRepositoryCustom {
             return null;
         }
 
-        // 1. 시도 코드로 변환 시도 (예: "서울 마포구" -> "11")
-        String derivedCode = Region.findCodeByName(regionName);
+        // 1. regionName에 해당하는 Region enum 매칭 (영문/한글 모두 지원)
+        Region targetRegion = null;
+        for (Region r : Region.values()) {
+            if (r.name().equalsIgnoreCase(regionName.trim())) {
+                targetRegion = r;
+                break;
+            }
+        }
 
-        if (derivedCode != null) {
-            return youngPolicy.regionCode.contains(derivedCode)
-                    .or(youngPolicy.regionCode.contains("전국"))
-                    .or(youngPolicy.regionCode.contains("3001"))
-                    .or(youngPolicy.regionCode.contains("003002001"))
+        if (targetRegion == null) {
+            for (Region r : Region.values()) {
+                for (String name : r.getNames()) {
+                    if (regionName.contains(name)) {
+                        targetRegion = r;
+                        break;
+                    }
+                }
+                if (targetRegion != null) {
+                    break;
+                }
+            }
+        }
+
+        // 2. 매칭되는 Region이 존재하는 경우 한글 지명 및 시도 코드로 맵핑 조건 생성
+        if (targetRegion != null) {
+            BooleanExpression exp = null;
+            for (String name : targetRegion.getNames()) {
+                BooleanExpression nameCondition = youngPolicy.regionCode.containsIgnoreCase(name);
+                exp = (exp == null) ? nameCondition : exp.or(nameCondition);
+            }
+            if (targetRegion.getCode() != null) {
+                String code = targetRegion.getCode();
+                exp = exp.or(youngPolicy.regionCode.startsWith(code))
+                         .or(youngPolicy.regionCode.like("%," + code + "%"));
+            }
+
+            return exp.or(youngPolicy.regionCode.contains(NATIONAL_REGION_NAME))
+                    .or(youngPolicy.regionCode.contains(NATIONAL_REGION_CODE))
                     .or(youngPolicy.regionCode.isNull())
                     .or(youngPolicy.regionCode.isEmpty());
         }
 
-        // 2. 만약 매핑된 코드가 없다면 한글 검색어 매칭 기회를 제공합니다. (예: region_code 컬럼에 한글로 직접 저장된 경우나 전국 검색 시)
+        // 3. 만약 해당하는 Region 매핑이 없으면 한글 검색어로 직접 포함 여부 검사
         return youngPolicy.regionCode.containsIgnoreCase(regionName)
-                .or(youngPolicy.regionCode.contains("전국"))
-                .or(youngPolicy.regionCode.contains("3001"))
-                .or(youngPolicy.regionCode.contains("003002001"))
+                .or(youngPolicy.regionCode.contains(NATIONAL_REGION_NAME))
+                .or(youngPolicy.regionCode.contains(NATIONAL_REGION_CODE))
                 .or(youngPolicy.regionCode.isNull())
                 .or(youngPolicy.regionCode.isEmpty());
     }

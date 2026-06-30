@@ -1,6 +1,5 @@
 package com.team10.backend.domain.user.entity;
 
-import com.team10.backend.domain.user.type.AgeGroup;
 import com.team10.backend.domain.user.type.FinancialInterest;
 import com.team10.backend.domain.user.type.OccupationStatus;
 import com.team10.backend.domain.user.type.Region;
@@ -23,9 +22,8 @@ public class UserProfile extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 20)
-    private AgeGroup ageGroup;
+    @Column(nullable = false)
+    private Integer birthYear;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
@@ -43,24 +41,24 @@ public class UserProfile extends BaseEntity {
     private Set<FinancialInterest> financialInterests = new HashSet<>();
 
     public static UserProfile create(User user,
-                                     AgeGroup ageGroup,
+                                     Integer birthYear,
                                      Region region,
                                      OccupationStatus occupationStatus,
                                      Set<FinancialInterest> financialInterests) {
         UserProfile profile = new UserProfile();
         profile.user = user;
-        profile.ageGroup = ageGroup;
+        profile.birthYear = birthYear;
         profile.region = region;
         profile.occupationStatus = occupationStatus;
         profile.financialInterests = financialInterests != null ? financialInterests : new HashSet<>();
         return profile;
     }
 
-    public void update(AgeGroup ageGroup,
+    public void update(Integer birthYear,
                        Region region,
                        OccupationStatus occupationStatus,
                        Set<FinancialInterest> financialInterests) {
-        this.ageGroup = ageGroup;
+        this.birthYear = birthYear;
         this.region = region;
         this.occupationStatus = occupationStatus;
         this.financialInterests.clear();

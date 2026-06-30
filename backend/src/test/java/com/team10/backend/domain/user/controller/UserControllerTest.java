@@ -18,7 +18,6 @@ import com.team10.backend.domain.user.service.IdentityVerificationService;
 import com.team10.backend.domain.user.service.UserConsentService;
 import com.team10.backend.domain.user.service.UserProfileService;
 import com.team10.backend.domain.user.service.UserService;
-import com.team10.backend.domain.user.type.AgeGroup;
 import com.team10.backend.domain.user.type.FinancialInterest;
 import com.team10.backend.domain.user.type.OccupationStatus;
 import com.team10.backend.domain.user.type.Region;
@@ -261,9 +260,9 @@ class UserControllerTest {
         @DisplayName("프로필 등록 — 201")
         void success() throws Exception {
             UserProfileReq req = new UserProfileReq(
-                    AgeGroup.TWENTIES, Region.SEOUL, OccupationStatus.EMPLOYED,
+                    1990, Region.SEOUL, OccupationStatus.EMPLOYED,
                     Set.of(FinancialInterest.SAVINGS));
-            UserProfileRes res = new UserProfileRes(1L, AgeGroup.TWENTIES, Region.SEOUL,
+            UserProfileRes res = new UserProfileRes(1L, 1990, Region.SEOUL,
                     OccupationStatus.EMPLOYED, Set.of(FinancialInterest.SAVINGS));
             when(userProfileService.create(eq(1L), any())).thenReturn(res);
 
@@ -273,12 +272,12 @@ class UserControllerTest {
                             .content(objectMapper.writeValueAsString(req)))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.userId").value(1L))
-                    .andExpect(jsonPath("$.ageGroup").value("TWENTIES"))
+                    .andExpect(jsonPath("$.birthYear").value(1990))
                     .andExpect(jsonPath("$.region").value("SEOUL"));
         }
 
         @Test
-        @DisplayName("필수 필드(ageGroup) 누락 — 400")
+        @DisplayName("필수 필드(birthYear) 누락 — 400")
         void missingRequiredField() throws Exception {
             UserProfileReq req = new UserProfileReq(
                     null, Region.SEOUL, OccupationStatus.EMPLOYED,

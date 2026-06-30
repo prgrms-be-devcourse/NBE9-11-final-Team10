@@ -13,7 +13,6 @@ import com.team10.backend.domain.user.dto.res.UserRes;
 import com.team10.backend.domain.user.entity.User;
 import com.team10.backend.domain.user.exception.UserErrorCode;
 import com.team10.backend.domain.user.repository.UserRepository;
-import com.team10.backend.domain.user.type.AgeGroup;
 import com.team10.backend.domain.user.type.FinancialInterest;
 import com.team10.backend.domain.user.type.OccupationStatus;
 import com.team10.backend.domain.user.type.Region;
@@ -534,7 +533,7 @@ class UserServiceTest {
     private UserCreateReq signupReq(String email, String name, String phone, LocalDate birthDate) {
         return new UserCreateReq(
                 "portone-id", email, "Password1!", name, phone, birthDate,
-                AgeGroup.TWENTIES, Region.SEOUL, OccupationStatus.EMPLOYED, Set.of(FinancialInterest.SAVINGS),
+                1990, Region.SEOUL, OccupationStatus.EMPLOYED, Set.of(FinancialInterest.SAVINGS),
                 true, true, true, false);
     }
 
