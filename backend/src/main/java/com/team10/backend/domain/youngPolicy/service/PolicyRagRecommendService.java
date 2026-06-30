@@ -267,7 +267,6 @@ public class PolicyRagRecommendService {
         }
         return regionCode.contains("전국") ||
                regionCode.contains("3001") ||
-               regionCode.contains("003002001") ||
                regionCode.isBlank();
     }
 }

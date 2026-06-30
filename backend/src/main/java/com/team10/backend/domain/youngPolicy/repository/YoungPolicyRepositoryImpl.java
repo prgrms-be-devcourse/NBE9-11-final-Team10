@@ -108,7 +108,6 @@ public class YoungPolicyRepositoryImpl implements YoungPolicyRepositoryCustom {
 
             return exp.or(youngPolicy.regionCode.contains("전국"))
                     .or(youngPolicy.regionCode.contains("3001"))
-                    .or(youngPolicy.regionCode.contains("003002001"))
                     .or(youngPolicy.regionCode.isNull())
                     .or(youngPolicy.regionCode.isEmpty());
         }
@@ -117,7 +116,6 @@ public class YoungPolicyRepositoryImpl implements YoungPolicyRepositoryCustom {
         return youngPolicy.regionCode.containsIgnoreCase(regionName)
                 .or(youngPolicy.regionCode.contains("전국"))
                 .or(youngPolicy.regionCode.contains("3001"))
-                .or(youngPolicy.regionCode.contains("003002001"))
                 .or(youngPolicy.regionCode.isNull())
                 .or(youngPolicy.regionCode.isEmpty());
     }

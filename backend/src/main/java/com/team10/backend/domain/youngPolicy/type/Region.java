@@ -48,7 +48,7 @@ public enum Region {
 
         // 전국에 대한 특수 처리
         if (name.contains("전국")) {
-            return "003002001";
+            return "3001";
         }
 
         // 1. 영문 Enum 명칭 매칭 시도 (예: "SEOUL" -> SEOUL, "Seoul" -> SEOUL)
