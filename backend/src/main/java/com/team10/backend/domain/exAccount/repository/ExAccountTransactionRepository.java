@@ -21,6 +21,8 @@ public interface ExAccountTransactionRepository extends JpaRepository<ExAccountT
             Long userId
     );
 
+    void deleteByExAccountId(Long exAccountId);
+
     Optional<ExAccountTransaction> findByExAccountIdAndTransactionKey(Long exAccountId, String transactionKey);
 
     @Modifying

@@ -19,6 +19,11 @@ mkdir -p /dockerProjects/prometheus/data
 mkdir -p /dockerProjects/grafana/data
 mkdir -p /dockerProjects/grafana/provisioning/datasources
 
+# Prometheus and Grafana containers run as non-root users and need write access
+# to their persisted data directories.
+chown -R 65534:65534 /dockerProjects/prometheus/data
+chown -R 472:472 /dockerProjects/grafana/data
+
 cat > /dockerProjects/edge/docker-compose.yml <<'COMPOSE'
 ${compose_yml}
 COMPOSE
