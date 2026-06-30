@@ -93,7 +93,7 @@ export default function SignupPage() {
     const e: FormErrors = {}
     if (!form.name.trim()) e.name = '이름을 입력해 주세요.'
     if (!form.email) e.email = '이메일을 입력해 주세요.'
-    else if (!/^[a-zA-Z0-9_+&*-]+(?:\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,7}$/.test(form.email))
+    else if (!/^[a-zA-Z0-9_+&*-]+(?:\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/.test(form.email))
       e.email = '올바른 이메일 형식이 아닙니다.'
     if (!form.password) e.password = '비밀번호를 입력해 주세요.'
     else if (form.password.length < 8) e.password = '비밀번호는 8자 이상이어야 합니다.'
