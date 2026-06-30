@@ -89,6 +89,37 @@ jacoco {
     toolVersion = "0.8.13"
 }
 
+val jacocoExcludePatterns = listOf(
+    // bootstrap
+    "**/*Application.class",
+
+    // querydsl
+    "**/generated/**",
+    "**/Q*.class",
+
+    // configuration
+    "**/*Config.class",
+    "**/*Properties.class",
+    "**/*Constants.class",
+    "**/*Constants$*.class",
+
+    // data carriers
+    "**/dto/**",
+    "**/*Req.class",
+    "**/*Res.class",
+    "**/*Event.class",
+
+    // exception
+    "**/exception/**",
+
+    // simple declarations
+    "**/type/**",
+    "**/annotation/**",
+
+    // base entity
+    "**/BaseEntity.class"
+)
+
 /**
  * ./gradlew test 수행 시
  * JUnit test 종료 후 jacocoTestReport 자동 실행
@@ -183,34 +214,3 @@ fun filterJacocoClasses(classDirectories: ConfigurableFileCollection) {
         })
     )
 }
-
-val jacocoExcludePatterns = listOf(
-    // bootstrap
-    "**/*Application.class",
-
-    // querydsl
-    "**/generated/**",
-    "**/Q*.class",
-
-    // configuration
-    "**/*Config.class",
-    "**/*Properties.class",
-    "**/*Constants.class",
-    "**/*Constants$*.class",
-
-    // data carriers
-    "**/dto/**",
-    "**/*Req.class",
-    "**/*Res.class",
-    "**/*Event.class",
-
-    // exception
-    "**/exception/**",
-
-    // simple declarations
-    "**/type/**",
-    "**/annotation/**",
-
-    // base entity
-    "**/BaseEntity.class"
-)
