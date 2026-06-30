@@ -1,5 +1,6 @@
 plugins {
     java
+    jacoco
     id("org.springframework.boot") version "4.0.6"
     id("io.spring.dependency-management") version "1.1.7"
 }
@@ -84,6 +85,132 @@ dependencies {
     implementation("io.micrometer:micrometer-registry-prometheus")
 }
 
+jacoco {
+    toolVersion = "0.8.13"
+}
+
+val jacocoExcludePatterns = listOf(
+    // bootstrap
+    "**/*Application.class",
+
+    // querydsl
+    "**/generated/**",
+    "**/Q*.class",
+
+    // configuration
+    "**/*Config.class",
+    "**/*Properties.class",
+    "**/*Constants.class",
+    "**/*Constants$*.class",
+
+    // data carriers
+    "**/dto/**",
+    "**/*Req.class",
+    "**/*Res.class",
+    "**/*Event.class",
+
+    // exception
+    "**/exception/**",
+
+    // simple declarations
+    "**/type/**",
+    "**/annotation/**",
+
+    // base entity
+    "**/BaseEntity.class"
+)
+
+/**
+ * ./gradlew test 수행 시
+ * JUnit test 종료 후 jacocoTestReport 자동 실행
+ */
 tasks.withType<Test> {
     useJUnitPlatform()
+    finalizedBy(tasks.named("jacocoTestReport"))
+}
+
+/**
+ * 테스트 커버리지 리포트 생성 설정
+ * */
+tasks.named<JacocoReport>("jacocoTestReport") {
+
+    /** 테스트 커버리지 검사에서 제외할 경로 명시 */
+    filterJacocoClasses(classDirectories)
+
+    reports {
+        xml.required.set(true)  // SonarQube 등의 외부 툴에서 사용
+        html.required.set(true) // build/reports/jacoco/test/html/index.html
+    }
+}
+
+/**
+ * 테스트 커버리지 Quality Gate 정의
+ * */
+tasks.jacocoTestCoverageVerification {
+
+    /** 테스트 커버리지 검사에서 제외할 경로 명시 */
+    filterJacocoClasses(classDirectories)
+
+    /** 품질 검사 통과 기준 정의 */
+    violationRules {
+//        특정 경로에 대해서만 CLASS를 적용해 엄격한 검사를 수행할 수 있다
+//        rule {
+//            enabled = true
+//            element = "CLASS"
+//
+//            includes = listOf("com.team.service.*")
+//
+//            limit {
+//
+//            }
+//        }
+
+        rule {
+            enabled = true // 규칙 활성 여부
+            element = "BUNDLE" // 커버리지 검사 단위 지정 CLASS : 각 클래스 별
+
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = 0.80.toBigDecimal()
+            }
+            limit {
+                counter = "BRANCH"
+                value = "COVEREDRATIO"
+                minimum = 0.70.toBigDecimal()
+            }
+            limit {
+                counter = "METHOD"
+                value = "COVEREDRATIO"
+                minimum = 0.70.toBigDecimal()
+            }
+            limit {
+                counter = "CLASS"
+                value = "COVEREDRATIO"
+                minimum = 0.70.toBigDecimal()
+            }
+        }
+    }
+}
+
+/**
+ * build 시 check -> test 수행
+ * 이떄 finalizedBy 설정에 의해 테스트 수행 후 jacocoTestReport 자동 실행
+ * 이후 아래 설정에 의해 jacocoTestCoverageVerification 품질 게이트 검증 실행
+ * 기준 만족 시에만 BUILD SUCCESS
+ * */
+//tasks.check {
+//    dependsOn(tasks.jacocoTestCoverageVerification)
+//}
+
+
+/** JaCoCo 커버리지 측정/검증 제외 경로 지정 헬퍼 메서드 */
+fun filterJacocoClasses(classDirectories: ConfigurableFileCollection) {
+    classDirectories.setFrom(
+        files(classDirectories.files.map {
+            fileTree(it) {
+                exclude(jacocoExcludePatterns)
+            }
+        })
+    )
 }
