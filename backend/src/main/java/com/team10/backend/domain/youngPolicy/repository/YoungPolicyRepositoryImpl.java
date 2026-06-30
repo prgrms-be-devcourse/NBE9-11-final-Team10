@@ -103,7 +103,9 @@ public class YoungPolicyRepositoryImpl implements YoungPolicyRepositoryCustom {
                 exp = (exp == null) ? nameCondition : exp.or(nameCondition);
             }
             if (targetRegion.getCode() != null) {
-                exp = exp.or(youngPolicy.regionCode.contains(targetRegion.getCode()));
+                String code = targetRegion.getCode();
+                exp = exp.or(youngPolicy.regionCode.startsWith(code))
+                         .or(youngPolicy.regionCode.like("%," + code + "%"));
             }
 
             return exp.or(youngPolicy.regionCode.contains("전국"))

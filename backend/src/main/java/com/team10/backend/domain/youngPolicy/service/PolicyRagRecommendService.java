@@ -221,7 +221,7 @@ public class PolicyRagRecommendService {
 
             if (policyRegionCode != null) {
                 // 정책 지역 코드가 사용자 지역 코드를 포함하는 경우 (예: 서울 "11" 포함)
-                if (userRegionCode != null && policyRegionCode.contains(userRegionCode)) {
+                if (userRegionCode != null && (policyRegionCode.startsWith(userRegionCode) || policyRegionCode.contains("," + userRegionCode))) {
                     // 전국 정책 코드가 아닌 특정 지자체 코드인 경우 지역 특화 가중치 부여
                     if (!isNationalCode(policyRegionCode)) {
                         score += 50.0; // 지역 특화 정책 가중치 대폭 상향 (15.0 -> 50.0)
