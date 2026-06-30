@@ -33,6 +33,10 @@ public enum Region {
         return code;
     }
 
+    public String[] getNames() {
+        return names;
+    }
+
     /**
      * 한글 지역명을 기반으로 알맞은 시도 코드를 조회합니다.
      * 예: "서울 마포구" -> "11", "경기도 성남시" -> "41"
@@ -47,6 +51,14 @@ public enum Region {
             return "003002001";
         }
 
+        // 1. 영문 Enum 명칭 매칭 시도 (예: "SEOUL" -> SEOUL, "Seoul" -> SEOUL)
+        for (Region region : values()) {
+            if (region.name().equalsIgnoreCase(name.trim())) {
+                return region.code;
+            }
+        }
+
+        // 2. 한글 이름 매칭 시도 (예: "서울 마포구" -> "서울" 매칭 -> "11")
         for (Region region : values()) {
             for (String n : region.names) {
                 if (name.contains(n)) {

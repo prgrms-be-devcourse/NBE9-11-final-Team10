@@ -1,6 +1,5 @@
 package com.team10.backend.domain.user.dto.req;
 
-import com.team10.backend.domain.user.type.AgeGroup;
 import com.team10.backend.domain.user.type.FinancialInterest;
 import com.team10.backend.domain.user.type.OccupationStatus;
 import com.team10.backend.domain.user.type.Region;
@@ -37,8 +36,9 @@ public record UserCreateReq(
         LocalDate birthDate,
 
         // 프로필 — 본인인증 다음 단계(2단계)에서 함께 수집되어 가입과 동시에 생성된다.
-        @NotNull(message = "연령대는 필수입니다.")
-        AgeGroup ageGroup,
+        @NotNull(message = "태어난 년도는 필수입니다.")
+        @Min(value = 1900, message = "올바른 태어난 년도를 입력해주세요.")
+        Integer birthYear,
 
         @NotNull(message = "지역은 필수입니다.")
         Region region,

@@ -82,7 +82,7 @@ public class UserService {
             userProfileService.create(
                     saved.getId(),
                     new UserProfileReq(
-                            request.ageGroup(),
+                            request.birthYear(),
                             request.region(),
                             request.occupationStatus(),
                             request.financialInterests()

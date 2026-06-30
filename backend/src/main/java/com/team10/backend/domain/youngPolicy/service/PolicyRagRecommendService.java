@@ -8,6 +8,7 @@ import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyRecommendItem;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyRecommendRes;
 import com.team10.backend.domain.youngPolicy.entity.YoungPolicy;
 import com.team10.backend.domain.youngPolicy.repository.YoungPolicyRepository;
+import com.team10.backend.domain.youngPolicy.type.Region;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -80,10 +81,11 @@ public class PolicyRagRecommendService {
             return new YoungPolicyRecommendRes(List.of());
         }
 
-        // 키워드 매칭 가중치를 이용해 상위 10개 후보군 선별 (LLM 입력 토큰 최적화 및 1차 Rerank)
+        // 키워드 및 지역 매칭 가중치를 이용해 상위 10개 후보군 선별 (LLM 입력 토큰 최적화 및 1차 Rerank)
         String query = request.query();
+        String region = request.region();
         List<YoungPolicy> rerankedCandidates = filteredPolicies.stream()
-                .sorted(Comparator.comparingDouble((YoungPolicy p) -> calculateMatchScore(p, query)).reversed())
+                .sorted(Comparator.comparingDouble((YoungPolicy p) -> calculateMatchScore(p, query, region)).reversed())
                 .limit(10)
                 .toList();
 
@@ -172,33 +174,66 @@ public class PolicyRagRecommendService {
     }
 
     /**
-     * 간단한 텍스트 유사도 점수 산출
+     * 키워드 및 지역 매칭 유사도 점수 산출
+     * 제목 가중치를 낮추고, 사용자 지역에 따른 지역 분류 및 가중치를 반영합니다.
      */
-    private double calculateMatchScore(YoungPolicy policy, String query) {
-        if (query == null || query.isBlank()) {
-            return 0.0;
-        }
-
-        String[] keywords = query.split("\\s+");
+    private double calculateMatchScore(YoungPolicy policy, String query, String userRegion) {
         double score = 0.0;
 
-        String title = policy.getTitle() != null ? policy.getTitle() : "";
-        String desc = policy.getDescription() != null ? policy.getDescription() : "";
-        String subCategory = policy.getSubCategory() != null ? policy.getSubCategory() : "";
+        // 1. 사용자 지역 분류 및 지역 가중치 반영
+        if (userRegion != null && !userRegion.isBlank()) {
+            String userRegionCode = Region.findCodeByName(userRegion);
+            String policyRegionCode = policy.getRegionCode();
 
-        for (String kw : keywords) {
-            if (kw.length() < 2) continue; // 1글자 조사 제외
-
-            if (title.contains(kw)) {
-                score += 10.0;
-            }
-            if (subCategory.contains(kw)) {
-                score += 5.0;
-            }
-            if (desc.contains(kw)) {
-                score += 2.0;
+            if (policyRegionCode != null) {
+                // 정책 지역 코드가 사용자 지역 코드를 포함하는 경우 (예: 서울 "11" 포함)
+                if (userRegionCode != null && policyRegionCode.contains(userRegionCode)) {
+                    // 전국 정책 코드가 아닌 특정 지자체 코드인 경우 지역 특화 가중치 부여
+                    if (!isNationalCode(policyRegionCode)) {
+                        score += 15.0; // 지역 특화 정책 가중치
+                    } else {
+                        score += 5.0;  // 전국구 정책 가중치
+                    }
+                } else if (isNationalCode(policyRegionCode) || policyRegionCode.contains("전국")) {
+                    score += 5.0;      // 전국구 정책 가중치
+                }
+            } else {
+                score += 5.0;          // 지역 코드가 없는 경우도 전국구에 준하여 처리
             }
         }
+
+        // 2. 키워드 매칭 가중치 (제목 가중치를 낮춤)
+        if (query != null && !query.isBlank()) {
+            String[] keywords = query.split("\\s+");
+            String title = policy.getTitle() != null ? policy.getTitle() : "";
+            String desc = policy.getDescription() != null ? policy.getDescription() : "";
+            String subCategory = policy.getSubCategory() != null ? policy.getSubCategory() : "";
+
+            for (String kw : keywords) {
+                if (kw.length() < 2) continue; // 1글자 조사 제외
+
+                if (title.contains(kw)) {
+                    score += 5.0; // 기존 10.0 -> 5.0으로 하향 조정
+                }
+                if (subCategory.contains(kw)) {
+                    score += 3.0; // 기존 5.0 -> 3.0으로 하향 조정
+                }
+                if (desc.contains(kw)) {
+                    score += 1.0; // 기존 2.0 -> 1.0으로 하향 조정
+                }
+            }
+        }
+
         return score;
+    }
+
+    private boolean isNationalCode(String regionCode) {
+        if (regionCode == null) {
+            return true;
+        }
+        return regionCode.contains("전국") ||
+               regionCode.contains("3001") ||
+               regionCode.contains("003002001") ||
+               regionCode.isBlank();
     }
 }
