@@ -51,6 +51,13 @@ interface FormState {
 
 type FormErrors = Partial<Record<keyof FormState, string>>
 
+// 생년월일로 선택 가능한 가장 최근 날짜 — 오늘 기준 1년 전까지만 허용한다.
+function getMaxBirthDateString() {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function SignupPage() {
   const router = useRouter()
 
@@ -86,14 +93,19 @@ export default function SignupPage() {
     const e: FormErrors = {}
     if (!form.name.trim()) e.name = '이름을 입력해 주세요.'
     if (!form.email) e.email = '이메일을 입력해 주세요.'
-    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = '올바른 이메일 형식이 아닙니다.'
+    else if (!/^[a-zA-Z0-9_+&*-]+(?:\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,7}$/.test(form.email))
+      e.email = '올바른 이메일 형식이 아닙니다.'
     if (!form.password) e.password = '비밀번호를 입력해 주세요.'
     else if (form.password.length < 8) e.password = '비밀번호는 8자 이상이어야 합니다.'
+    else if (!/^(?=.*[A-Za-z])(?=.*\d).+$/.test(form.password))
+      e.password = '비밀번호는 영문과 숫자를 각각 1자 이상 포함해야 합니다.'
     if (form.password !== form.passwordConfirm) e.passwordConfirm = '비밀번호가 일치하지 않습니다.'
     if (!form.phoneNumber) e.phoneNumber = '휴대폰 번호를 입력해 주세요.'
     else if (!/^01[0-9]{8,9}$/.test(form.phoneNumber))
       e.phoneNumber = '올바른 형식으로 입력해 주세요. (예: 01012345678)'
     if (!form.birthDate) e.birthDate = '생년월일을 입력해 주세요.'
+    else if (form.birthDate > getMaxBirthDateString())
+      e.birthDate = '생년월일은 1년 이전 날짜여야 합니다.'
     if (!form.identityVerificationId.trim()) {
       e.identityVerificationId = '본인인증을 완료해 주세요.'
     }
@@ -337,6 +349,7 @@ export default function SignupPage() {
                 <Input
                   id="birthDate"
                   type="date"
+                  max={getMaxBirthDateString()}
                   value={form.birthDate}
                   onChange={(e) => setForm((p) => ({ ...p, birthDate: e.target.value }))}
                   aria-invalid={!!fieldError('birthDate')}
