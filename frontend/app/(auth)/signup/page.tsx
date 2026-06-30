@@ -52,11 +52,11 @@ interface FormState {
 type FormErrors = Partial<Record<keyof FormState, string>>
 
 // 생년월일로 선택 가능한 가장 최근 날짜 — 오늘 기준 1년 전까지만 허용한다.
-function getMaxBirthDateString() {
+const MAX_BIRTH_DATE = (() => {
   const d = new Date()
   d.setFullYear(d.getFullYear() - 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+})()
 
 export default function SignupPage() {
   const router = useRouter()
