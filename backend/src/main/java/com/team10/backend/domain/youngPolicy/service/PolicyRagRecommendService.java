@@ -9,6 +9,7 @@ import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyRecommendRes;
 import com.team10.backend.domain.youngPolicy.entity.YoungPolicy;
 import com.team10.backend.domain.youngPolicy.repository.YoungPolicyRepository;
 import com.team10.backend.domain.youngPolicy.type.Region;
+import com.team10.backend.domain.user.repository.UserProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +39,7 @@ public class PolicyRagRecommendService {
     private final YoungPolicyRepository youngPolicyRepository;
     private final GeminiChatService geminiChatService;
     private final ObjectMapper objectMapper;
+    private final UserProfileRepository userProfileRepository;
 
     @Value("classpath:prompts/system-instruction.txt")
     private Resource systemInstructionResource;
@@ -66,11 +68,43 @@ public class PolicyRagRecommendService {
         }
     }
 
-    public YoungPolicyRecommendRes recommend(YoungPolicyRecommendReq request) {
+    public YoungPolicyRecommendRes recommend(Long userId, YoungPolicyRecommendReq request) {
+        Integer age = request.age();
+        String region = request.region();
+
+        // 로그인된 사용자인 경우 프로필 정보를 우선 적용
+        if (userId != null) {
+            var profileOpt = userProfileRepository.findByUserId(userId);
+            if (profileOpt.isPresent()) {
+                var profile = profileOpt.get();
+                if (profile.getBirthYear() != null) {
+                    age = java.time.LocalDate.now().getYear() - profile.getBirthYear();
+                }
+                if (profile.getRegion() != null) {
+                    try {
+                        var ypRegion = com.team10.backend.domain.youngPolicy.type.Region.valueOf(profile.getRegion().name());
+                        if (ypRegion.getNames() != null && ypRegion.getNames().length > 0) {
+                            region = ypRegion.getNames()[0]; // "서울", "경기" 등
+                        }
+                    } catch (IllegalArgumentException e) {
+                        log.warn("Failed to map User Region enum to YoungPolicy Region enum", e);
+                    }
+                }
+            }
+        }
+
+        // age 나 region 이 null 일 때의 방어 조치 (String.format 예외 방지)
+        if (age == null) {
+            age = 25; // 기본값 연령
+        }
+        if (region == null) {
+            region = "전국";
+        }
+
         // 1차 메타데이터 필터링 (나이, 지역, 카테고리 적용)
         YoungPolicySearchReq searchFilter = new YoungPolicySearchReq(
-                request.age(),
-                request.region(),
+                age,
+                region,
                 request.category(),
                 null
         );
@@ -83,9 +117,9 @@ public class PolicyRagRecommendService {
 
         // 키워드 및 지역 매칭 가중치를 이용해 상위 10개 후보군 선별 (LLM 입력 토큰 최적화 및 1차 Rerank)
         String query = request.query();
-        String region = request.region();
+        final String finalRegion = region;
         List<YoungPolicy> rerankedCandidates = filteredPolicies.stream()
-                .sorted(Comparator.comparingDouble((YoungPolicy p) -> calculateMatchScore(p, query, region)).reversed())
+                .sorted(Comparator.comparingDouble((YoungPolicy p) -> calculateMatchScore(p, query, finalRegion)).reversed())
                 .limit(10)
                 .toList();
 
@@ -99,8 +133,8 @@ public class PolicyRagRecommendService {
 
         String userPrompt = String.format(
                 userPromptTemplate,
-                request.age(),
-                request.region(),
+                age,
+                region,
                 request.category() != null ? request.category() : "전체",
                 query,
                 policiesContext.toString()

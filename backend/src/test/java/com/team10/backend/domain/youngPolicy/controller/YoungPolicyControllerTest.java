@@ -123,7 +123,7 @@ class YoungPolicyControllerTest {
         YoungPolicyRecommendRes response = new YoungPolicyRecommendRes(List.of(
                 new YoungPolicyRecommendItem(100L, "PL001", "청년 월세 지원", "주거지원", "주거비", 19, 39, "003002001", "2026", "주거비 부담을 덜어주기 위해 지원 대상으로 추천합니다.")
         ));
-        when(policyRagRecommendService.recommend(any(YoungPolicyRecommendReq.class))).thenReturn(response);
+        when(policyRagRecommendService.recommend(any(), any(YoungPolicyRecommendReq.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/youth-policies/recommend")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -141,6 +141,6 @@ class YoungPolicyControllerTest {
                 .andExpect(jsonPath("$.recommendedPolicies[0].title").value("청년 월세 지원"))
                 .andExpect(jsonPath("$.recommendedPolicies[0].recommendReason").value("주거비 부담을 덜어주기 위해 지원 대상으로 추천합니다."));
 
-        verify(policyRagRecommendService).recommend(any(YoungPolicyRecommendReq.class));
+        verify(policyRagRecommendService).recommend(any(), any(YoungPolicyRecommendReq.class));
     }
 }
