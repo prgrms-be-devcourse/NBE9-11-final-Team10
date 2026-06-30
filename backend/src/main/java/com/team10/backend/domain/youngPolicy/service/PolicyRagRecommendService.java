@@ -72,15 +72,15 @@ public class PolicyRagRecommendService {
         Integer age = request.age();
         String region = request.region();
 
-        // 로그인된 사용자인 경우 프로필 정보를 우선 적용
+        // 클라이언트에서 명시적으로 나이나 지역을 보내지 않았을 때만 로그인된 사용자의 프로필 정보를 적용 (세션 기반 보완)
         if (userId != null) {
             var profileOpt = userProfileRepository.findByUserId(userId);
             if (profileOpt.isPresent()) {
                 var profile = profileOpt.get();
-                if (profile.getBirthYear() != null) {
+                if (age == null && profile.getBirthYear() != null) {
                     age = java.time.LocalDate.now().getYear() - profile.getBirthYear();
                 }
-                if (profile.getRegion() != null) {
+                if ((region == null || region.isBlank()) && profile.getRegion() != null) {
                     try {
                         var ypRegion = com.team10.backend.domain.youngPolicy.type.Region.valueOf(profile.getRegion().name());
                         if (ypRegion.getNames() != null && ypRegion.getNames().length > 0) {
