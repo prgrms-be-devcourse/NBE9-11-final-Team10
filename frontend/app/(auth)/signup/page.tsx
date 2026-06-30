@@ -349,7 +349,7 @@ export default function SignupPage() {
                 <Input
                   id="birthDate"
                   type="date"
-                  max={getMaxBirthDateString()}
+                  max={MAX_BIRTH_DATE}
                   value={form.birthDate}
                   onChange={(e) => setForm((p) => ({ ...p, birthDate: e.target.value }))}
                   aria-invalid={!!fieldError('birthDate')}
