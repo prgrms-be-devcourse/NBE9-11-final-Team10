@@ -36,19 +36,18 @@ docker exec -i mysql mysql -u root -p snaptix < 04_k6_young_policies.sql
 
 ## AWS/DB 담당자 확인 필요
 
-`03_k6_investment.sql`의 주식 코드는 아직 확정값이 아닙니다. 아래 값은 k6 투자 테스트를 작성하기 위한 후보값이며, EC2 MySQL의 실제 `stocks.stock_code`에 존재하는지 확인해야 합니다.
+`03_k6_investment.sql`의 주식 코드는 EC2 MySQL의 실제 `stocks.stock_code`를 기준으로 반영했습니다.
 
 ```text
-확인/교체 필요:
-005930,000660,035420,035720,005380,068270,373220,207940,051910,006400
+000150,000120,000140,000880,005830,010950,015760,016360,017670,0204S0
 ```
 
 AWS/DB 담당자는 아래를 확인합니다.
 
 | 확인 항목 | 확인 방법 | 조치 |
 |---|---|---|
-| `stocks.stock_code` 존재 여부 | `03_k6_investment.sql` 실행 후 `matched_stock_count` 확인 | `10`보다 작으면 실제 존재하는 종목 코드로 SQL의 `stock_code` 후보를 교체 |
-| k6 env의 `STOCK_CODES` | SQL에 최종 반영한 종목 코드와 비교 | `perf/k6/.env.local`의 `STOCK_CODES`에도 같은 코드 반영 |
+| `stocks.stock_code` 존재 여부 | `03_k6_investment.sql` 실행 후 `matched_stock_count` 확인 | `10`보다 작으면 `stocks` 데이터 적재 상태 또는 코드 오타 확인 |
+| k6 env의 `STOCK_CODES` | SQL에 반영한 종목 코드와 비교 | `perf/k6/.env.local`의 `STOCK_CODES`에도 같은 코드 반영 |
 | 보유종목 생성 여부 | `investment_holdings`에 `investment_account_id` 900001, 900002 데이터 생성 확인 | 생성 건수가 부족하면 종목 코드 또는 주식 마스터 적재 상태 확인 |
 
 `04_k6_young_policies.sql`은 데이터를 생성하지 않고, 실제 적재된 청년정책 중 k6 테스트에 쓸 만한 정책을 조회합니다. 고정된 상세 조회 대상이 필요하면 조회 결과의 `id` 값을 k6 env의 `POLICY_IDS`에 넣습니다.
@@ -74,8 +73,8 @@ export EXCHANGE_TO=USD
 export EXCHANGE_AMOUNT=1000
 
 export INVESTMENT_ACCOUNT_IDS=900001
-# 실제 EC2 stocks.stock_code 확인 후 아래 값을 교체하세요.
-export STOCK_CODES=005930,000660,035420,035720
+# EC2 MySQL의 실제 stocks.stock_code 기준입니다.
+export STOCK_CODES=000150,000120,000140,000880,005830,010950,015760,016360,017670,0204S0
 export STOCK_KEYWORDS=삼성,현대,카카오
 
 export SENDER_ACCOUNT_ID=900001
