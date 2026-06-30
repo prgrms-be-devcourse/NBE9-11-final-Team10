@@ -1,6 +1,5 @@
 package com.team10.backend.domain.user.entity;
 
-import com.team10.backend.domain.user.type.AgeGroup;
 import com.team10.backend.domain.user.type.FinancialInterest;
 import com.team10.backend.domain.user.type.OccupationStatus;
 import com.team10.backend.domain.user.type.Region;
@@ -28,11 +27,11 @@ class UserProfileTest {
         @DisplayName("관심사가 주어지면 그대로 설정된다")
         void withInterests_setsAsGiven() {
             UserProfile profile = UserProfile.create(
-                    newUser(), AgeGroup.TWENTIES, Region.SEOUL, OccupationStatus.EMPLOYED,
+                    newUser(), 1990, Region.SEOUL, OccupationStatus.EMPLOYED,
                     Set.of(FinancialInterest.SAVINGS, FinancialInterest.INVESTMENT)
             );
 
-            assertThat(profile.getAgeGroup()).isEqualTo(AgeGroup.TWENTIES);
+            assertThat(profile.getBirthYear()).isEqualTo(1990);
             assertThat(profile.getRegion()).isEqualTo(Region.SEOUL);
             assertThat(profile.getOccupationStatus()).isEqualTo(OccupationStatus.EMPLOYED);
             assertThat(profile.getFinancialInterests())
@@ -43,7 +42,7 @@ class UserProfileTest {
         @DisplayName("관심사가 null이면 빈 집합으로 초기화된다")
         void nullInterests_initializesEmptySet() {
             UserProfile profile = UserProfile.create(
-                    newUser(), AgeGroup.THIRTIES, Region.BUSAN, OccupationStatus.STUDENT, null
+                    newUser(), 1980, Region.BUSAN, OccupationStatus.STUDENT, null
             );
 
             assertThat(profile.getFinancialInterests()).isEmpty();
@@ -58,14 +57,14 @@ class UserProfileTest {
         @DisplayName("필드와 관심사 집합이 새 값으로 교체된다")
         void replacesFieldsAndInterests() {
             UserProfile profile = UserProfile.create(
-                    newUser(), AgeGroup.TWENTIES, Region.SEOUL, OccupationStatus.EMPLOYED,
+                    newUser(), 1990, Region.SEOUL, OccupationStatus.EMPLOYED,
                     new HashSet<>(Set.of(FinancialInterest.SAVINGS))
             );
 
-            profile.update(AgeGroup.FORTIES, Region.DAEGU, OccupationStatus.FREELANCER,
+            profile.update(1970, Region.DAEGU, OccupationStatus.FREELANCER,
                     Set.of(FinancialInterest.LOAN, FinancialInterest.PENSION));
 
-            assertThat(profile.getAgeGroup()).isEqualTo(AgeGroup.FORTIES);
+            assertThat(profile.getBirthYear()).isEqualTo(1970);
             assertThat(profile.getRegion()).isEqualTo(Region.DAEGU);
             assertThat(profile.getOccupationStatus()).isEqualTo(OccupationStatus.FREELANCER);
             assertThat(profile.getFinancialInterests())
@@ -76,11 +75,11 @@ class UserProfileTest {
         @DisplayName("관심사로 null이 전달되면 기존 관심사를 비우기만 한다")
         void nullInterests_clearsExisting() {
             UserProfile profile = UserProfile.create(
-                    newUser(), AgeGroup.TWENTIES, Region.SEOUL, OccupationStatus.EMPLOYED,
+                    newUser(), 1990, Region.SEOUL, OccupationStatus.EMPLOYED,
                     new HashSet<>(Set.of(FinancialInterest.SAVINGS))
             );
 
-            profile.update(AgeGroup.TWENTIES, Region.SEOUL, OccupationStatus.EMPLOYED, null);
+            profile.update(1990, Region.SEOUL, OccupationStatus.EMPLOYED, null);
 
             assertThat(profile.getFinancialInterests()).isEmpty();
         }

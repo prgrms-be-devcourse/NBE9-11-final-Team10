@@ -13,8 +13,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { signup as apiSignup } from '@/lib/api/auth'
 import { ApiRequestError } from '@/lib/api'
-import { ageGroupOptions, interestOptions, occupationOptions, regionOptions } from '@/lib/profileOptions'
-import type { AgeGroup, FinancialInterest, OccupationStatus, Region } from '@/lib/types'
+import { interestOptions, occupationOptions, regionOptions } from '@/lib/profileOptions'
+import type { FinancialInterest, OccupationStatus, Region } from '@/lib/types'
 
 declare global {
   interface Window {
@@ -40,7 +40,7 @@ interface FormState {
   phoneNumber: string
   birthDate: string
   identityVerificationId: string
-  ageGroup: AgeGroup | ''
+  birthYear: number | ''
   region: Region | ''
   occupationStatus: OccupationStatus | ''
   agreedServiceTerms: boolean
@@ -54,7 +54,7 @@ type FormErrors = Partial<Record<keyof FormState, string>>
 // 2단계(프로필 설정) 화면에 실제로 렌더링되는 필드. 백엔드 검증 에러가 이 목록 밖의
 // 필드(예: password, birthDate)를 가리키면 화면 어디에도 표시되지 않고 조용히 묻히므로,
 // 그런 경우엔 1단계로 돌려보내고 상단 알림도 같이 띄운다.
-const STEP1_VISIBLE_FIELDS = new Set<string>(['ageGroup', 'region', 'occupationStatus'])
+const STEP1_VISIBLE_FIELDS = new Set<string>(['birthYear', 'region', 'occupationStatus'])
 
 // 생년월일로 선택 가능한 가장 최근 날짜 — 오늘 기준 1년 전까지만 허용한다.
 const MAX_BIRTH_DATE = (() => {
@@ -78,7 +78,7 @@ export default function SignupPage() {
     phoneNumber: '',
     birthDate: '',
     identityVerificationId: '',
-    ageGroup: '',
+    birthYear: '',
     region: '',
     occupationStatus: '',
     agreedServiceTerms: false,
@@ -122,7 +122,7 @@ export default function SignupPage() {
 
   function validateProfileStep(): FormErrors {
     const e: FormErrors = {}
-    if (!form.ageGroup) e.ageGroup = '연령대를 선택해 주세요.'
+    if (!form.birthYear) e.birthYear = '태어난 년도를 선택해 주세요.'
     if (!form.region) e.region = '지역을 선택해 주세요.'
     if (!form.occupationStatus) e.occupationStatus = '직업 상태를 선택해 주세요.'
     return e
@@ -198,7 +198,7 @@ export default function SignupPage() {
         name: form.name,
         phoneNumber: form.phoneNumber,
         birthDate: form.birthDate,
-        ageGroup: form.ageGroup as AgeGroup,
+        birthYear: Number(form.birthYear),
         region: form.region as Region,
         occupationStatus: form.occupationStatus as OccupationStatus,
         financialInterests: Array.from(interests),
@@ -452,27 +452,30 @@ export default function SignupPage() {
               </p>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ageGroup">연령대</Label>
+                <Label htmlFor="birthYear">태어난 년도</Label>
                 <select
-                  id="ageGroup"
-                  value={form.ageGroup}
+                  id="birthYear"
+                  value={form.birthYear}
                   onChange={(e) =>
-                    setForm((p) => ({ ...p, ageGroup: e.target.value as AgeGroup }))
+                    setForm((p) => ({ ...p, birthYear: Number(e.target.value) }))
                   }
                   className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-                  aria-invalid={!!fieldError('ageGroup')}
+                  aria-invalid={!!fieldError('birthYear')}
                 >
                   <option value="" disabled>
                     선택해 주세요
                   </option>
-                  {ageGroupOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
+                  {Array.from({ length: new Date().getFullYear() - 1950 + 1 }, (_, i) => {
+                    const year = new Date().getFullYear() - i;
+                    return (
+                      <option key={year} value={year}>
+                        {year}년
+                      </option>
+                    );
+                  })}
                 </select>
-                {fieldError('ageGroup') && (
-                  <p className="text-xs text-destructive">{fieldError('ageGroup')}</p>
+                {fieldError('birthYear') && (
+                  <p className="text-xs text-destructive">{fieldError('birthYear')}</p>
                 )}
               </div>
 

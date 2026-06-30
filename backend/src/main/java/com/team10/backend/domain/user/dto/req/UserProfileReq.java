@@ -1,7 +1,7 @@
 package com.team10.backend.domain.user.dto.req;
 
-import com.team10.backend.domain.user.type.AgeGroup;
 import com.team10.backend.domain.user.type.FinancialInterest;
+import jakarta.validation.constraints.Min;
 import com.team10.backend.domain.user.type.OccupationStatus;
 import com.team10.backend.domain.user.type.Region;
 import jakarta.validation.constraints.NotNull;
@@ -9,8 +9,9 @@ import jakarta.validation.constraints.NotNull;
 import java.util.Set;
 
 public record UserProfileReq(
-        @NotNull(message = "연령대는 필수입니다.")
-        AgeGroup ageGroup,
+        @NotNull(message = "태어난 년도는 필수입니다.")
+        @Min(value = 1900, message = "올바른 태어난 년도를 입력해주세요.")
+        Integer birthYear,
 
         @NotNull(message = "지역은 필수입니다.")
         Region region,

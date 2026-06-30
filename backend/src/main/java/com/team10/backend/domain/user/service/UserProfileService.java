@@ -35,7 +35,7 @@ public class UserProfileService {
 
         UserProfile profile = UserProfile.create(
                 user,
-                request.ageGroup(),
+                request.birthYear(),
                 request.region(),
                 request.occupationStatus(),
                 request.financialInterests()
@@ -61,7 +61,7 @@ public class UserProfileService {
                 .orElseThrow(() -> new BusinessException(UserErrorCode.PROFILE_NOT_FOUND));
 
         profile.update(
-                request.ageGroup(),
+                request.birthYear(),
                 request.region(),
                 request.occupationStatus(),
                 request.financialInterests()

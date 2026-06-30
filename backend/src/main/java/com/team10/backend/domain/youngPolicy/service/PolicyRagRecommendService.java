@@ -8,6 +8,8 @@ import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyRecommendItem;
 import com.team10.backend.domain.youngPolicy.dto.res.YoungPolicyRecommendRes;
 import com.team10.backend.domain.youngPolicy.entity.YoungPolicy;
 import com.team10.backend.domain.youngPolicy.repository.YoungPolicyRepository;
+import com.team10.backend.domain.youngPolicy.type.Region;
+import com.team10.backend.domain.user.repository.UserProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,9 +36,26 @@ public class PolicyRagRecommendService {
     private static final TypeReference<List<Map<String, Object>>> RECOMMENDATION_TYPE_REF =
             new TypeReference<>() {};
 
+    private static final int RERANK_CANDIDATE_LIMIT = 10;
+    private static final int DEFAULT_FALLBACK_AGE = 25;
+    private static final String DEFAULT_FALLBACK_REGION = "전국";
+
+    // 가중치 상수 정의
+    private static final double LOCAL_POLICY_WEIGHT = 50.0;
+    private static final double NATIONAL_POLICY_WEIGHT = 10.0;
+    private static final double KEYWORD_TITLE_WEIGHT = 5.0;
+    private static final double KEYWORD_SUBCATEGORY_WEIGHT = 3.0;
+    private static final double KEYWORD_DESC_WEIGHT = 1.0;
+    private static final int MIN_KEYWORD_LENGTH = 2;
+
+    // 전국구 코드 패턴
+    private static final String NATIONAL_REGION_NAME = "전국";
+    private static final String NATIONAL_REGION_CODE = "3001";
+
     private final YoungPolicyRepository youngPolicyRepository;
     private final GeminiChatService geminiChatService;
     private final ObjectMapper objectMapper;
+    private final UserProfileRepository userProfileRepository;
 
     @Value("classpath:prompts/system-instruction.txt")
     private Resource systemInstructionResource;
@@ -65,11 +84,43 @@ public class PolicyRagRecommendService {
         }
     }
 
-    public YoungPolicyRecommendRes recommend(YoungPolicyRecommendReq request) {
+    public YoungPolicyRecommendRes recommend(Long userId, YoungPolicyRecommendReq request) {
+        Integer age = request.age();
+        String region = request.region();
+
+        // 클라이언트에서 명시적으로 나이나 지역을 보내지 않았을 때만 로그인된 사용자의 프로필 정보를 적용 (세션 기반 보완)
+        if (userId != null) {
+            var profileOpt = userProfileRepository.findByUserId(userId);
+            if (profileOpt.isPresent()) {
+                var profile = profileOpt.get();
+                if (age == null && profile.getBirthYear() != null) {
+                    age = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getYear() - profile.getBirthYear();
+                }
+                if ((region == null || region.isBlank()) && profile.getRegion() != null) {
+                    try {
+                        var ypRegion = com.team10.backend.domain.youngPolicy.type.Region.valueOf(profile.getRegion().name());
+                        if (ypRegion.getNames() != null && ypRegion.getNames().length > 0) {
+                            region = ypRegion.getNames()[0]; // "서울", "경기" 등
+                        }
+                    } catch (IllegalArgumentException e) {
+                        log.warn("Failed to map User Region enum to YoungPolicy Region enum", e);
+                    }
+                }
+            }
+        }
+
+        // age 나 region 이 null 일 때의 방어 조치 (String.format 예외 방지)
+        if (age == null) {
+            age = DEFAULT_FALLBACK_AGE;
+        }
+        if (region == null) {
+            region = DEFAULT_FALLBACK_REGION;
+        }
+
         // 1차 메타데이터 필터링 (나이, 지역, 카테고리 적용)
         YoungPolicySearchReq searchFilter = new YoungPolicySearchReq(
-                request.age(),
-                request.region(),
+                age,
+                region,
                 request.category(),
                 null
         );
@@ -80,11 +131,12 @@ public class PolicyRagRecommendService {
             return new YoungPolicyRecommendRes(List.of());
         }
 
-        // 키워드 매칭 가중치를 이용해 상위 10개 후보군 선별 (LLM 입력 토큰 최적화 및 1차 Rerank)
+        // 키워드 및 지역 매칭 가중치를 이용해 상위 10개 후보군 선별 (LLM 입력 토큰 최적화 및 1차 Rerank)
         String query = request.query();
+        final String finalRegion = region;
         List<YoungPolicy> rerankedCandidates = filteredPolicies.stream()
-                .sorted(Comparator.comparingDouble((YoungPolicy p) -> calculateMatchScore(p, query)).reversed())
-                .limit(10)
+                .sorted(Comparator.comparingDouble((YoungPolicy p) -> calculateMatchScore(p, query, finalRegion)).reversed())
+                .limit(RERANK_CANDIDATE_LIMIT)
                 .toList();
 
         // AI 추천을 위한 프롬프트 가공 (4가지 카드 추천에 특화된 구조)
@@ -97,8 +149,8 @@ public class PolicyRagRecommendService {
 
         String userPrompt = String.format(
                 userPromptTemplate,
-                request.age(),
-                request.region(),
+                age,
+                region,
                 request.category() != null ? request.category() : "전체",
                 query,
                 policiesContext.toString()
@@ -172,33 +224,65 @@ public class PolicyRagRecommendService {
     }
 
     /**
-     * 간단한 텍스트 유사도 점수 산출
+     * 키워드 및 지역 매칭 유사도 점수 산출
+     * 제목 가중치를 낮추고, 사용자 지역에 따른 지역 분류 및 가중치를 반영합니다.
      */
-    private double calculateMatchScore(YoungPolicy policy, String query) {
-        if (query == null || query.isBlank()) {
-            return 0.0;
-        }
-
-        String[] keywords = query.split("\\s+");
+    private double calculateMatchScore(YoungPolicy policy, String query, String userRegion) {
         double score = 0.0;
 
-        String title = policy.getTitle() != null ? policy.getTitle() : "";
-        String desc = policy.getDescription() != null ? policy.getDescription() : "";
-        String subCategory = policy.getSubCategory() != null ? policy.getSubCategory() : "";
+        // 1. 사용자 지역 분류 및 지역 가중치 반영
+        if (userRegion != null && !userRegion.isBlank()) {
+            String userRegionCode = Region.findCodeByName(userRegion);
+            String policyRegionCode = policy.getRegionCode();
 
-        for (String kw : keywords) {
-            if (kw.length() < 2) continue; // 1글자 조사 제외
-
-            if (title.contains(kw)) {
-                score += 10.0;
-            }
-            if (subCategory.contains(kw)) {
-                score += 5.0;
-            }
-            if (desc.contains(kw)) {
-                score += 2.0;
+            if (policyRegionCode != null) {
+                // 정책 지역 코드가 사용자 지역 코드를 포함하는 경우 (예: 서울 "11" 포함)
+                if (userRegionCode != null && (policyRegionCode.startsWith(userRegionCode) || policyRegionCode.contains("," + userRegionCode))) {
+                    // 전국 정책 코드가 아닌 특정 지자체 코드인 경우 지역 특화 가중치 부여
+                    if (!isNationalCode(policyRegionCode)) {
+                        score += LOCAL_POLICY_WEIGHT;
+                    } else {
+                        score += NATIONAL_POLICY_WEIGHT;
+                    }
+                } else if (isNationalCode(policyRegionCode) || policyRegionCode.contains(NATIONAL_REGION_NAME)) {
+                    score += NATIONAL_POLICY_WEIGHT;
+                }
+            } else {
+                score += NATIONAL_POLICY_WEIGHT;
             }
         }
+
+        // 2. 키워드 매칭 가중치 (제목 가중치를 낮춤)
+        if (query != null && !query.isBlank()) {
+            String[] keywords = query.split("\\s+");
+            String title = policy.getTitle() != null ? policy.getTitle() : "";
+            String desc = policy.getDescription() != null ? policy.getDescription() : "";
+            String subCategory = policy.getSubCategory() != null ? policy.getSubCategory() : "";
+
+            for (String kw : keywords) {
+                if (kw.length() < MIN_KEYWORD_LENGTH) continue; // 1글자 조사 제외
+
+                if (title.contains(kw)) {
+                    score += KEYWORD_TITLE_WEIGHT;
+                }
+                if (subCategory.contains(kw)) {
+                    score += KEYWORD_SUBCATEGORY_WEIGHT;
+                }
+                if (desc.contains(kw)) {
+                    score += KEYWORD_DESC_WEIGHT;
+                }
+            }
+        }
+
         return score;
+    }
+
+    private boolean isNationalCode(String regionCode) {
+        if (regionCode == null) {
+            return true;
+        }
+        return regionCode.contains(NATIONAL_REGION_NAME) ||
+               regionCode.contains(NATIONAL_REGION_CODE) ||
+               regionCode.isBlank();
     }
 }
