@@ -56,7 +56,7 @@ AWS/DB 담당자는 아래를 확인합니다.
 
 MacBook/IntelliJ 터미널에서 EC2 서버를 대상으로 k6를 실행할 때 `perf/k6/.env.local`에 아래 값을 넣습니다.
 
-`TEST_EMAIL`/`SENDER_ACCOUNT_ID`/`RECEIVER_ACCOUNT_NUMBER`는 단일 사용자 이체 테스트용이고, `TEST_EMAILS`/`SENDER_ACCOUNT_IDS`/`RECEIVER_ACCOUNT_NUMBERS`는 20명/20개 출금 계좌로 분산 이체 부하를 줄 때 사용합니다.
+`TEST_EMAIL`/`SENDER_ACCOUNT_ID`/`RECEIVER_ACCOUNT_NUMBER`는 단일 사용자 테스트용이고, `TEST_EMAILS`와 전체 `ACCOUNT_IDS`는 여러 사용자 계좌 조회 흐름에 사용합니다. `SENDER_ACCOUNT_IDS`/`RECEIVER_ACCOUNT_NUMBERS`는 20명/20개 출금 계좌로 분산 이체 부하를 줄 때 사용합니다.
 
 ```bash
 export BASE_URL=https://api.0bank.shop
@@ -64,7 +64,8 @@ export BASE_URL=https://api.0bank.shop
 export TEST_EMAIL=k6-user1@0bank.test
 export TEST_EMAILS=k6-user1@0bank.test,k6-user2@0bank.test,k6-user3@0bank.test,k6-user4@0bank.test,k6-user5@0bank.test,k6-user6@0bank.test,k6-user7@0bank.test,k6-user8@0bank.test,k6-user9@0bank.test,k6-user10@0bank.test,k6-user11@0bank.test,k6-user12@0bank.test,k6-user13@0bank.test,k6-user14@0bank.test,k6-user15@0bank.test,k6-user16@0bank.test,k6-user17@0bank.test,k6-user18@0bank.test,k6-user19@0bank.test,k6-user20@0bank.test
 export TEST_PASSWORD='Password1!'
-export ACCOUNT_IDS=900001,900002,900003,900004,900005,900006,900007,900008,900009,900010
+export ACCOUNT_IDS=900001,900002,900003,900004,900005,900006,900007,900008,900009,900010,900011,900012,900013,900014,900015,900016,900017,900018,900019,900020,900021,900022,900023,900024,900025,900026,900027,900028,900029,900030,900031,900032,900033,900034,900035,900036,900037,900038,900039,900040
+export ACCOUNTS_PER_USER=2
 
 export KRW_ACCOUNT_ID=900001
 export FX_WALLET_ID=900001
