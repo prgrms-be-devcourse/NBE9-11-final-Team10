@@ -94,7 +94,7 @@ public class PolicyRagRecommendService {
             if (profileOpt.isPresent()) {
                 var profile = profileOpt.get();
                 if (age == null && profile.getBirthYear() != null) {
-                    age = java.time.LocalDate.now().getYear() - profile.getBirthYear();
+                    age = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).getYear() - profile.getBirthYear();
                 }
                 if ((region == null || region.isBlank()) && profile.getRegion() != null) {
                     try {
