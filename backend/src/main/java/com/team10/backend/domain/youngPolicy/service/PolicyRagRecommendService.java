@@ -190,15 +190,15 @@ public class PolicyRagRecommendService {
                 if (userRegionCode != null && policyRegionCode.contains(userRegionCode)) {
                     // 전국 정책 코드가 아닌 특정 지자체 코드인 경우 지역 특화 가중치 부여
                     if (!isNationalCode(policyRegionCode)) {
-                        score += 15.0; // 지역 특화 정책 가중치
+                        score += 50.0; // 지역 특화 정책 가중치 대폭 상향 (15.0 -> 50.0)
                     } else {
-                        score += 5.0;  // 전국구 정책 가중치
+                        score += 10.0; // 전국구 정책 가중치 상향 (5.0 -> 10.0)
                     }
                 } else if (isNationalCode(policyRegionCode) || policyRegionCode.contains("전국")) {
-                    score += 5.0;      // 전국구 정책 가중치
+                    score += 10.0;     // 전국구 정책 가중치
                 }
             } else {
-                score += 5.0;          // 지역 코드가 없는 경우도 전국구에 준하여 처리
+                score += 10.0;         // 지역 코드가 없는 경우도 전국구에 준하여 처리
             }
         }
 
