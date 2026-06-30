@@ -18,6 +18,7 @@ import {
   searchYouthPolicies,
 } from '@/lib/api/youth-policies'
 import { getMyProfile } from '@/lib/api/users'
+import { regionOptions as profileRegionOptions } from '@/lib/profileOptions'
 import type { RecommendedYouthPolicy } from '@/lib/api/youth-policies'
 import type { YouthPolicy } from '@/lib/types'
 
@@ -122,7 +123,7 @@ export default function YouthPoliciesPage() {
     if (!user) return
 
     getMyProfile()
-      .then((profile) => setUserRegion(profile.region?.trim() ?? ''))
+      .then((profile) => setUserRegion(normalizeProfileRegion(profile.region)))
       .catch(() => setUserRegion(''))
   }, [user])
 
@@ -164,12 +165,9 @@ export default function YouthPoliciesPage() {
     const requestSeq = recommendRequestSeq.current + 1
     recommendRequestSeq.current = requestSeq
     try {
-      const effectiveAge = parseNumber(age) ?? userAge
-      const effectiveRegion = region || userRegion
       const result = await recommendYouthPolicies({
-        age: effectiveAge,
-        region: effectiveRegion,
-        category,
+        age: userAge,
+        region: userRegion || undefined,
         query: query.trim(),
       })
       if (recommendRequestSeq.current !== requestSeq) return
@@ -493,6 +491,14 @@ function parseNumber(value: string): number | undefined {
   if (!value.trim()) return undefined
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function normalizeProfileRegion(region?: string): string {
+  if (!region?.trim()) return ''
+
+  const trimmedRegion = region.trim()
+  const option = profileRegionOptions.find((item) => item.value === trimmedRegion)
+  return option?.label ?? trimmedRegion
 }
 
 function calculateAge(birthDate?: string): number | undefined {
